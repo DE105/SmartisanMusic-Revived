@@ -1,0 +1,124 @@
+package com.smartisanos.music.playback
+
+import android.content.ContentUris
+import android.content.Context
+import android.provider.MediaStore
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import com.smartisanos.music.R
+
+class LocalAudioLibrary(
+    private val context: Context,
+) {
+
+    private var cachedVersion: String? = null
+    private var cachedItems: List<MediaItem> = emptyList()
+
+    fun getRootItem(): MediaItem {
+        val metadata = MediaMetadata.Builder()
+            .setTitle(context.getString(R.string.library_root))
+            .setIsBrowsable(true)
+            .setIsPlayable(false)
+            .build()
+
+        return MediaItem.Builder()
+            .setMediaId(ROOT_ID)
+            .setMediaMetadata(metadata)
+            .build()
+    }
+
+    fun getAudioItems(forceRefresh: Boolean = false): List<MediaItem> {
+        val mediaStoreVersion = MediaStore.getVersion(context)
+        if (!forceRefresh && cachedVersion == mediaStoreVersion && cachedItems.isNotEmpty()) {
+            return cachedItems
+        }
+
+        val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        val projection = arrayOf(
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.TRACK,
+            MediaStore.Audio.Media.DATE_ADDED,
+        )
+        val selection = buildString {
+            append("${MediaStore.Audio.Media.IS_MUSIC} != 0")
+            append(" AND ${MediaStore.Audio.Media.DURATION} > 0")
+        }
+        val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC"
+
+        val items = mutableListOf<MediaItem>()
+        try {
+            context.contentResolver.query(
+                collection,
+                projection,
+                selection,
+                null,
+                sortOrder,
+            )?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                val trackColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
+
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idColumn)
+                    val title = cursor.getString(titleColumn)
+                        ?.takeIf { it.isNotBlank() }
+                        ?: context.getString(R.string.unknown_song_title)
+                    val artist = cursor.getString(artistColumn)
+                        ?.takeIf { it.isNotBlank() && it != MediaStore.UNKNOWN_STRING }
+                        ?: context.getString(R.string.unknown_artist)
+                    val album = cursor.getString(albumColumn)?.takeIf { it.isNotBlank() }
+                    val durationMs = cursor.getLong(durationColumn)
+                    val trackNumber = cursor.getInt(trackColumn).takeIf { it > 0 }
+                    val mediaUri = ContentUris.withAppendedId(collection, id)
+
+                    val metadataBuilder = MediaMetadata.Builder()
+                        .setTitle(title)
+                        .setDisplayTitle(title)
+                        .setArtist(artist)
+                        .setSubtitle(artist)
+                        .setDurationMs(durationMs)
+                        .setIsPlayable(true)
+                        .setIsBrowsable(false)
+
+                    if (!album.isNullOrBlank()) {
+                        metadataBuilder.setAlbumTitle(album)
+                    }
+
+                    if (trackNumber != null) {
+                        metadataBuilder.setTrackNumber(trackNumber)
+                    }
+
+                    items += MediaItem.Builder()
+                        .setMediaId(id.toString())
+                        .setUri(mediaUri)
+                        .setMediaMetadata(metadataBuilder.build())
+                        .build()
+                }
+            }
+        } catch (_: SecurityException) {
+            return emptyList()
+        }
+
+        cachedVersion = mediaStoreVersion
+        cachedItems = items
+        return items
+    }
+
+    fun getItem(mediaId: String): MediaItem? {
+        if (mediaId == ROOT_ID) {
+            return getRootItem()
+        }
+        return getAudioItems().firstOrNull { it.mediaId == mediaId }
+    }
+
+    companion object {
+        const val ROOT_ID = "root"
+    }
+}

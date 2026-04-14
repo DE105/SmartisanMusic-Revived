@@ -2,10 +2,11 @@ package com.smartisanos.music.ui.shell
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -27,6 +28,8 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.smartisanos.music.R
+import com.smartisanos.music.playback.ProvidePlaybackController
+import com.smartisanos.music.ui.components.GlobalPlaybackBar
 import com.smartisanos.music.ui.components.SmartisanBottomBar
 import com.smartisanos.music.ui.components.SmartisanTopBar
 import com.smartisanos.music.ui.components.SmartisanTopBarIconButton
@@ -48,44 +51,50 @@ fun MusicApp() {
         ?: MusicDestination.Playlist
     val crossTextureBrush = rememberCrossTextureBrush()
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = ShellBackground,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        bottomBar = {
-            SmartisanBottomBar(
-                currentRoute = currentRoute,
-                onDestinationSelected = { destination ->
-                    navController.navigate(destination.route) {
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
+    ProvidePlaybackController {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = ShellBackground,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            bottomBar = {
+                SmartisanBottomBar(
+                    currentRoute = currentRoute,
+                    onDestinationSelected = { destination ->
+                        navController.navigate(destination.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
                         }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                }
-            )
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize(),
-        ) {
-            MusicShellTopBar(destination = currentDestination)
-            Box(
+                    },
+                )
+            }
+        ) { innerPadding ->
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .background(brush = crossTextureBrush),
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .consumeWindowInsets(innerPadding),
             ) {
-                MusicNavHost(
-                    navController = navController,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                SmartisanTopBarShadow(
-                    modifier = Modifier.align(Alignment.TopCenter),
-                )
+                MusicShellTopBar(destination = currentDestination)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .background(brush = crossTextureBrush),
+                ) {
+                    MusicNavHost(
+                        navController = navController,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    GlobalPlaybackBar(
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                    SmartisanTopBarShadow(
+                        modifier = Modifier.align(Alignment.TopCenter),
+                    )
+                }
             }
         }
     }

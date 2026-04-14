@@ -13,4 +13,12 @@
     <string name="show_song">本地歌曲将显示在这里</string>
     <string name="listview_header_tile">平铺</string>
     <string name="tab_local_search">搜索</string>
+    <string name="library_root">本地音乐</string>
+    <string name="unknown_song_title">未知歌曲</string>
+    <string name="unknown_artist">未知艺术家</string>
+    <string name="previous_song">上一首</string>
+    <string name="next_song">下一首</string>
+    <string name="play">播放</string>
+    <string name="pause">暂停</string>
+    <string name="favorite">收藏</string>
 </resources>
