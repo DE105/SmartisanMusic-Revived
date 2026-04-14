@@ -1,8 +1,10 @@
 package com.smartisanos.music.ui.shell
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,6 +37,7 @@ import com.smartisanos.music.ui.navigation.MusicNavHost
 
 private val ShellBackground = Color(0xFFF7F7F7)
 private val SearchIconSize = 34.dp
+private val AlbumTileIconSize = 18.dp
 
 @Composable
 fun MusicApp() {
@@ -90,11 +93,18 @@ fun MusicApp() {
 
 @Composable
 private fun MusicShellTopBar(destination: MusicDestination) {
-    val isPlaylist = destination == MusicDestination.Playlist
+    val showsEdit = destination == MusicDestination.Playlist ||
+        destination == MusicDestination.Album ||
+        destination == MusicDestination.Songs
+    val showsSearch = destination == MusicDestination.Playlist ||
+        destination == MusicDestination.Artist ||
+        destination == MusicDestination.Album ||
+        destination == MusicDestination.Songs
+    val showsTile = destination == MusicDestination.Album
 
     SmartisanTopBar(
         title = destination.label,
-        leftContent = if (isPlaylist) {
+        leftContent = if (showsEdit) {
             {
                 SmartisanTopBarTextButton(
                     text = stringResource(R.string.edit),
@@ -103,14 +113,28 @@ private fun MusicShellTopBar(destination: MusicDestination) {
         } else {
             null
         },
-        rightContent = if (isPlaylist) {
+        rightContent = if (showsSearch || showsTile) {
             {
-                SmartisanTopBarIconButton(
-                    iconRes = R.drawable.search_icon,
-                    pressedIconRes = R.drawable.search_icon_down,
-                    contentDescription = stringResource(R.string.tab_local_search),
-                    iconSize = SearchIconSize,
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (showsTile) {
+                        SmartisanTopBarIconButton(
+                            iconRes = R.drawable.btn_display_tile2,
+                            pressedIconRes = R.drawable.btn_display_tile2_down,
+                            contentDescription = stringResource(R.string.listview_header_tile),
+                            iconSize = AlbumTileIconSize,
+                        )
+                    }
+                    if (showsSearch) {
+                        SmartisanTopBarIconButton(
+                            iconRes = R.drawable.search_icon,
+                            pressedIconRes = R.drawable.search_icon_down,
+                            contentDescription = stringResource(R.string.tab_local_search),
+                            iconSize = SearchIconSize,
+                        )
+                    }
+                }
             }
         } else {
             null

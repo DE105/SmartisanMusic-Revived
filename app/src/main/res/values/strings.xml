@@ -5,5 +5,12 @@
     <string name="new_playlist">新建播放列表</string>
     <string name="no_playlist">暂无播放列表</string>
     <string name="create_playlist">可以在此创建自己的播放列表</string>
+    <string name="no_artist">暂无艺术家</string>
+    <string name="show_artist">本地歌曲的表演艺术家将显示在这里</string>
+    <string name="no_album">暂无专辑</string>
+    <string name="show_album">本地歌曲所属的专辑将显示在这里</string>
+    <string name="no_song">暂无歌曲</string>
+    <string name="show_song">本地歌曲将显示在这里</string>
+    <string name="listview_header_tile">平铺</string>
     <string name="tab_local_search">搜索</string>
 </resources>
