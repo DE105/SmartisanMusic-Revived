@@ -37,6 +37,7 @@ import com.smartisanos.music.ui.components.SmartisanTopBarShadow
 import com.smartisanos.music.ui.components.SmartisanTopBarTextButton
 import com.smartisanos.music.ui.navigation.MusicDestination
 import com.smartisanos.music.ui.navigation.MusicNavHost
+import com.smartisanos.music.ui.navigation.PlaybackRoute
 
 private val ShellBackground = Color(0xFFF7F7F7)
 private val SearchIconSize = 34.dp
@@ -49,6 +50,7 @@ fun MusicApp() {
     val currentRoute = currentBackStackEntry?.destination?.route ?: MusicDestination.Playlist.route
     val currentDestination = MusicDestination.entries.firstOrNull { it.route == currentRoute }
         ?: MusicDestination.Playlist
+    val isPlaybackRoute = currentRoute == PlaybackRoute
     val crossTextureBrush = rememberCrossTextureBrush()
 
     ProvidePlaybackController {
@@ -57,18 +59,20 @@ fun MusicApp() {
             containerColor = ShellBackground,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
-                SmartisanBottomBar(
-                    currentRoute = currentRoute,
-                    onDestinationSelected = { destination ->
-                        navController.navigate(destination.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
+                if (!isPlaybackRoute) {
+                    SmartisanBottomBar(
+                        currentRoute = currentRoute,
+                        onDestinationSelected = { destination ->
+                            navController.navigate(destination.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
                             }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
-                )
+                        },
+                    )
+                }
             }
         ) { innerPadding ->
             Column(
@@ -77,7 +81,9 @@ fun MusicApp() {
                     .padding(innerPadding)
                     .consumeWindowInsets(innerPadding),
             ) {
-                MusicShellTopBar(destination = currentDestination)
+                if (!isPlaybackRoute) {
+                    MusicShellTopBar(destination = currentDestination)
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -88,12 +94,19 @@ fun MusicApp() {
                         navController = navController,
                         modifier = Modifier.fillMaxSize(),
                     )
-                    GlobalPlaybackBar(
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
-                    SmartisanTopBarShadow(
-                        modifier = Modifier.align(Alignment.TopCenter),
-                    )
+                    if (!isPlaybackRoute) {
+                        GlobalPlaybackBar(
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                            onOpenPlayback = {
+                                navController.navigate(PlaybackRoute) {
+                                    launchSingleTop = true
+                                }
+                            },
+                        )
+                        SmartisanTopBarShadow(
+                            modifier = Modifier.align(Alignment.TopCenter),
+                        )
+                    }
                 }
             }
         }

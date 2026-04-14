@@ -21,4 +21,10 @@
     <string name="play">播放</string>
     <string name="pause">暂停</string>
     <string name="favorite">收藏</string>
+    <string name="volume">音量</string>
+    <string name="repeat">循环</string>
+    <string name="shuffle">随机</string>
+    <string name="collapse_player">收起播放器</string>
+    <string name="playback_queue">播放列表</string>
+    <string name="player_more_actions">更多操作</string>
 </resources>

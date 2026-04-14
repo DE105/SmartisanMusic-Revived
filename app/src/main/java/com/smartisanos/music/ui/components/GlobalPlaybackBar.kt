@@ -74,6 +74,7 @@ private data class PlaybackBarSnapshot(
 @Composable
 fun GlobalPlaybackBar(
     modifier: Modifier = Modifier,
+    onOpenPlayback: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val controller = LocalPlaybackController.current ?: return
@@ -142,29 +143,39 @@ fun GlobalPlaybackBar(
                     .padding(start = PlaybackBarSidePadding, end = PlaybackBarRightPadding),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                PlaybackBarArtwork(
-                    mediaItem = mediaItem,
-                    modifier = Modifier.size(PlaybackBarArtworkSize),
-                )
-                Column(
+                Row(
                     modifier = Modifier
-                        .padding(start = PlaybackBarSidePadding)
-                        .width(PlaybackBarTextWidth),
-                    verticalArrangement = Arrangement.Center,
+                        .weight(1f)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onOpenPlayback,
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextLine(
-                        text = title,
-                        style = PlaybackBarTitleStyle,
-                        marquee = true,
+                    PlaybackBarArtwork(
+                        mediaItem = mediaItem,
+                        modifier = Modifier.size(PlaybackBarArtworkSize),
                     )
-                    TextLine(
-                        text = subtitle,
-                        style = PlaybackBarSubtitleStyle,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
+                    Column(
+                        modifier = Modifier
+                            .padding(start = PlaybackBarSidePadding)
+                            .width(PlaybackBarTextWidth),
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        TextLine(
+                            text = title,
+                            style = PlaybackBarTitleStyle,
+                            marquee = true,
+                        )
+                        TextLine(
+                            text = subtitle,
+                            style = PlaybackBarSubtitleStyle,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
                 }
                 Row(
-                    modifier = Modifier.weight(1f),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

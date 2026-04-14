@@ -3,6 +3,8 @@ package com.smartisanos.music.ui.navigation
 import androidx.annotation.DrawableRes
 import com.smartisanos.music.R
 
+const val PlaybackRoute = "playback"
+
 enum class MusicDestination(
     val route: String,
     val label: String,
