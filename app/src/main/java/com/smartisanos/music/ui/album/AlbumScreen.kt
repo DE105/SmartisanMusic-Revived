@@ -7,7 +7,6 @@ import com.smartisanos.music.ui.components.MusicPlaceholderScreen
 @Composable
 fun AlbumScreen(modifier: Modifier = Modifier) {
     MusicPlaceholderScreen(
-        title = "专辑",
         modifier = modifier,
     )
 }
