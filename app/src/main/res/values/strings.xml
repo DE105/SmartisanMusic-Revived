@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">Music</string>
+    <string name="edit">编辑</string>
+    <string name="tab_play_list">播放列表</string>
+    <string name="new_playlist">新建播放列表</string>
+    <string name="no_playlist">暂无播放列表</string>
+    <string name="create_playlist">可以在此创建自己的播放列表</string>
+    <string name="tab_local_search">搜索</string>
 </resources>

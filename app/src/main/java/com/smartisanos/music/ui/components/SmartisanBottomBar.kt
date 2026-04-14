@@ -21,13 +21,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -36,12 +39,15 @@ import androidx.compose.ui.unit.sp
 import com.smartisanos.music.ui.navigation.MusicDestination
 
 private val SmartisanRed = Color(0xFFE64040)
-private val SmartisanText = Color(0x66000000)
+private val SmartisanText = Color(0x70000000)
+private val SmartisanIconTint = Color(0xFF979797)
 private val ShellBackground = Color(0xFFF7F7F7)
 private val BottomBarContentHeight = 54.dp
 private val BottomBarTopPadding = 4.dp
 private val BottomBarIconSize = 26.dp
 private val BottomBarHorizontalPadding = 12.dp
+private val MoreDotSize = 5.dp
+private val MoreDotSpacing = 3.dp
 private val BottomBarLabelStyle = TextStyle(
     fontSize = 9.sp,
     lineHeight = 10.sp,
@@ -112,18 +118,61 @@ private fun RowScope.SmartisanBottomBarItem(
                 .padding(top = BottomBarTopPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Image(
-                painter = painterResource(
-                    if (selected || pressed) destination.selectedIconRes else destination.iconRes
-                ),
-                contentDescription = destination.label,
-                modifier = Modifier.size(BottomBarIconSize),
-            )
+            if (destination == MusicDestination.More) {
+                MoreDotsIcon(
+                    selected = selected || pressed,
+                    modifier = Modifier.size(BottomBarIconSize),
+                )
+            } else {
+                Image(
+                    painter = painterResource(
+                        if (selected || pressed) destination.selectedIconRes else destination.iconRes
+                    ),
+                    contentDescription = destination.label,
+                    modifier = Modifier.size(BottomBarIconSize),
+                    colorFilter = if (selected || pressed) {
+                        null
+                    } else {
+                        ColorFilter.tint(SmartisanIconTint, BlendMode.SrcIn)
+                    },
+                )
+            }
             Text(
                 text = destination.label,
                 style = BottomBarLabelStyle,
                 color = if (selected || pressed) SmartisanRed else SmartisanText,
             )
+        }
+    }
+}
+
+@Composable
+private fun MoreDotsIcon(
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val dotColor = if (selected) SmartisanRed else SmartisanIconTint
+
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(
+                MoreDotSpacing
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            repeat(3) {
+                Box(
+                    modifier = Modifier
+                        .size(MoreDotSize)
+                        .background(
+                            color = dotColor,
+                            shape = CircleShape,
+                        )
+                )
+            }
         }
     }
 }
