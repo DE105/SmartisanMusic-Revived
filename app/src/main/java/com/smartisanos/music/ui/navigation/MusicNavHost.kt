@@ -8,7 +8,6 @@ import androidx.navigation.compose.composable
 import com.smartisanos.music.ui.album.AlbumScreen
 import com.smartisanos.music.ui.artist.ArtistScreen
 import com.smartisanos.music.ui.more.MoreScreen
-import com.smartisanos.music.ui.playback.PlaybackScreen
 import com.smartisanos.music.ui.playlist.PlaylistScreen
 import com.smartisanos.music.ui.songs.SongsScreen
 
@@ -36,11 +35,6 @@ fun MusicNavHost(
         }
         composable(MusicDestination.More.route) {
             MoreScreen()
-        }
-        composable(PlaybackRoute) {
-            PlaybackScreen(
-                onCollapse = { navController.popBackStack() },
-            )
         }
     }
 }

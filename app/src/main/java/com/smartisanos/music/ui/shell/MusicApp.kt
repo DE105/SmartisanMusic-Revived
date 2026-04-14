@@ -1,5 +1,11 @@
 package com.smartisanos.music.ui.shell
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +20,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,6 +32,7 @@ import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -37,11 +46,14 @@ import com.smartisanos.music.ui.components.SmartisanTopBarShadow
 import com.smartisanos.music.ui.components.SmartisanTopBarTextButton
 import com.smartisanos.music.ui.navigation.MusicDestination
 import com.smartisanos.music.ui.navigation.MusicNavHost
-import com.smartisanos.music.ui.navigation.PlaybackRoute
+import com.smartisanos.music.ui.playback.PlaybackScreen
 
 private val ShellBackground = Color(0xFFF7F7F7)
 private val SearchIconSize = 34.dp
 private val AlbumTileIconSize = 18.dp
+private val PlaybackOverlayEasing = Easing { fraction ->
+    1f - (1f - fraction) * (1f - fraction)
+}
 
 @Composable
 fun MusicApp() {
@@ -50,16 +62,21 @@ fun MusicApp() {
     val currentRoute = currentBackStackEntry?.destination?.route ?: MusicDestination.Playlist.route
     val currentDestination = MusicDestination.entries.firstOrNull { it.route == currentRoute }
         ?: MusicDestination.Playlist
-    val isPlaybackRoute = currentRoute == PlaybackRoute
     val crossTextureBrush = rememberCrossTextureBrush()
 
     ProvidePlaybackController {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            containerColor = ShellBackground,
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            bottomBar = {
-                if (!isPlaybackRoute) {
+        var playbackVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+
+        BackHandler(enabled = playbackVisible) {
+            playbackVisible = false
+        }
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                containerColor = ShellBackground,
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                bottomBar = {
                     SmartisanBottomBar(
                         currentRoute = currentRoute,
                         onDestinationSelected = { destination ->
@@ -73,34 +90,28 @@ fun MusicApp() {
                         },
                     )
                 }
-            }
-        ) { innerPadding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .consumeWindowInsets(innerPadding),
-            ) {
-                if (!isPlaybackRoute) {
-                    MusicShellTopBar(destination = currentDestination)
-                }
-                Box(
+            ) { innerPadding ->
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .background(brush = crossTextureBrush),
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .consumeWindowInsets(innerPadding),
                 ) {
-                    MusicNavHost(
-                        navController = navController,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    if (!isPlaybackRoute) {
+                    MusicShellTopBar(destination = currentDestination)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .background(brush = crossTextureBrush),
+                    ) {
+                        MusicNavHost(
+                            navController = navController,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                         GlobalPlaybackBar(
                             modifier = Modifier.align(Alignment.BottomCenter),
                             onOpenPlayback = {
-                                navController.navigate(PlaybackRoute) {
-                                    launchSingleTop = true
-                                }
+                                playbackVisible = true
                             },
                         )
                         SmartisanTopBarShadow(
@@ -108,6 +119,33 @@ fun MusicApp() {
                         )
                     }
                 }
+            }
+            AnimatedVisibility(
+                visible = playbackVisible,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(1f),
+                enter = slideInVertically(
+                    animationSpec = tween(
+                        durationMillis = 300,
+                        easing = PlaybackOverlayEasing,
+                    ),
+                    initialOffsetY = { fullHeight -> fullHeight },
+                ),
+                exit = slideOutVertically(
+                    animationSpec = tween(
+                        durationMillis = 300,
+                        easing = PlaybackOverlayEasing,
+                    ),
+                    targetOffsetY = { fullHeight -> fullHeight },
+                ),
+            ) {
+                PlaybackScreen(
+                    modifier = Modifier.fillMaxSize(),
+                    onCollapse = {
+                        playbackVisible = false
+                    },
+                )
             }
         }
     }
