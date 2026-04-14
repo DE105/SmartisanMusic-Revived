@@ -1,7 +1,13 @@
 package com.smartisanos.music.ui.playback
 
 import android.widget.ImageView
+import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,6 +18,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -33,6 +40,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +54,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -101,7 +110,7 @@ private val PlaybackTimeStyle = TextStyle(
     color = PlaybackTimeColor,
 )
 
-private data class PlaybackScreenState(
+internal data class PlaybackScreenState(
     val mediaItem: MediaItem? = null,
     val isPlaying: Boolean = false,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
@@ -111,14 +120,30 @@ private data class PlaybackScreenState(
     val volume: Float = 1f,
 )
 
+internal enum class PlaybackOutputRoute {
+    Speaker,
+    Bluetooth,
+}
+
 @Composable
 fun PlaybackScreen(
     onCollapse: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val controller = LocalPlaybackController.current
+    val view = LocalView.current
     var state by remember(controller) {
         mutableStateOf(controller.snapshot())
+    }
+    var showMorePanel by rememberSaveable { mutableStateOf(false) }
+    var showLyrics by rememberSaveable { mutableStateOf(false) }
+    var keepScreenAwake by rememberSaveable { mutableStateOf(false) }
+    var scratchEnabled by rememberSaveable { mutableStateOf(false) }
+    var favoriteEnabled by rememberSaveable { mutableStateOf(false) }
+    var selectedRoute by rememberSaveable { mutableStateOf(PlaybackOutputRoute.Speaker) }
+
+    BackHandler(enabled = showMorePanel) {
+        showMorePanel = false
     }
 
     DisposableEffect(controller) {
@@ -131,6 +156,14 @@ fun PlaybackScreen(
         playbackController.addListener(listener)
         onDispose {
             playbackController.removeListener(listener)
+        }
+    }
+
+    DisposableEffect(view, keepScreenAwake) {
+        val previousValue = view.keepScreenOn
+        view.keepScreenOn = keepScreenAwake
+        onDispose {
+            view.keepScreenOn = previousValue
         }
     }
 
@@ -152,6 +185,33 @@ fun PlaybackScreen(
     val durationMs = state.durationMs.takeIf { it > 0L }
         ?: mediaMetadata?.durationMs
         ?: 0L
+    val primaryLyricLine = stringResource(R.string.playback_more_primary_line)
+    val secondaryLyricLine = stringResource(R.string.playback_more_secondary_line)
+    val tertiaryLyricLine = stringResource(R.string.playback_more_tertiary_line)
+    val progress = durationMs
+        .takeIf { it > 0L }
+        ?.let { state.currentPositionMs.toFloat() / it.toFloat() }
+        ?.coerceIn(0f, 1f)
+        ?: 0f
+    val targetNeedleRotation = if (state.mediaItem == null) {
+        -12f
+    } else {
+        3.5f + (progress * 16f)
+    }
+    val needleRotation by animateFloatAsState(
+        targetValue = targetNeedleRotation,
+        animationSpec = tween(durationMillis = 220),
+        label = "needleRotation",
+    )
+    val lyricsLines = remember(title, artist, primaryLyricLine, secondaryLyricLine, tertiaryLyricLine) {
+        listOf(
+            title,
+            artist,
+            primaryLyricLine,
+            secondaryLyricLine,
+            tertiaryLyricLine,
+        )
+    }
 
     BoxWithConstraints(
         modifier = modifier
@@ -196,20 +256,26 @@ fun PlaybackScreen(
                     modifier = Modifier.width(turntableWidth),
                     turntableWidth = turntableWidth,
                     scale = scale,
-                    progress = durationMs
-                        .takeIf { it > 0L }
-                        ?.let { state.currentPositionMs.toFloat() / it.toFloat() }
-                        ?.coerceIn(0f, 1f)
-                        ?: 0f,
+                    showLyrics = showLyrics,
+                    keepScreenAwake = keepScreenAwake,
+                    lyricsLines = lyricsLines,
+                    needleRotation = needleRotation,
                     discRotation = ((state.currentPositionMs % 1_800L).toFloat() / 1_800f) * 360f,
+                    onMoreClick = {
+                        showMorePanel = true
+                    },
+                    onKeepScreenToggle = {
+                        keepScreenAwake = !keepScreenAwake
+                    },
                 )
             }
             Spacer(modifier = Modifier.weight(1f))
-            PlaybackControlButtons(
-                isPlaying = state.isPlaying,
-                repeatMode = state.repeatMode,
-                shuffleEnabled = state.shuffleEnabled,
-                scale = scale,
+            PlaybackBottomPager(
+                width = turntableWidth,
+                bottomInset = bottomInset,
+                state = state,
+                selectedRoute = selectedRoute,
+                onRouteSelected = { selectedRoute = it },
                 onRepeatClick = {
                     controller?.repeatMode =
                         if (state.repeatMode == Player.REPEAT_MODE_OFF) {
@@ -234,18 +300,54 @@ fun PlaybackScreen(
                 onShuffleClick = {
                     controller?.shuffleModeEnabled = !state.shuffleEnabled
                 },
-            )
-            PlaybackVolumeBar(
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 18.dp),
-                width = turntableWidth,
-                value = state.volume.coerceIn(0f, 1f),
-                onValueChange = { volume ->
+                onVolumeChange = { volume ->
                     controller?.volume = volume
                 },
             )
-            Spacer(modifier = Modifier.height((20.dp + bottomInset).coerceAtLeast(20.dp)))
+        }
+
+        AnimatedVisibility(
+            visible = showMorePanel,
+            modifier = Modifier.fillMaxSize(),
+            enter = fadeIn(animationSpec = tween(180)),
+            exit = fadeOut(animationSpec = tween(160)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0x12000000))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) {
+                        showMorePanel = false
+                    },
+            ) {
+                PlaybackMoreActionPanel(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(
+                            start = 8.dp,
+                            end = 8.dp,
+                            bottom = 108.dp + bottomInset,
+                        )
+                        .width(turntableWidth),
+                    keepScreenAwake = keepScreenAwake,
+                    scratchEnabled = scratchEnabled,
+                    favoriteEnabled = favoriteEnabled,
+                    showLyrics = showLyrics,
+                    onKeepScreenAwakeToggle = { keepScreenAwake = !keepScreenAwake },
+                    onScratchToggle = { scratchEnabled = !scratchEnabled },
+                    onFavoriteToggle = { favoriteEnabled = !favoriteEnabled },
+                    onLyricsToggle = {
+                        showLyrics = !showLyrics
+                        showMorePanel = false
+                    },
+                    onDismiss = {
+                        showMorePanel = false
+                    },
+                )
+            }
         }
     }
 }
@@ -446,8 +548,13 @@ private fun PlaybackTimeSeekBar(
 private fun PlaybackTurntableSection(
     turntableWidth: Dp,
     scale: Float,
-    progress: Float,
+    showLyrics: Boolean,
+    keepScreenAwake: Boolean,
+    lyricsLines: List<String>,
+    needleRotation: Float,
     discRotation: Float,
+    onMoreClick: () -> Unit,
+    onKeepScreenToggle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val turntableHeight = 356.5938.dp * scale
@@ -458,7 +565,6 @@ private fun PlaybackTurntableSection(
     val needleShadowRightMargin = 2.dp * scale
     val moreButtonMargin = 12.dp * scale
     val moreButtonTopMargin = 38.dp * scale
-    val needleRotation = 3.5f + (progress.coerceIn(0f, 1f) * 16f)
 
     Box(
         modifier = modifier.height(turntableHeight + 52.dp * scale),
@@ -472,8 +578,24 @@ private fun PlaybackTurntableSection(
                 .padding(start = moreButtonMargin, top = moreButtonTopMargin)
                 .size(28.dp * scale),
             shadowColor = PlaybackMoreButtonShadow,
-            onClick = { },
+            onClick = onMoreClick,
         )
+        if (showLyrics) {
+            PressedDrawableButton(
+                normalRes = R.drawable.sun_btn_off,
+                pressedRes = R.drawable.sun_btn_off_down,
+                contentDescription = stringResource(R.string.always_on),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = moreButtonMargin, top = moreButtonTopMargin)
+                    .size(28.dp * scale)
+                    .graphicsLayer {
+                        alpha = if (keepScreenAwake) 1f else 0.72f
+                    },
+                shadowColor = PlaybackMoreButtonShadow,
+                onClick = onKeepScreenToggle,
+            )
+        }
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -497,6 +619,17 @@ private fun PlaybackTurntableSection(
                     painter = painterResource(R.drawable.playing_cover_lp),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
+            AnimatedVisibility(
+                visible = showLyrics,
+                enter = fadeIn(animationSpec = tween(220)),
+                exit = fadeOut(animationSpec = tween(180)),
+                modifier = Modifier.matchParentSize(),
+            ) {
+                PlaybackLyricsOverlay(
+                    lyricsLines = lyricsLines,
                     modifier = Modifier.matchParentSize(),
                 )
             }
@@ -545,7 +678,7 @@ private fun PlaybackTurntableSection(
 }
 
 @Composable
-private fun PlaybackControlButtons(
+internal fun PlaybackControlButtons(
     isPlaying: Boolean,
     repeatMode: Int,
     shuffleEnabled: Boolean,
@@ -640,7 +773,7 @@ private fun PlaybackControlButtons(
 }
 
 @Composable
-private fun PlaybackVolumeBar(
+internal fun PlaybackVolumeBar(
     value: Float,
     width: Dp,
     modifier: Modifier = Modifier,
@@ -751,7 +884,7 @@ private fun PlaybackVolumeBar(
 }
 
 @Composable
-private fun PressedDrawableButton(
+internal fun PressedDrawableButton(
     @DrawableRes normalRes: Int,
     @DrawableRes pressedRes: Int,
     contentDescription: String,
@@ -798,7 +931,7 @@ private fun PressedDrawableButton(
 }
 
 @Composable
-private fun AndroidDrawableImage(
+internal fun AndroidDrawableImage(
     @DrawableRes drawableRes: Int,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
