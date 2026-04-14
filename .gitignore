@@ -1,0 +1,26 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+
+.DS_Store
+Thumbs.db
+
+/build
+/captures
+.externalNativeBuild
+.cxx
+
+# Packaged artifacts
+/app/release/
+/app/debug/
+/*.apk
+/*.aab
+
+# Reverse engineering workspace
+/reverse/
