@@ -2,8 +2,13 @@ package com.smartisanos.music.ui.songs
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -31,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -69,11 +76,15 @@ fun SongsScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val playbackBrowser = LocalPlaybackBrowser.current
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { }
     var permissionVersion by remember { mutableIntStateOf(0) }
     var songs by remember(playbackBrowser) { mutableStateOf(emptyList<MediaItem>()) }
     var currentMediaId by remember(playbackBrowser) {
         mutableStateOf(playbackBrowser?.currentMediaItem?.mediaId)
     }
+    val hasPermission = hasAudioPermission(context)
 
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
@@ -106,7 +117,7 @@ fun SongsScreen(modifier: Modifier = Modifier) {
             songs = emptyList()
             return@LaunchedEffect
         }
-        if (!hasAudioPermission(context)) {
+        if (!hasPermission) {
             songs = emptyList()
             return@LaunchedEffect
         }
@@ -118,6 +129,24 @@ fun SongsScreen(modifier: Modifier = Modifier) {
         }
         val childrenResult = browser.getChildren(rootItem.mediaId, 0, Int.MAX_VALUE, null).await(context)
         songs = childrenResult.value?.toList().orEmpty()
+    }
+
+    if (!hasPermission) {
+        SongsPermissionState(
+            modifier = modifier,
+            onGrantPermission = {
+                permissionLauncher.launch(audioPermission())
+            },
+            onOpenSettings = {
+                context.startActivity(
+                    Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", context.packageName, null),
+                    ),
+                )
+            },
+        )
+        return
     }
 
     if (songs.isEmpty()) {
@@ -150,6 +179,39 @@ fun SongsScreen(modifier: Modifier = Modifier) {
                     playbackBrowser?.play()
                 },
             )
+        }
+    }
+}
+
+@Composable
+private fun SongsPermissionState(
+    onGrantPermission: () -> Unit,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            SmartisanBlankState(
+                iconRes = R.drawable.blank_song,
+                title = stringResource(R.string.audio_permission_title),
+                subtitle = stringResource(R.string.audio_permission_subtitle),
+            )
+            Row(
+                modifier = Modifier.padding(top = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Button(onClick = onGrantPermission) {
+                    Text(text = stringResource(R.string.audio_permission_action))
+                }
+                Button(onClick = onOpenSettings) {
+                    Text(text = stringResource(R.string.audio_permission_settings))
+                }
+            }
         }
     }
 }
@@ -222,10 +284,11 @@ private fun SongRow(
 }
 
 private fun hasAudioPermission(context: Context): Boolean {
-    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        Manifest.permission.READ_MEDIA_AUDIO
-    } else {
-        Manifest.permission.READ_EXTERNAL_STORAGE
-    }
-    return ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+    return ContextCompat.checkSelfPermission(context, audioPermission()) == PackageManager.PERMISSION_GRANTED
+}
+
+private fun audioPermission(): String = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    Manifest.permission.READ_MEDIA_AUDIO
+} else {
+    Manifest.permission.READ_EXTERNAL_STORAGE
 }

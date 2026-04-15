@@ -1,6 +1,9 @@
 package com.smartisanos.music.ui.playback
 
+import android.content.Context
+import android.media.AudioManager
 import android.widget.ImageView
+import android.widget.SeekBar
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
@@ -8,6 +11,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,8 +44,10 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,30 +55,42 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
+import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
 import com.smartisanos.music.playback.LocalPlaybackController
+import com.smartisanos.music.playback.setScratchSeekModeEnabled
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
+import kotlin.math.sqrt
 
 private val PlaybackPageBackground = Color(0xFFFDFDFB)
 private val PlaybackTopBarFill = Brush.verticalGradient(
@@ -94,6 +112,20 @@ private val PlaybackPanelBorder = Color(0xFFE8E8E8)
 private val PlaybackPanelBottomEdge = Color(0xFFFDFDFD)
 private val PlaybackPanelShadow = Color(0x14000000)
 private val PlaybackMoreButtonShadow = Color(0x12000000)
+
+private const val ScratchCycleDurationMs = 1_800f
+private const val ScratchHubDeadZoneRatio = 0.22f
+private const val ScratchMaxAngleStepDegrees = 54f
+private const val ScratchPreviewTimeoutMs = 260L
+private const val ScratchPreviewSettleToleranceMs = 24L
+private val PlaybackSeekBarHeight = 41.dp
+private val PlaybackSeekBarSideWidth = 51.3.dp
+private val PlaybackSeekTrackHeight = 8.dp
+private val PlaybackSeekThumbWidth = 22.3.dp
+private val PlaybackSeekThumbHeight = 41.dp
+private val PlaybackSeekBarDividerHeight = 0.7.dp
+private val PlaybackVolumeBarHeight = 60.dp
+private val PlaybackVolumeThumbOffset = 5.dp
 
 private val PlaybackTitleStyle = TextStyle(
     fontSize = 18.sp,
@@ -131,16 +163,23 @@ fun PlaybackScreen(
     modifier: Modifier = Modifier,
 ) {
     val controller = LocalPlaybackController.current
+    val context = LocalContext.current
     val view = LocalView.current
+    val scratchSoundController = remember(context) {
+        ScratchSoundController(context)
+    }
     var state by remember(controller) {
-        mutableStateOf(controller.snapshot())
+        mutableStateOf(controller.snapshot(context))
     }
     var showMorePanel by rememberSaveable { mutableStateOf(false) }
     var showLyrics by rememberSaveable { mutableStateOf(false) }
     var keepScreenAwake by rememberSaveable { mutableStateOf(false) }
-    var scratchEnabled by rememberSaveable { mutableStateOf(false) }
+    val scratchEnabled = true
     var favoriteEnabled by rememberSaveable { mutableStateOf(false) }
     var selectedRoute by rememberSaveable { mutableStateOf(PlaybackOutputRoute.Speaker) }
+    var scratchPreviewPositionMs by remember { mutableStateOf<Long?>(null) }
+    var scratchDragging by remember { mutableStateOf(false) }
+    var scratchResumePlayback by remember { mutableStateOf(false) }
 
     BackHandler(enabled = showMorePanel) {
         showMorePanel = false
@@ -150,12 +189,27 @@ fun PlaybackScreen(
         val playbackController = controller ?: return@DisposableEffect onDispose { }
         val listener = object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
-                state = playbackController.snapshot()
+                state = playbackController.snapshot(context)
             }
         }
         playbackController.addListener(listener)
         onDispose {
             playbackController.removeListener(listener)
+        }
+    }
+
+    DisposableEffect(controller) {
+        val playbackController = controller
+        playbackController?.volume = 1f
+        onDispose {
+            playbackController?.volume = 1f
+            playbackController?.setScratchSeekModeEnabled(false)
+        }
+    }
+
+    DisposableEffect(scratchSoundController) {
+        onDispose {
+            scratchSoundController.release()
         }
     }
 
@@ -170,12 +224,26 @@ fun PlaybackScreen(
     LaunchedEffect(controller, state.mediaItem?.mediaId, state.isPlaying) {
         val playbackController = controller ?: return@LaunchedEffect
         while (isActive) {
-            state = playbackController.snapshot()
+            state = playbackController.snapshot(context)
             delay(if (state.isPlaying) 80L else 240L)
         }
     }
 
+    LaunchedEffect(controller, scratchEnabled, showLyrics) {
+        if (!scratchEnabled || showLyrics) {
+            scratchDragging = false
+            scratchPreviewPositionMs = null
+            if (scratchResumePlayback) {
+                controller?.play()
+            }
+            scratchResumePlayback = false
+            controller?.setScratchSeekModeEnabled(false)
+            scratchSoundController.stop()
+        }
+    }
+
     val mediaMetadata = state.mediaItem?.mediaMetadata
+    val scratchSourceUri = state.mediaItem?.localConfiguration?.uri
     val title = mediaMetadata?.displayTitle?.toString()
         ?: mediaMetadata?.title?.toString()
         ?: stringResource(R.string.unknown_song_title)
@@ -185,18 +253,22 @@ fun PlaybackScreen(
     val durationMs = state.durationMs.takeIf { it > 0L }
         ?: mediaMetadata?.durationMs
         ?: 0L
+    val livePositionMs = state.currentPositionMs.coerceIn(0L, durationMs.coerceAtLeast(0L))
+    val displayPositionMs = scratchPreviewPositionMs
+        ?.coerceIn(0L, durationMs.coerceAtLeast(0L))
+        ?: livePositionMs
     val primaryLyricLine = stringResource(R.string.playback_more_primary_line)
     val secondaryLyricLine = stringResource(R.string.playback_more_secondary_line)
     val tertiaryLyricLine = stringResource(R.string.playback_more_tertiary_line)
     val progress = durationMs
         .takeIf { it > 0L }
-        ?.let { state.currentPositionMs.toFloat() / it.toFloat() }
+        ?.let { displayPositionMs.toFloat() / it.toFloat() }
         ?.coerceIn(0f, 1f)
         ?: 0f
-    val targetNeedleRotation = if (state.mediaItem == null) {
-        -12f
-    } else {
+    val targetNeedleRotation = if (state.mediaItem != null && (state.isPlaying || scratchDragging)) {
         3.5f + (progress * 16f)
+    } else {
+        -12f
     }
     val needleRotation by animateFloatAsState(
         targetValue = targetNeedleRotation,
@@ -211,6 +283,28 @@ fun PlaybackScreen(
             secondaryLyricLine,
             tertiaryLyricLine,
         )
+    }
+
+    LaunchedEffect(scratchDragging, scratchPreviewPositionMs, state.currentPositionMs) {
+        val previewPosition = scratchPreviewPositionMs ?: return@LaunchedEffect
+        if (!scratchDragging && abs(state.currentPositionMs - previewPosition) <= ScratchPreviewSettleToleranceMs) {
+            scratchPreviewPositionMs = null
+        }
+    }
+
+    LaunchedEffect(scratchDragging, scratchPreviewPositionMs) {
+        val previewPosition = scratchPreviewPositionMs ?: return@LaunchedEffect
+        if (scratchDragging) {
+            return@LaunchedEffect
+        }
+        delay(ScratchPreviewTimeoutMs)
+        if (!scratchDragging && scratchPreviewPositionMs == previewPosition) {
+            scratchPreviewPositionMs = null
+        }
+    }
+
+    LaunchedEffect(scratchSourceUri) {
+        scratchSoundController.prepareSource(scratchSourceUri)
     }
 
     BoxWithConstraints(
@@ -239,7 +333,7 @@ fun PlaybackScreen(
             )
             PlaybackTimeSeekBar(
                 durationMs = durationMs,
-                currentPositionMs = state.currentPositionMs.coerceIn(0L, durationMs.coerceAtLeast(0L)),
+                currentPositionMs = displayPositionMs,
                 thumbRes = R.drawable.playing_control_time,
                 modifier = Modifier.fillMaxWidth(),
                 onSeek = { positionMs ->
@@ -256,16 +350,58 @@ fun PlaybackScreen(
                     modifier = Modifier.width(turntableWidth),
                     turntableWidth = turntableWidth,
                     scale = scale,
+                    currentPositionMs = displayPositionMs,
+                    durationMs = durationMs,
+                    scratchEnabled = scratchEnabled,
                     showLyrics = showLyrics,
                     keepScreenAwake = keepScreenAwake,
                     lyricsLines = lyricsLines,
                     needleRotation = needleRotation,
-                    discRotation = ((state.currentPositionMs % 1_800L).toFloat() / 1_800f) * 360f,
+                    discRotation = ((displayPositionMs % ScratchCycleDurationMs.toLong()).toFloat() / ScratchCycleDurationMs) * 360f,
                     onMoreClick = {
                         showMorePanel = true
                     },
                     onKeepScreenToggle = {
                         keepScreenAwake = !keepScreenAwake
+                    },
+                    onScratchStart = {
+                        scratchDragging = true
+                        scratchResumePlayback = state.isPlaying
+                        if (scratchResumePlayback) {
+                            controller?.pause()
+                        }
+                        controller?.setScratchSeekModeEnabled(true)
+                        scratchSoundController.onScratchStart(
+                            sourceUri = scratchSourceUri,
+                            positionMs = livePositionMs,
+                        )
+                    },
+                    onScratchMotion = { positionMs, deltaAngle ->
+                        scratchSoundController.onScratchMotion(positionMs, deltaAngle)
+                    },
+                    onScratchPositionChange = { positionMs, _ ->
+                        scratchPreviewPositionMs = positionMs
+                    },
+                    onScratchEnd = { positionMs ->
+                        scratchDragging = false
+                        scratchPreviewPositionMs = positionMs
+                        controller?.seekTo(positionMs)
+                        if (scratchResumePlayback) {
+                            controller?.play()
+                        }
+                        scratchResumePlayback = false
+                        controller?.setScratchSeekModeEnabled(false)
+                        scratchSoundController.stop()
+                    },
+                    onScratchCancel = {
+                        scratchDragging = false
+                        scratchPreviewPositionMs = null
+                        if (scratchResumePlayback) {
+                            controller?.play()
+                        }
+                        scratchResumePlayback = false
+                        controller?.setScratchSeekModeEnabled(false)
+                        scratchSoundController.stop()
                     },
                 )
             }
@@ -301,7 +437,8 @@ fun PlaybackScreen(
                     controller?.shuffleModeEnabled = !state.shuffleEnabled
                 },
                 onVolumeChange = { volume ->
-                    controller?.volume = volume
+                    context.setMusicStreamVolumeFraction(volume)
+                    state = state.copy(volume = context.musicStreamVolumeFraction())
                 },
             )
         }
@@ -333,11 +470,9 @@ fun PlaybackScreen(
                         )
                         .width(turntableWidth),
                     keepScreenAwake = keepScreenAwake,
-                    scratchEnabled = scratchEnabled,
                     favoriteEnabled = favoriteEnabled,
                     showLyrics = showLyrics,
                     onKeepScreenAwakeToggle = { keepScreenAwake = !keepScreenAwake },
-                    onScratchToggle = { scratchEnabled = !scratchEnabled },
                     onFavoriteToggle = { favoriteEnabled = !favoriteEnabled },
                     onLyricsToggle = {
                         showLyrics = !showLyrics
@@ -448,97 +583,106 @@ private fun PlaybackTimeSeekBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 4.dp),
+            .padding(top = 2.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .height(PlaybackSeekBarHeight),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = formatPlaybackTime(shownPosition),
-                style = PlaybackTimeStyle,
-            )
-            Text(
-                text = "-${formatPlaybackTime((duration - shownPosition).coerceAtLeast(0L))}",
-                style = PlaybackTimeStyle,
-            )
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(18.dp)
-                .padding(horizontal = 12.dp)
-                .onSizeChanged { trackWidthPx = it.width }
-                .pointerInput(duration) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            if (trackWidthPx > 0) {
-                                dragFraction = fractionFromPosition(offset.x, trackWidthPx)
-                                if (duration > 0L) {
-                                    onSeek((dragFraction * duration.toFloat()).roundToLong())
-                                }
-                            }
-                        },
-                        onDrag = { change, dragAmount ->
-                            if (trackWidthPx > 0) {
-                                dragFraction = fractionFromPosition(change.position.x, trackWidthPx)
-                                if (duration > 0L) {
-                                    onSeek((dragFraction * duration.toFloat()).roundToLong())
-                                }
-                                change.consume()
-                            }
-                        },
-                        onDragEnd = {
-                            val finalFraction = dragFraction.takeUnless { it.isNaN() } ?: currentFraction
-                            if (duration > 0L) {
-                                onSeek((finalFraction * duration.toFloat()).roundToLong())
-                            }
-                            dragFraction = Float.NaN
-                        },
-                        onDragCancel = {
-                            dragFraction = Float.NaN
-                        },
-                    )
-                },
-        ) {
-            Box(
+                style = PlaybackTimeStyle.copy(textAlign = TextAlign.Start),
+                maxLines = 1,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .align(Alignment.Center)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(PlaybackTrackColor),
+                    .width(PlaybackSeekBarSideWidth)
+                    .padding(start = 6.dp),
             )
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(shownFraction)
-                    .height(3.dp)
-                    .align(Alignment.CenterStart)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(PlaybackTrackFillColor),
-            )
-            Image(
-                painter = painterResource(thumbRes),
-                contentDescription = null,
-                modifier = Modifier
-                    .size(18.dp)
-                    .align(Alignment.CenterStart)
-                    .offset {
-                        IntOffset(
-                            x = ((trackWidthPx - with(density) { 18.dp.roundToPx() }) * shownFraction)
-                                .roundToInt()
-                                .coerceAtLeast(0),
-                            y = 0,
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .onSizeChanged { trackWidthPx = it.width }
+                    .pointerInput(duration) {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                if (trackWidthPx > 0) {
+                                    dragFraction = fractionFromPosition(offset.x, trackWidthPx)
+                                    if (duration > 0L) {
+                                        onSeek((dragFraction * duration.toFloat()).roundToLong())
+                                    }
+                                }
+                            },
+                            onDrag = { change, _ ->
+                                if (trackWidthPx > 0) {
+                                    dragFraction = fractionFromPosition(change.position.x, trackWidthPx)
+                                    if (duration > 0L) {
+                                        onSeek((dragFraction * duration.toFloat()).roundToLong())
+                                    }
+                                    change.consume()
+                                }
+                            },
+                            onDragEnd = {
+                                val finalFraction = dragFraction.takeUnless { it.isNaN() } ?: currentFraction
+                                if (duration > 0L) {
+                                    onSeek((finalFraction * duration.toFloat()).roundToLong())
+                                }
+                                dragFraction = Float.NaN
+                            },
+                            onDragCancel = {
+                                dragFraction = Float.NaN
+                            },
                         )
                     },
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(PlaybackSeekTrackHeight)
+                        .align(Alignment.Center)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(PlaybackTrackColor),
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(shownFraction)
+                        .height(PlaybackSeekTrackHeight)
+                        .align(Alignment.CenterStart)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(PlaybackTrackFillColor),
+                )
+                Image(
+                    painter = painterResource(thumbRes),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .width(PlaybackSeekThumbWidth)
+                        .height(PlaybackSeekThumbHeight)
+                        .align(Alignment.CenterStart)
+                        .offset {
+                            IntOffset(
+                                x = (
+                                    (trackWidthPx - with(density) { PlaybackSeekThumbWidth.roundToPx() }) *
+                                        shownFraction
+                                ).roundToInt().coerceAtLeast(0),
+                                y = 0,
+                            )
+                        },
+                )
+            }
+            Text(
+                text = "-${formatPlaybackTime((duration - shownPosition).coerceAtLeast(0L))}",
+                style = PlaybackTimeStyle.copy(textAlign = TextAlign.End),
+                maxLines = 1,
+                modifier = Modifier
+                    .width(PlaybackSeekBarSideWidth)
+                    .padding(end = 6.dp),
             )
         }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(1.dp)
+                .height(PlaybackSeekBarDividerHeight)
                 .background(PlaybackTopBarDivider.copy(alpha = 0.7f)),
         )
     }
@@ -548,6 +692,9 @@ private fun PlaybackTimeSeekBar(
 private fun PlaybackTurntableSection(
     turntableWidth: Dp,
     scale: Float,
+    currentPositionMs: Long,
+    durationMs: Long,
+    scratchEnabled: Boolean,
     showLyrics: Boolean,
     keepScreenAwake: Boolean,
     lyricsLines: List<String>,
@@ -555,6 +702,11 @@ private fun PlaybackTurntableSection(
     discRotation: Float,
     onMoreClick: () -> Unit,
     onKeepScreenToggle: () -> Unit,
+    onScratchStart: () -> Unit,
+    onScratchMotion: (Long, Float) -> Unit,
+    onScratchPositionChange: (Long, Float) -> Unit,
+    onScratchEnd: (Long) -> Unit,
+    onScratchCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val turntableHeight = 356.5938.dp * scale
@@ -565,6 +717,18 @@ private fun PlaybackTurntableSection(
     val needleShadowRightMargin = 2.dp * scale
     val moreButtonMargin = 12.dp * scale
     val moreButtonTopMargin = 38.dp * scale
+    var discSize by remember { mutableStateOf(IntSize.Zero) }
+    var scratchActive by remember { mutableStateOf(false) }
+    var scratchPositionMs by remember { mutableStateOf(0L) }
+    var lastAngleDegrees by remember { mutableFloatStateOf(Float.NaN) }
+    val scratchAvailable by rememberUpdatedState(scratchEnabled && !showLyrics && durationMs > 0L)
+    val latestPositionMs by rememberUpdatedState(currentPositionMs)
+    val latestDurationMs by rememberUpdatedState(durationMs)
+    val latestScratchStart by rememberUpdatedState(onScratchStart)
+    val latestScratchMotion by rememberUpdatedState(onScratchMotion)
+    val latestScratchPositionChange by rememberUpdatedState(onScratchPositionChange)
+    val latestScratchEnd by rememberUpdatedState(onScratchEnd)
+    val latestScratchCancel by rememberUpdatedState(onScratchCancel)
 
     Box(
         modifier = modifier.height(turntableHeight + 52.dp * scale),
@@ -575,6 +739,7 @@ private fun PlaybackTurntableSection(
             contentDescription = stringResource(R.string.player_more_actions),
             modifier = Modifier
                 .align(Alignment.TopStart)
+                .zIndex(2f)
                 .padding(start = moreButtonMargin, top = moreButtonTopMargin)
                 .size(28.dp * scale),
             shadowColor = PlaybackMoreButtonShadow,
@@ -587,6 +752,7 @@ private fun PlaybackTurntableSection(
                 contentDescription = stringResource(R.string.always_on),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
+                    .zIndex(2f)
                     .padding(end = moreButtonMargin, top = moreButtonTopMargin)
                     .size(28.dp * scale)
                     .graphicsLayer {
@@ -622,6 +788,68 @@ private fun PlaybackTurntableSection(
                     modifier = Modifier.matchParentSize(),
                 )
             }
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .onSizeChanged { discSize = it }
+                    .zIndex(3f)
+                    .pointerInput(scratchAvailable) {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                if (!scratchAvailable) {
+                                    return@detectDragGestures
+                                }
+                                val center = discCenter(discSize)
+                                val radius = discRadius(discSize)
+                                if (!isWithinScratchRegion(offset, center, radius)) {
+                                    return@detectDragGestures
+                                }
+                                scratchActive = true
+                                scratchPositionMs = latestPositionMs.coerceIn(0L, latestDurationMs)
+                                lastAngleDegrees = angleDegrees(offset, center)
+                                latestScratchStart()
+                                latestScratchPositionChange(scratchPositionMs, 0f)
+                            },
+                            onDrag = { change, _ ->
+                                if (!scratchActive) {
+                                    return@detectDragGestures
+                                }
+                                val center = discCenter(discSize)
+                                val currentAngle = angleDegrees(change.position, center)
+                                var deltaAngle = normalizeAngleDelta(currentAngle - lastAngleDegrees)
+                                deltaAngle = deltaAngle.coerceIn(
+                                    -ScratchMaxAngleStepDegrees,
+                                    ScratchMaxAngleStepDegrees,
+                                )
+                                lastAngleDegrees = currentAngle
+
+                                val targetPosition = (
+                                    scratchPositionMs + (deltaAngle / 360f) * ScratchCycleDurationMs
+                                ).roundToLong().coerceIn(0L, latestDurationMs)
+                                latestScratchMotion(targetPosition, deltaAngle)
+                                if (targetPosition != scratchPositionMs) {
+                                    scratchPositionMs = targetPosition
+                                    latestScratchPositionChange(targetPosition, deltaAngle)
+                                }
+                                change.consume()
+                            },
+                            onDragEnd = {
+                                if (scratchActive) {
+                                    latestScratchEnd(scratchPositionMs)
+                                }
+                                scratchActive = false
+                                lastAngleDegrees = Float.NaN
+                            },
+                            onDragCancel = {
+                                if (scratchActive) {
+                                    latestScratchCancel()
+                                }
+                                scratchActive = false
+                                lastAngleDegrees = Float.NaN
+                            },
+                        )
+                    },
+            )
             AnimatedVisibility(
                 visible = showLyrics,
                 enter = fadeIn(animationSpec = tween(220)),
@@ -644,8 +872,9 @@ private fun PlaybackTurntableSection(
                         rotationZ = needleRotation
                     },
             ) {
-                AndroidDrawableImage(
+                AndroidImageView(
                     drawableRes = R.drawable.needle_shadow2,
+                    scaleType = ImageView.ScaleType.FIT_END,
                     modifier = Modifier.matchParentSize(),
                 )
             }
@@ -660,17 +889,21 @@ private fun PlaybackTurntableSection(
                         rotationZ = needleRotation
                     },
             ) {
-                AndroidDrawableImage(
+                AndroidNeedleBackground(
                     drawableRes = R.drawable.playing_stylus_lp_bg,
                     modifier = Modifier.matchParentSize(),
                 )
-                AndroidDrawableImage(
+                AndroidImageView(
                     drawableRes = R.drawable.playing_stylus_lp,
+                    scaleType = ImageView.ScaleType.FIT_XY,
                     modifier = Modifier.matchParentSize(),
                 )
-                AndroidDrawableImage(
+                AndroidImageView(
                     drawableRes = R.drawable.playing_stylus_lp_top,
-                    modifier = Modifier.matchParentSize(),
+                    scaleType = ImageView.ScaleType.FIT_START,
+                    modifier = Modifier
+                        .height(needleHeight)
+                        .align(Alignment.TopEnd),
                 )
             }
         }
@@ -779,108 +1012,46 @@ internal fun PlaybackVolumeBar(
     modifier: Modifier = Modifier,
     onValueChange: (Float) -> Unit,
 ) {
-    var trackWidthPx by remember { mutableIntStateOf(0) }
-    var dragFraction by remember { mutableFloatStateOf(Float.NaN) }
     val density = LocalDensity.current
-    val shownFraction = if (dragFraction.isNaN()) value else dragFraction.coerceIn(0f, 1f)
+    val thumbOffsetPx = with(density) { PlaybackVolumeThumbOffset.roundToPx() }
+    val latestOnValueChange = rememberUpdatedState(onValueChange)
+    AndroidView(
+        factory = { context ->
+            SeekBar(context).apply {
+                max = 100
+                splitTrack = false
+                progressDrawable = ContextCompat.getDrawable(context, R.drawable.volume_seekbar_progress)
+                thumb = ContextCompat.getDrawable(context, R.drawable.playing_control_volume)
+                thumbOffset = thumbOffsetPx
+                setPadding(0, 0, 0, 0)
+                setOnSeekBarChangeListener(
+                    object : SeekBar.OnSeekBarChangeListener {
+                        override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                            if (fromUser) {
+                                latestOnValueChange.value(progress / 100f)
+                            }
+                        }
 
-    Box(
+                        override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+
+                        override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+                    },
+                )
+            }
+        },
+        update = { seekBar ->
+            val targetProgress = (value.coerceIn(0f, 1f) * 100f).roundToInt()
+            if (seekBar.progress != targetProgress) {
+                seekBar.progress = targetProgress
+            }
+            if (seekBar.thumbOffset != thumbOffsetPx) {
+                seekBar.thumbOffset = thumbOffsetPx
+            }
+        },
         modifier = modifier
             .width(width)
-            .height(31.dp)
-            .drawWithCache {
-                onDrawBehind {
-                    drawRoundRect(
-                        color = Color.White,
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
-                    )
-                    drawRoundRect(
-                        color = PlaybackPanelShadow,
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
-                        size = size.copy(height = size.height - 1.dp.toPx()),
-                    )
-                    drawRoundRect(
-                        color = PlaybackPanelBorder,
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx()),
-                    )
-                    drawLine(
-                        color = PlaybackPanelBottomEdge,
-                        start = androidx.compose.ui.geometry.Offset(4.dp.toPx(), size.height - 1.dp.toPx()),
-                        end = androidx.compose.ui.geometry.Offset(size.width - 4.dp.toPx(), size.height - 1.dp.toPx()),
-                        strokeWidth = 1.dp.toPx(),
-                    )
-                }
-            }
-            .padding(horizontal = 9.dp, vertical = 4.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(23.dp)
-                .onSizeChanged { trackWidthPx = it.width }
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            if (trackWidthPx > 0) {
-                                dragFraction = fractionFromPosition(offset.x, trackWidthPx)
-                                onValueChange(dragFraction)
-                            }
-                        },
-                        onDrag = { change, dragAmount ->
-                            if (trackWidthPx > 0) {
-                                dragFraction = fractionFromPosition(change.position.x, trackWidthPx)
-                                onValueChange(dragFraction)
-                                change.consume()
-                            }
-                        },
-                        onDragEnd = {
-                            val finalFraction = dragFraction.takeUnless { it.isNaN() } ?: value
-                            onValueChange(finalFraction)
-                            dragFraction = Float.NaN
-                        },
-                        onDragCancel = {
-                            dragFraction = Float.NaN
-                        },
-                    )
-                },
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .align(Alignment.Center)
-                    .padding(horizontal = 17.5.dp)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(PlaybackVolumeTrackColor),
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(shownFraction)
-                    .height(6.dp)
-                    .align(Alignment.CenterStart)
-                    .padding(start = 17.5.dp)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(PlaybackVolumeFillColor),
-            )
-            Image(
-                painter = painterResource(R.drawable.playing_control_volume),
-                contentDescription = stringResource(R.string.volume),
-                modifier = Modifier
-                    .widthIn(min = 12.dp)
-                    .height(23.dp)
-                    .align(Alignment.CenterStart)
-                    .offset {
-                        IntOffset(
-                            x = ((trackWidthPx - with(density) { 14.dp.roundToPx() }) * shownFraction)
-                                .roundToInt()
-                                .coerceAtLeast(0),
-                            y = 0,
-                        )
-                    },
-            )
-        }
-    }
+            .height(PlaybackVolumeBarHeight)
+    )
 }
 
 @Composable
@@ -951,7 +1122,47 @@ internal fun AndroidDrawableImage(
     )
 }
 
-private fun Player?.snapshot(): PlaybackScreenState {
+@Composable
+internal fun AndroidNeedleBackground(
+    @DrawableRes drawableRes: Int,
+    modifier: Modifier = Modifier,
+) {
+    AndroidView(
+        factory = { context ->
+            ImageView(context).apply {
+                scaleType = ImageView.ScaleType.FIT_XY
+            }
+        },
+        modifier = modifier,
+        update = { imageView ->
+            imageView.setBackgroundResource(drawableRes)
+        },
+    )
+}
+
+@Composable
+internal fun AndroidImageView(
+    @DrawableRes drawableRes: Int,
+    scaleType: ImageView.ScaleType,
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null,
+) {
+    AndroidView(
+        factory = { context ->
+            ImageView(context).apply {
+                this.scaleType = scaleType
+                this.contentDescription = contentDescription
+            }
+        },
+        modifier = modifier,
+        update = { imageView ->
+            imageView.setImageResource(drawableRes)
+            imageView.contentDescription = contentDescription
+        },
+    )
+}
+
+private fun Player?.snapshot(context: Context): PlaybackScreenState {
     val player = this ?: return PlaybackScreenState()
     return PlaybackScreenState(
         mediaItem = player.currentMediaItem,
@@ -960,8 +1171,24 @@ private fun Player?.snapshot(): PlaybackScreenState {
         shuffleEnabled = player.shuffleModeEnabled,
         currentPositionMs = player.currentPosition.coerceAtLeast(0L),
         durationMs = player.duration.takeIf { it > 0L } ?: 0L,
-        volume = player.volume,
+        volume = context.musicStreamVolumeFraction(),
     )
+}
+
+private fun Context.musicStreamVolumeFraction(): Float {
+    val audioManager = getSystemService(AudioManager::class.java) ?: return 1f
+    val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+    val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(0)
+    return (currentVolume.toFloat() / maxVolume.toFloat()).coerceIn(0f, 1f)
+}
+
+private fun Context.setMusicStreamVolumeFraction(value: Float) {
+    val audioManager = getSystemService(AudioManager::class.java) ?: return
+    val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+    val targetVolume = (value.coerceIn(0f, 1f) * maxVolume.toFloat())
+        .roundToInt()
+        .coerceIn(0, maxVolume)
+    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVolume, 0)
 }
 
 private fun formatPlaybackTime(positionMs: Long): String {
@@ -974,4 +1201,43 @@ private fun formatPlaybackTime(positionMs: Long): String {
 private fun fractionFromPosition(positionX: Float, trackWidthPx: Int): Float {
     if (trackWidthPx <= 0) return 0f
     return (positionX / trackWidthPx.toFloat()).coerceIn(0f, 1f)
+}
+
+private fun discCenter(size: IntSize): Offset = Offset(size.width / 2f, size.height / 2f)
+
+private fun discRadius(size: IntSize): Float = min(size.width, size.height) / 2f
+
+private fun isWithinScratchRegion(
+    point: Offset,
+    center: Offset,
+    radius: Float,
+): Boolean {
+    if (radius <= 0f) {
+        return false
+    }
+    val dx = point.x - center.x
+    val dy = point.y - center.y
+    val distance = sqrt((dx * dx) + (dy * dy))
+    return distance in (radius * ScratchHubDeadZoneRatio)..radius
+}
+
+private fun angleDegrees(
+    point: Offset,
+    center: Offset,
+): Float = Math.toDegrees(
+    atan2(
+        y = (point.y - center.y).toDouble(),
+        x = (point.x - center.x).toDouble(),
+    ),
+).toFloat()
+
+private fun normalizeAngleDelta(deltaDegrees: Float): Float {
+    var normalized = deltaDegrees
+    while (normalized > 180f) {
+        normalized -= 360f
+    }
+    while (normalized < -180f) {
+        normalized += 360f
+    }
+    return normalized
 }

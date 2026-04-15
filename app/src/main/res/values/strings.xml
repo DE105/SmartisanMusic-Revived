@@ -37,4 +37,8 @@
     <string name="playback_more_primary_line">暂无内嵌歌词</string>
     <string name="playback_more_secondary_line">歌词遮罩和交互层已接入当前播放页</string>
     <string name="playback_more_tertiary_line">轻触“歌词”可切换唱盘与歌词遮罩</string>
+    <string name="audio_permission_title">需要读取音频权限</string>
+    <string name="audio_permission_subtitle">授权后才能扫描本地音乐并显示歌曲列表</string>
+    <string name="audio_permission_action">授予权限</string>
+    <string name="audio_permission_settings">打开设置</string>
 </resources>

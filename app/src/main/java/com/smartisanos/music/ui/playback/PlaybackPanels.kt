@@ -70,6 +70,9 @@ private val PlaybackPanelLabelStyle = TextStyle(
     color = Color(0x66333333),
     textAlign = TextAlign.Center,
 )
+private val PlaybackMoreActionButtonWidth = 56.dp
+private val PlaybackMoreActionIconBoxSize = 36.dp
+private val PlaybackMoreActionIconSize = 30.dp
 
 @Composable
 internal fun PlaybackBottomPager(
@@ -97,7 +100,7 @@ internal fun PlaybackBottomPager(
             state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(170.dp),
+                .height(186.dp),
             beyondViewportPageCount = 1,
         ) { page ->
             val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
@@ -112,7 +115,9 @@ internal fun PlaybackBottomPager(
             ) {
                 if (page == ControllerPageIndex) {
                     Column(
-                        modifier = Modifier.width(width),
+                        modifier = Modifier
+                            .width(width)
+                            .padding(bottom = 15.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         PlaybackControlButtons(
@@ -207,11 +212,9 @@ internal fun PlaybackLyricsOverlay(
 @Composable
 internal fun PlaybackMoreActionPanel(
     keepScreenAwake: Boolean,
-    scratchEnabled: Boolean,
     favoriteEnabled: Boolean,
     showLyrics: Boolean,
     onKeepScreenAwakeToggle: () -> Unit,
-    onScratchToggle: () -> Unit,
     onFavoriteToggle: () -> Unit,
     onLyricsToggle: () -> Unit,
     onDismiss: () -> Unit,
@@ -249,7 +252,6 @@ internal fun PlaybackMoreActionPanel(
             )
             PlaybackMoreActionButton(stringResource(R.string.share), R.drawable.playing_btn_share, R.drawable.playing_btn_share_down, false, onDismiss)
             PlaybackMoreActionButton(stringResource(R.string.lyrics), R.drawable.playing_btn_lyrics, R.drawable.playing_btn_lyrics_down, showLyrics, onLyricsToggle)
-            PlaybackMoreActionButton(stringResource(R.string.scratch), R.drawable.btn_playing_scratche_off, R.drawable.btn_playing_scratche_on, scratchEnabled, onScratchToggle)
             PlaybackMoreActionButton(stringResource(R.string.always_on), R.drawable.sun_btn_off, R.drawable.sun_btn_off_down, keepScreenAwake, onKeepScreenAwakeToggle)
         }
     }
@@ -308,14 +310,49 @@ private fun PlaybackPagerIndicator(currentPage: Int, modifier: Modifier = Modifi
 }
 
 @Composable
-private fun PlaybackMoreActionButton(label: String, normalRes: Int, pressedRes: Int, highlighted: Boolean, onClick: () -> Unit) {
+private fun PlaybackMoreActionButton(
+    label: String,
+    normalRes: Int,
+    pressedRes: Int,
+    highlighted: Boolean,
+    onClick: () -> Unit,
+    iconBoxSize: Dp = PlaybackMoreActionIconBoxSize,
+    iconWidth: Dp = PlaybackMoreActionIconSize,
+    iconHeight: Dp = PlaybackMoreActionIconSize,
+) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     Column(
-        modifier = Modifier.width(56.dp).clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+        modifier = Modifier
+            .width(PlaybackMoreActionButtonWidth)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Image(painter = painterResource(if (pressed) pressedRes else normalRes), contentDescription = label)
-        Text(text = label, style = PlaybackPanelLabelStyle.copy(color = if (highlighted) Color(0xCC333333) else PlaybackPanelLabelStyle.color), modifier = Modifier.padding(top = 4.dp))
+        Box(
+            modifier = Modifier.size(iconBoxSize),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(if (pressed) pressedRes else normalRes),
+                contentDescription = label,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .width(iconWidth)
+                    .height(iconHeight),
+            )
+        }
+        Text(
+            text = label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = PlaybackPanelLabelStyle.copy(
+                color = if (highlighted) Color(0xCC333333) else PlaybackPanelLabelStyle.color,
+            ),
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
