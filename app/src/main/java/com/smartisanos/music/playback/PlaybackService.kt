@@ -1,6 +1,7 @@
 package com.smartisanos.music.playback
 
 import android.Manifest
+import android.app.PendingIntent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Build
@@ -19,6 +20,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.ListeningExecutorService
 import com.google.common.util.concurrent.MoreExecutors
+import com.smartisanos.music.MainActivity
 import java.util.concurrent.Executors
 
 class PlaybackService : MediaLibraryService() {
@@ -48,7 +50,9 @@ class PlaybackService : MediaLibraryService() {
             this,
             exoPlayer,
             PlaybackLibrarySessionCallback(),
-        ).build()
+        )
+            .setSessionActivity(createSessionActivityPendingIntent())
+            .build()
     }
 
     override fun onGetSession(
@@ -80,6 +84,15 @@ class PlaybackService : MediaLibraryService() {
             return emptyList()
         }
         return localAudioLibrary.getAudioItems()
+    }
+
+    private fun createSessionActivityPendingIntent(): PendingIntent {
+        return PendingIntent.getActivity(
+            this,
+            PlaybackSessionActivityRequestCode,
+            MainActivity.createOpenPlaybackIntent(this),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 
     private inner class PlaybackLibrarySessionCallback : MediaLibrarySession.Callback {
@@ -186,5 +199,9 @@ class PlaybackService : MediaLibraryService() {
             }
             return super.onCustomCommand(session, controller, customCommand, args)
         }
+    }
+
+    private companion object {
+        private const val PlaybackSessionActivityRequestCode = 1001
     }
 }

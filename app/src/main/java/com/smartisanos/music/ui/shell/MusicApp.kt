@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,7 +56,7 @@ private val PlaybackOverlayEasing = Easing { fraction ->
 }
 
 @Composable
-fun MusicApp() {
+fun MusicApp(playbackLaunchRequest: Int = 0) {
     val navController = rememberNavController()
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route ?: MusicDestination.Playlist.route
@@ -65,6 +66,12 @@ fun MusicApp() {
 
     ProvidePlaybackController {
         var playbackVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+
+        LaunchedEffect(playbackLaunchRequest) {
+            if (playbackLaunchRequest > 0) {
+                playbackVisible = true
+            }
+        }
 
         Box(modifier = Modifier.fillMaxSize()) {
             Scaffold(
