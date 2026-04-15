@@ -181,8 +181,12 @@ fun PlaybackScreen(
     var scratchDragging by remember { mutableStateOf(false) }
     var scratchResumePlayback by remember { mutableStateOf(false) }
 
-    BackHandler(enabled = showMorePanel) {
-        showMorePanel = false
+    BackHandler {
+        if (showMorePanel) {
+            showMorePanel = false
+        } else {
+            onCollapse()
+        }
     }
 
     DisposableEffect(controller) {

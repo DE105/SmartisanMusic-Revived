@@ -1,6 +1,5 @@
 package com.smartisanos.music.ui.shell
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.tween
@@ -66,10 +65,6 @@ fun MusicApp() {
 
     ProvidePlaybackController {
         var playbackVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
-
-        BackHandler(enabled = playbackVisible) {
-            playbackVisible = false
-        }
 
         Box(modifier = Modifier.fillMaxSize()) {
             Scaffold(
