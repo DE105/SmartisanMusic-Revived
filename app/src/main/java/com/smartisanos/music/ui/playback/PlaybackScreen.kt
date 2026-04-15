@@ -2,6 +2,8 @@ package com.smartisanos.music.ui.playback
 
 import android.content.Context
 import android.media.AudioManager
+import android.view.Gravity
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.SeekBar
 import androidx.activity.compose.BackHandler
@@ -56,7 +58,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
@@ -119,6 +120,11 @@ private const val ScratchHubDeadZoneRatio = 0.22f
 private const val ScratchMaxAngleStepDegrees = 54f
 private const val ScratchPreviewTimeoutMs = 260L
 private const val ScratchPreviewSettleToleranceMs = 24L
+private const val OriginalNeedlePivotX = 0.82f
+private const val OriginalNeedlePivotY = 0.08f
+private const val NeedleRestRotationDegrees = -12f
+private const val NeedlePlaybackStartRotationDegrees = 12f
+private const val NeedlePlaybackSweepDegrees = 10f
 private val PlaybackSeekBarHeight = 41.dp
 private val PlaybackSeekBarSideWidth = 51.3.dp
 private val PlaybackSeekTrackHeight = 8.dp
@@ -176,7 +182,7 @@ fun PlaybackScreen(
     var showMorePanel by rememberSaveable { mutableStateOf(false) }
     var showLyrics by rememberSaveable { mutableStateOf(false) }
     var keepScreenAwake by rememberSaveable { mutableStateOf(false) }
-    val scratchEnabled = true
+    var scratchEnabled by rememberSaveable { mutableStateOf(true) }
     var favoriteEnabled by rememberSaveable { mutableStateOf(false) }
     var selectedRoute by rememberSaveable { mutableStateOf(PlaybackOutputRoute.Speaker) }
     var scratchPreviewPositionMs by remember { mutableStateOf<Long?>(null) }
@@ -271,10 +277,12 @@ fun PlaybackScreen(
         ?.let { displayPositionMs.toFloat() / it.toFloat() }
         ?.coerceIn(0f, 1f)
         ?: 0f
-    val targetNeedleRotation = if (state.mediaItem != null && (state.isPlaying || scratchDragging)) {
-        3.5f + (progress * 16f)
+    val needleShouldTouchRecord = state.mediaItem != null &&
+        (state.isPlaying || scratchDragging)
+    val targetNeedleRotation = if (needleShouldTouchRecord) {
+        NeedlePlaybackStartRotationDegrees + (progress * NeedlePlaybackSweepDegrees)
     } else {
-        -12f
+        NeedleRestRotationDegrees
     }
     val needleRotation by animateFloatAsState(
         targetValue = targetNeedleRotation,
@@ -472,19 +480,21 @@ fun PlaybackScreen(
                 PlaybackMoreActionPanel(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(
-                            start = 8.dp,
-                            end = 8.dp,
-                            bottom = 108.dp + bottomInset,
-                        )
-                        .width(turntableWidth),
-                    keepScreenAwake = keepScreenAwake,
+                        .fillMaxWidth(),
                     favoriteEnabled = favoriteEnabled,
                     showLyrics = showLyrics,
-                    onKeepScreenAwakeToggle = { keepScreenAwake = !keepScreenAwake },
+                    scratchEnabled = scratchEnabled,
+                    bottomInset = bottomInset,
                     onFavoriteToggle = { favoriteEnabled = !favoriteEnabled },
+                    onSleepTimerClick = {
+                        showMorePanel = false
+                    },
                     onLyricsToggle = {
                         showLyrics = !showLyrics
+                        showMorePanel = false
+                    },
+                    onScratchToggle = {
+                        scratchEnabled = !scratchEnabled
                         showMorePanel = false
                     },
                     onDismiss = {
@@ -720,11 +730,6 @@ private fun PlaybackTurntableSection(
     modifier: Modifier = Modifier,
 ) {
     val turntableHeight = 356.5938.dp * scale
-    val needleWidth = 73.3.dp * scale
-    val needleHeight = 310.dp * scale
-    val needleTopMargin = 25.5.dp * scale
-    val needleRightMargin = 2.5.dp * scale
-    val needleShadowRightMargin = 2.dp * scale
     val moreButtonMargin = 12.dp * scale
     val moreButtonTopMargin = 38.dp * scale
     val actionButtonSize = PlaybackActionButtonSize * scale
@@ -884,54 +889,128 @@ private fun PlaybackTurntableSection(
                 )
             }
             if (!showLyrics) {
-                Box(
+                OriginalNeedleStack(
+                    needleRotation = needleRotation,
+                    scale = scale,
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = needleTopMargin, end = needleShadowRightMargin)
-                        .width(needleWidth)
-                        .height(needleHeight)
-                        .graphicsLayer {
-                            transformOrigin = TransformOrigin(0.82f, 0.08f)
-                            rotationZ = needleRotation
-                        },
-                ) {
-                    AndroidImageView(
-                        drawableRes = R.drawable.needle_shadow2,
-                        scaleType = ImageView.ScaleType.FIT_END,
-                        modifier = Modifier.matchParentSize(),
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = needleTopMargin, end = needleRightMargin)
-                        .width(needleWidth)
-                        .height(needleHeight)
-                        .graphicsLayer {
-                            transformOrigin = TransformOrigin(0.82f, 0.08f)
-                            rotationZ = needleRotation
-                        },
-                ) {
-                    AndroidNeedleBackground(
-                        drawableRes = R.drawable.playing_stylus_lp_bg,
-                        modifier = Modifier.matchParentSize(),
-                    )
-                    AndroidImageView(
-                        drawableRes = R.drawable.playing_stylus_lp,
-                        scaleType = ImageView.ScaleType.FIT_XY,
-                        modifier = Modifier.matchParentSize(),
-                    )
-                    AndroidImageView(
-                        drawableRes = R.drawable.playing_stylus_lp_top,
-                        scaleType = ImageView.ScaleType.FIT_START,
-                        modifier = Modifier
-                            .height(needleHeight)
-                            .align(Alignment.TopEnd),
-                    )
-                }
+                        .matchParentSize()
+                        .zIndex(2f),
+                )
             }
         }
     }
+}
+
+private data class OriginalNeedleViews(
+    val base: ImageView,
+    val shadow: ImageView,
+    val needle: ImageView,
+    val top: ImageView,
+)
+
+@Composable
+private fun OriginalNeedleStack(
+    needleRotation: Float,
+    scale: Float,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+    AndroidView(
+        factory = { context ->
+            FrameLayout(context).apply {
+                clipChildren = false
+                clipToPadding = false
+
+                val base = ImageView(context).apply {
+                    scaleType = ImageView.ScaleType.FIT_XY
+                    setBackgroundResource(R.drawable.playing_stylus_lp_bg_original)
+                }
+                val shadow = ImageView(context).apply {
+                    scaleType = ImageView.ScaleType.FIT_END
+                    setImageResource(R.drawable.needle_shadow2)
+                }
+                val needle = ImageView(context).apply {
+                    scaleType = ImageView.ScaleType.FIT_XY
+                    setImageResource(R.drawable.playing_stylus_lp_original)
+                }
+                val top = ImageView(context).apply {
+                    scaleType = ImageView.ScaleType.FIT_START
+                    setImageResource(R.drawable.playing_stylus_lp_top_original)
+                }
+
+                tag = OriginalNeedleViews(base, shadow, needle, top)
+                addView(base)
+                addView(shadow)
+                addView(needle)
+                addView(top)
+            }
+        },
+        modifier = modifier,
+        update = { frame ->
+            val views = frame.tag as OriginalNeedleViews
+            val needleWidthPx = with(density) { (73.3.dp * scale).roundToPx() }
+            val needleHeightPx = with(density) { (310.dp * scale).roundToPx() }
+            val needleTopWidthPx = with(density) { (41.dp * scale).roundToPx() }
+            val needleTopMarginPx = with(density) { (25.5.dp * scale).roundToPx() }
+            val needleRightMarginPx = with(density) { (2.5.dp * scale).roundToPx() }
+            val needleShadowRightMarginPx = with(density) { (2.dp * scale).roundToPx() }
+
+            updateOriginalNeedleLayout(
+                view = views.base,
+                widthPx = needleWidthPx,
+                heightPx = needleHeightPx,
+                topMarginPx = needleTopMarginPx,
+                endMarginPx = needleRightMarginPx,
+            )
+            updateOriginalNeedleLayout(
+                view = views.shadow,
+                widthPx = needleWidthPx,
+                heightPx = needleHeightPx,
+                topMarginPx = needleTopMarginPx,
+                endMarginPx = needleShadowRightMarginPx,
+            )
+            updateOriginalNeedleLayout(
+                view = views.needle,
+                widthPx = needleWidthPx,
+                heightPx = needleHeightPx,
+                topMarginPx = needleTopMarginPx,
+                endMarginPx = needleRightMarginPx,
+            )
+            updateOriginalNeedleLayout(
+                view = views.top,
+                widthPx = needleTopWidthPx,
+                heightPx = needleHeightPx,
+                topMarginPx = needleTopMarginPx,
+                endMarginPx = needleRightMarginPx,
+            )
+
+            listOf(views.shadow, views.needle).forEach { view ->
+                view.pivotX = needleWidthPx * OriginalNeedlePivotX
+                view.pivotY = needleHeightPx * OriginalNeedlePivotY
+                view.rotation = needleRotation
+            }
+            views.base.rotation = 0f
+            views.top.rotation = 0f
+        },
+    )
+}
+
+private fun updateOriginalNeedleLayout(
+    view: ImageView,
+    widthPx: Int,
+    heightPx: Int,
+    topMarginPx: Int,
+    endMarginPx: Int,
+) {
+    val params = (view.layoutParams as? FrameLayout.LayoutParams)
+        ?: FrameLayout.LayoutParams(widthPx, heightPx, Gravity.TOP or Gravity.END)
+    params.width = widthPx
+    params.height = heightPx
+    params.gravity = Gravity.TOP or Gravity.END
+    params.topMargin = topMarginPx
+    params.marginEnd = endMarginPx
+    params.rightMargin = endMarginPx
+    view.layoutParams = params
 }
 
 @Composable

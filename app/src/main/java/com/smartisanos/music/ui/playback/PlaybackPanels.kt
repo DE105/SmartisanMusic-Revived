@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,7 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,9 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -49,8 +47,6 @@ import kotlin.math.absoluteValue
 private const val RouterPageIndex = 0
 private const val ControllerPageIndex = 1
 
-private val PlaybackPanelBackground = Color(0xFFF9F9F7)
-private val PlaybackPanelLineColor = Color(0x12000000)
 private val PlaybackRouterTextColor = Color(0x66333333)
 private val PlaybackRouterTextSelectedColor = Color(0xFF4A4A4A)
 private val PlaybackLyricsPrimaryStyle = TextStyle(
@@ -69,9 +65,23 @@ private val PlaybackPanelLabelStyle = TextStyle(
     color = Color(0x66333333),
     textAlign = TextAlign.Center,
 )
-private val PlaybackMoreActionButtonWidth = 56.dp
-private val PlaybackMoreActionIconBoxSize = 36.dp
-private val PlaybackMoreActionIconSize = 30.dp
+private val PlaybackMoreActionTitleStyle = TextStyle(
+    fontSize = 15.sp,
+    color = Color(0x99000000),
+    textAlign = TextAlign.Center,
+)
+private val PlaybackMoreActionButtonStyle = TextStyle(
+    fontSize = 11.sp,
+    color = Color(0x99000000),
+    textAlign = TextAlign.Center,
+)
+private val PlaybackMoreActionSelectedColor = Color(0xFF5C8FE8)
+private val PlaybackMoreActionDividerColor = Color(0xFFE0E0E0)
+private val PlaybackMoreActionTitleHeight = 51.dp
+private val PlaybackMoreActionRowHeight = 72.dp
+private val PlaybackMoreActionIconSize = 24.dp
+private val PlaybackMoreActionCancelWidth = 54.dp
+private val PlaybackMoreActionCancelHeight = 32.dp
 
 @Composable
 internal fun PlaybackBottomPager(
@@ -202,49 +212,255 @@ internal fun PlaybackLyricsOverlay(
 
 @Composable
 internal fun PlaybackMoreActionPanel(
-    keepScreenAwake: Boolean,
     favoriteEnabled: Boolean,
     showLyrics: Boolean,
-    onKeepScreenAwakeToggle: () -> Unit,
+    scratchEnabled: Boolean,
+    bottomInset: Dp,
     onFavoriteToggle: () -> Unit,
+    onSleepTimerClick: () -> Unit,
     onLyricsToggle: () -> Unit,
+    onScratchToggle: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(22.dp))
-            .background(PlaybackPanelBackground)
-            .drawWithCache {
-                onDrawBehind {
-                    drawRoundRect(
-                        color = Color(0x14000000),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(22.dp.toPx()),
-                    )
-                    drawRoundRect(
-                        color = PlaybackPanelLineColor,
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(22.dp.toPx()),
-                        style = Stroke(width = 1.dp.toPx()),
-                    )
-                }
-            }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier = modifier.background(Color.White),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            PlaybackMoreActionButton(
-                stringResource(R.string.favorite),
-                if (favoriteEnabled) R.drawable.playing_btn_favorite_cancel else R.drawable.playing_btn_favorite_add,
-                if (favoriteEnabled) R.drawable.playing_btn_favorite_cancel_down else R.drawable.playing_btn_favorite_add_down,
-                favoriteEnabled,
-                onFavoriteToggle,
-            )
-            PlaybackMoreActionButton(stringResource(R.string.share), R.drawable.playing_btn_share, R.drawable.playing_btn_share_down, false, onDismiss)
-            PlaybackMoreActionButton(stringResource(R.string.lyrics), R.drawable.playing_btn_lyrics, R.drawable.playing_btn_lyrics_down, showLyrics, onLyricsToggle)
-            PlaybackMoreActionButton(stringResource(R.string.always_on), R.drawable.sun_btn_off, R.drawable.sun_btn_off_down, keepScreenAwake, onKeepScreenAwakeToggle)
+        PlaybackMoreActionTitleBar(onDismiss = onDismiss)
+        PlaybackMoreActionGrid(
+            favoriteEnabled = favoriteEnabled,
+            showLyrics = showLyrics,
+            scratchEnabled = scratchEnabled,
+            onFavoriteToggle = onFavoriteToggle,
+            onSleepTimerClick = onSleepTimerClick,
+            onLyricsToggle = onLyricsToggle,
+            onScratchToggle = onScratchToggle,
+            onDismiss = onDismiss,
+        )
+        Spacer(modifier = Modifier.height(bottomInset))
+    }
+}
+
+@Composable
+private fun PlaybackMoreActionTitleBar(onDismiss: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(PlaybackMoreActionTitleHeight),
+        contentAlignment = Alignment.Center,
+    ) {
+        AndroidDrawableImage(
+            drawableRes = R.drawable.more_select_titlebar_bg,
+            modifier = Modifier.matchParentSize(),
+        )
+        Text(
+            text = stringResource(R.string.select_action),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = PlaybackMoreActionTitleStyle,
+        )
+        PlaybackCancelButton(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 8.dp)
+                .width(PlaybackMoreActionCancelWidth)
+                .height(PlaybackMoreActionCancelHeight),
+            onClick = onDismiss,
+        )
+    }
+}
+
+@Composable
+private fun PlaybackMoreActionGrid(
+    favoriteEnabled: Boolean,
+    showLyrics: Boolean,
+    scratchEnabled: Boolean,
+    onFavoriteToggle: () -> Unit,
+    onSleepTimerClick: () -> Unit,
+    onLyricsToggle: () -> Unit,
+    onScratchToggle: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(PlaybackMoreActionRowHeight * 2),
+    ) {
+        AndroidDrawableImage(
+            drawableRes = R.drawable.more_select_btn_bg,
+            modifier = Modifier.matchParentSize(),
+        )
+        AndroidDrawableImage(
+            drawableRes = R.drawable.more_select_titlebar_bg_shadow,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+                .align(Alignment.TopCenter),
+        )
+        Column(modifier = Modifier.fillMaxSize()) {
+            PlaybackMoreActionRow {
+                PlaybackMoreActionButton(
+                    label = stringResource(R.string.add_to_playlist),
+                    normalRes = R.drawable.more_select_icon_addlist,
+                    pressedRes = R.drawable.more_select_icon_addlist_down,
+                    onClick = onDismiss,
+                )
+                PlaybackMoreActionDivider(vertical = true)
+                PlaybackMoreActionButton(
+                    label = stringResource(R.string.add_to_queue),
+                    normalRes = R.drawable.more_select_icon_addplay,
+                    pressedRes = R.drawable.more_select_icon_addplay_down,
+                    onClick = onDismiss,
+                )
+                PlaybackMoreActionDivider(vertical = true)
+                PlaybackMoreActionButton(
+                    label = stringResource(R.string.love),
+                    normalRes = if (favoriteEnabled) R.drawable.more_select_icon_favorite_cancel else R.drawable.more_select_icon_favorite_add,
+                    pressedRes = if (favoriteEnabled) R.drawable.more_select_icon_favorite_cancel_down else R.drawable.more_select_icon_favorite_add_down,
+                    onClick = onFavoriteToggle,
+                )
+                PlaybackMoreActionDivider(vertical = true)
+                PlaybackMoreActionButton(
+                    label = stringResource(R.string.lyrics),
+                    normalRes = R.drawable.more_select_icon_lyric,
+                    pressedRes = R.drawable.more_select_icon_lyric,
+                    selected = showLyrics,
+                    onClick = onLyricsToggle,
+                )
+            }
+            PlaybackMoreActionDivider(vertical = false)
+            PlaybackMoreActionRow {
+                PlaybackMoreActionButton(
+                    label = stringResource(R.string.set_ringtone),
+                    normalRes = R.drawable.more_select_icon_ringtone,
+                    pressedRes = R.drawable.more_select_icon_ringtone,
+                    onClick = onDismiss,
+                )
+                PlaybackMoreActionDivider(vertical = true)
+                PlaybackMoreActionButton(
+                    label = stringResource(R.string.sleep_timer),
+                    normalRes = R.drawable.more_select_icon_timer,
+                    pressedRes = R.drawable.more_select_icon_timer,
+                    onClick = onSleepTimerClick,
+                )
+                PlaybackMoreActionDivider(vertical = true)
+                PlaybackMoreActionButton(
+                    label = stringResource(R.string.djing),
+                    normalRes = if (scratchEnabled) R.drawable.more_select_icon_djing_on else R.drawable.more_select_icon_djing,
+                    pressedRes = if (scratchEnabled) R.drawable.more_select_icon_djing_on else R.drawable.more_select_icon_djing,
+                    selected = scratchEnabled,
+                    selectedTextColor = PlaybackMoreActionSelectedColor,
+                    onClick = onScratchToggle,
+                )
+                PlaybackMoreActionDivider(vertical = true)
+                PlaybackMoreActionButton(
+                    label = stringResource(R.string.delete),
+                    normalRes = R.drawable.more_select_icon_delete,
+                    pressedRes = R.drawable.more_select_icon_delete,
+                    onClick = onDismiss,
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun PlaybackMoreActionRow(content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(PlaybackMoreActionRowHeight),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun PlaybackMoreActionDivider(vertical: Boolean) {
+    Box(
+        modifier = if (vertical) {
+            Modifier
+                .width(1.dp)
+                .fillMaxHeight()
+                .background(PlaybackMoreActionDividerColor)
+        } else {
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(PlaybackMoreActionDividerColor)
+        },
+    )
+}
+
+@Composable
+private fun PlaybackCancelButton(
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    Box(
+        modifier = modifier.clickable(
+            interactionSource = interactionSource,
+            indication = null,
+            onClick = onClick,
+        ),
+        contentAlignment = Alignment.Center,
+    ) {
+        AndroidDrawableImage(
+            drawableRes = if (pressed) R.drawable.btn_cancel_down else R.drawable.btn_cancel,
+            modifier = Modifier.matchParentSize(),
+        )
+        Text(
+            text = stringResource(R.string.cancel),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = PlaybackMoreActionButtonStyle,
+        )
+    }
+}
+
+@Composable
+private fun RowScope.PlaybackMoreActionButton(
+    label: String,
+    normalRes: Int,
+    pressedRes: Int,
+    selected: Boolean = false,
+    selectedTextColor: Color = PlaybackMoreActionButtonStyle.color,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Image(
+            painter = painterResource(if (pressed) pressedRes else normalRes),
+            contentDescription = label,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.size(PlaybackMoreActionIconSize),
+        )
+        Text(
+            text = label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = PlaybackMoreActionButtonStyle.copy(
+                color = if (selected) selectedTextColor else PlaybackMoreActionButtonStyle.color,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp, start = 4.dp, end = 4.dp),
+        )
     }
 }
 
@@ -296,54 +512,6 @@ private fun PlaybackPagerIndicator(currentPage: Int, modifier: Modifier = Modifi
             painter = painterResource(if (currentPage == ControllerPageIndex) R.drawable.playing_dot_black else R.drawable.playing_dot_white),
             contentDescription = null,
             modifier = Modifier.width(13.dp).height(12.dp),
-        )
-    }
-}
-
-@Composable
-private fun PlaybackMoreActionButton(
-    label: String,
-    normalRes: Int,
-    pressedRes: Int,
-    highlighted: Boolean,
-    onClick: () -> Unit,
-    iconBoxSize: Dp = PlaybackMoreActionIconBoxSize,
-    iconWidth: Dp = PlaybackMoreActionIconSize,
-    iconHeight: Dp = PlaybackMoreActionIconSize,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    Column(
-        modifier = Modifier
-            .width(PlaybackMoreActionButtonWidth)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
-            ),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            modifier = Modifier.size(iconBoxSize),
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                painter = painterResource(if (pressed) pressedRes else normalRes),
-                contentDescription = label,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .width(iconWidth)
-                    .height(iconHeight),
-            )
-        }
-        Text(
-            text = label,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = PlaybackPanelLabelStyle.copy(
-                color = if (highlighted) Color(0xCC333333) else PlaybackPanelLabelStyle.color,
-            ),
-            modifier = Modifier.padding(top = 4.dp),
         )
     }
 }
