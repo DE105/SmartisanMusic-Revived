@@ -2,6 +2,7 @@ package com.smartisanos.music.ui.playback
 
 import android.content.Context
 import android.media.AudioManager
+import android.os.SystemClock
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -51,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -116,6 +118,7 @@ private val PlaybackPanelBottomEdge = Color(0xFFFDFDFD)
 private val PlaybackPanelShadow = Color(0x14000000)
 
 private const val ScratchCycleDurationMs = 1_800f
+private const val DiscRotationDegrees = 360f
 private const val ScratchHubDeadZoneRatio = 0.22f
 private const val ScratchMaxAngleStepDegrees = 54f
 private const val ScratchPreviewTimeoutMs = 260L
@@ -158,6 +161,7 @@ internal data class PlaybackScreenState(
     val currentPositionMs: Long = 0L,
     val durationMs: Long = 0L,
     val volume: Float = 1f,
+    val positionSnapshotElapsedRealtimeMs: Long = 0L,
 )
 
 internal enum class PlaybackOutputRoute {
@@ -371,7 +375,9 @@ fun PlaybackScreen(
                     keepScreenAwake = keepScreenAwake,
                     lyricsLines = lyricsLines,
                     needleRotation = needleRotation,
-                    discRotation = ((displayPositionMs % ScratchCycleDurationMs.toLong()).toFloat() / ScratchCycleDurationMs) * 360f,
+                    mediaId = state.mediaItem?.mediaId,
+                    positionSnapshotElapsedRealtimeMs = state.positionSnapshotElapsedRealtimeMs,
+                    discRotationRunning = state.isPlaying && !scratchDragging && scratchPreviewPositionMs == null,
                     onMoreClick = {
                         showMorePanel = true
                     },
@@ -718,7 +724,9 @@ private fun PlaybackTurntableSection(
     keepScreenAwake: Boolean,
     lyricsLines: List<String>,
     needleRotation: Float,
-    discRotation: Float,
+    mediaId: String?,
+    positionSnapshotElapsedRealtimeMs: Long,
+    discRotationRunning: Boolean,
     onMoreClick: () -> Unit,
     onRecordTap: () -> Unit,
     onKeepScreenToggle: () -> Unit,
@@ -747,6 +755,12 @@ private fun PlaybackTurntableSection(
     val latestScratchPositionChange by rememberUpdatedState(onScratchPositionChange)
     val latestScratchEnd by rememberUpdatedState(onScratchEnd)
     val latestScratchCancel by rememberUpdatedState(onScratchCancel)
+    val discRotation = rememberSmoothDiscRotation(
+        mediaId = mediaId,
+        positionMs = currentPositionMs,
+        positionSnapshotElapsedRealtimeMs = positionSnapshotElapsedRealtimeMs,
+        running = discRotationRunning,
+    )
 
     Box(
         modifier = modifier.height(turntableHeight + 52.dp * scale),
@@ -1256,8 +1270,54 @@ private fun Player?.snapshot(context: Context): PlaybackScreenState {
         currentPositionMs = player.currentPosition.coerceAtLeast(0L),
         durationMs = player.duration.takeIf { it > 0L } ?: 0L,
         volume = context.musicStreamVolumeFraction(),
+        positionSnapshotElapsedRealtimeMs = SystemClock.elapsedRealtime(),
     )
 }
+
+@Composable
+private fun rememberSmoothDiscRotation(
+    mediaId: String?,
+    positionMs: Long,
+    positionSnapshotElapsedRealtimeMs: Long,
+    running: Boolean,
+): Float {
+    val latestPositionMs by rememberUpdatedState(positionMs)
+    val latestSnapshotElapsedRealtimeMs by rememberUpdatedState(positionSnapshotElapsedRealtimeMs)
+    var rotation by remember(mediaId) {
+        mutableFloatStateOf(discRotationFromPosition(positionMs))
+    }
+
+    LaunchedEffect(mediaId, running) {
+        if (running) {
+            while (isActive) {
+                withFrameNanos {
+                    val elapsedMs = (
+                        SystemClock.elapsedRealtime() - latestSnapshotElapsedRealtimeMs
+                    ).coerceAtLeast(0L)
+                    rotation = discRotationFromPosition(latestPositionMs + elapsedMs)
+                }
+            }
+        } else {
+            rotation = discRotationFromPosition(latestPositionMs)
+        }
+    }
+
+    LaunchedEffect(mediaId, positionMs, running) {
+        if (!running) {
+            rotation = discRotationFromPosition(positionMs)
+        }
+    }
+
+    return rotation
+}
+
+private fun discRotationFromPosition(positionMs: Long): Float {
+    val cycleMs = ScratchCycleDurationMs.toLong()
+    val cyclePositionMs = positionMs.floorMod(cycleMs)
+    return (cyclePositionMs.toFloat() / ScratchCycleDurationMs) * DiscRotationDegrees
+}
+
+private fun Long.floorMod(divisor: Long): Long = ((this % divisor) + divisor) % divisor
 
 private fun Context.musicStreamVolumeFraction(): Float {
     val audioManager = getSystemService(AudioManager::class.java) ?: return 1f
