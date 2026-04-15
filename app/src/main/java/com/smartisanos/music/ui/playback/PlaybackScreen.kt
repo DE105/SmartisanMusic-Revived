@@ -16,6 +16,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -111,7 +113,6 @@ private val PlaybackVolumeFillColor = Color(0xFF9A9A9A)
 private val PlaybackPanelBorder = Color(0xFFE8E8E8)
 private val PlaybackPanelBottomEdge = Color(0xFFFDFDFD)
 private val PlaybackPanelShadow = Color(0x14000000)
-private val PlaybackMoreButtonShadow = Color(0x12000000)
 
 private const val ScratchCycleDurationMs = 1_800f
 private const val ScratchHubDeadZoneRatio = 0.22f
@@ -126,6 +127,7 @@ private val PlaybackSeekThumbHeight = 41.dp
 private val PlaybackSeekBarDividerHeight = 0.7.dp
 private val PlaybackVolumeBarHeight = 60.dp
 private val PlaybackVolumeThumbOffset = 5.dp
+private val PlaybackActionButtonSize = 31.dp
 
 private val PlaybackTitleStyle = TextStyle(
     fontSize = 18.sp,
@@ -364,6 +366,9 @@ fun PlaybackScreen(
                     discRotation = ((displayPositionMs % ScratchCycleDurationMs.toLong()).toFloat() / ScratchCycleDurationMs) * 360f,
                     onMoreClick = {
                         showMorePanel = true
+                    },
+                    onRecordTap = {
+                        showLyrics = !showLyrics
                     },
                     onKeepScreenToggle = {
                         keepScreenAwake = !keepScreenAwake
@@ -705,6 +710,7 @@ private fun PlaybackTurntableSection(
     needleRotation: Float,
     discRotation: Float,
     onMoreClick: () -> Unit,
+    onRecordTap: () -> Unit,
     onKeepScreenToggle: () -> Unit,
     onScratchStart: () -> Unit,
     onScratchMotion: (Long, Float) -> Unit,
@@ -721,10 +727,13 @@ private fun PlaybackTurntableSection(
     val needleShadowRightMargin = 2.dp * scale
     val moreButtonMargin = 12.dp * scale
     val moreButtonTopMargin = 38.dp * scale
+    val actionButtonSize = PlaybackActionButtonSize * scale
     var discSize by remember { mutableStateOf(IntSize.Zero) }
     var scratchActive by remember { mutableStateOf(false) }
-    var scratchPositionMs by remember { mutableStateOf(0L) }
+    var scratchPositionMs by remember { mutableLongStateOf(0L) }
     var lastAngleDegrees by remember { mutableFloatStateOf(Float.NaN) }
+    val latestDiscSize by rememberUpdatedState(discSize)
+    val latestRecordTap by rememberUpdatedState(onRecordTap)
     val scratchAvailable by rememberUpdatedState(scratchEnabled && !showLyrics && durationMs > 0L)
     val latestPositionMs by rememberUpdatedState(currentPositionMs)
     val latestDurationMs by rememberUpdatedState(durationMs)
@@ -745,8 +754,7 @@ private fun PlaybackTurntableSection(
                 .align(Alignment.TopStart)
                 .zIndex(2f)
                 .padding(start = moreButtonMargin, top = moreButtonTopMargin)
-                .size(28.dp * scale),
-            shadowColor = PlaybackMoreButtonShadow,
+                .size(actionButtonSize),
             onClick = onMoreClick,
         )
         if (showLyrics) {
@@ -758,11 +766,10 @@ private fun PlaybackTurntableSection(
                     .align(Alignment.TopEnd)
                     .zIndex(2f)
                     .padding(end = moreButtonMargin, top = moreButtonTopMargin)
-                    .size(28.dp * scale)
+                    .size(actionButtonSize)
                     .graphicsLayer {
                         alpha = if (keepScreenAwake) 1f else 0.72f
                     },
-                shadowColor = PlaybackMoreButtonShadow,
                 onClick = onKeepScreenToggle,
             )
         }
@@ -797,6 +804,17 @@ private fun PlaybackTurntableSection(
                     .matchParentSize()
                     .onSizeChanged { discSize = it }
                     .zIndex(3f)
+                    .pointerInput(showLyrics) {
+                        detectTapGestures(
+                            onTap = { offset ->
+                                val center = discCenter(latestDiscSize)
+                                val radius = discRadius(latestDiscSize)
+                                if (isWithinDisc(offset, center, radius)) {
+                                    latestRecordTap()
+                                }
+                            },
+                        )
+                    }
                     .pointerInput(scratchAvailable) {
                         detectDragGestures(
                             onDragStart = { offset ->
@@ -865,50 +883,52 @@ private fun PlaybackTurntableSection(
                     modifier = Modifier.matchParentSize(),
                 )
             }
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = needleTopMargin, end = needleShadowRightMargin)
-                    .width(needleWidth)
-                    .height(needleHeight)
-                    .graphicsLayer {
-                        transformOrigin = TransformOrigin(0.82f, 0.08f)
-                        rotationZ = needleRotation
-                    },
-            ) {
-                AndroidImageView(
-                    drawableRes = R.drawable.needle_shadow2,
-                    scaleType = ImageView.ScaleType.FIT_END,
-                    modifier = Modifier.matchParentSize(),
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = needleTopMargin, end = needleRightMargin)
-                    .width(needleWidth)
-                    .height(needleHeight)
-                    .graphicsLayer {
-                        transformOrigin = TransformOrigin(0.82f, 0.08f)
-                        rotationZ = needleRotation
-                    },
-            ) {
-                AndroidNeedleBackground(
-                    drawableRes = R.drawable.playing_stylus_lp_bg,
-                    modifier = Modifier.matchParentSize(),
-                )
-                AndroidImageView(
-                    drawableRes = R.drawable.playing_stylus_lp,
-                    scaleType = ImageView.ScaleType.FIT_XY,
-                    modifier = Modifier.matchParentSize(),
-                )
-                AndroidImageView(
-                    drawableRes = R.drawable.playing_stylus_lp_top,
-                    scaleType = ImageView.ScaleType.FIT_START,
+            if (!showLyrics) {
+                Box(
                     modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = needleTopMargin, end = needleShadowRightMargin)
+                        .width(needleWidth)
                         .height(needleHeight)
-                        .align(Alignment.TopEnd),
-                )
+                        .graphicsLayer {
+                            transformOrigin = TransformOrigin(0.82f, 0.08f)
+                            rotationZ = needleRotation
+                        },
+                ) {
+                    AndroidImageView(
+                        drawableRes = R.drawable.needle_shadow2,
+                        scaleType = ImageView.ScaleType.FIT_END,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = needleTopMargin, end = needleRightMargin)
+                        .width(needleWidth)
+                        .height(needleHeight)
+                        .graphicsLayer {
+                            transformOrigin = TransformOrigin(0.82f, 0.08f)
+                            rotationZ = needleRotation
+                        },
+                ) {
+                    AndroidNeedleBackground(
+                        drawableRes = R.drawable.playing_stylus_lp_bg,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                    AndroidImageView(
+                        drawableRes = R.drawable.playing_stylus_lp,
+                        scaleType = ImageView.ScaleType.FIT_XY,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                    AndroidImageView(
+                        drawableRes = R.drawable.playing_stylus_lp_top,
+                        scaleType = ImageView.ScaleType.FIT_START,
+                        modifier = Modifier
+                            .height(needleHeight)
+                            .align(Alignment.TopEnd),
+                    )
+                }
             }
         }
     }
@@ -1064,7 +1084,6 @@ internal fun PressedDrawableButton(
     @DrawableRes pressedRes: Int,
     contentDescription: String,
     modifier: Modifier = Modifier,
-    shadowColor: Color = Color.Transparent,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -1072,24 +1091,6 @@ internal fun PressedDrawableButton(
 
     Box(
         modifier = modifier
-            .then(
-                if (shadowColor.alpha > 0f) {
-                    Modifier.drawWithCache {
-                        onDrawBehind {
-                            drawCircle(
-                                color = shadowColor,
-                                radius = size.minDimension * 0.48f,
-                                center = androidx.compose.ui.geometry.Offset(
-                                    x = size.width / 2f,
-                                    y = size.height / 2f + 1.5.dp.toPx(),
-                                ),
-                            )
-                        }
-                    }
-                } else {
-                    Modifier
-                }
-            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -1210,6 +1211,19 @@ private fun fractionFromPosition(positionX: Float, trackWidthPx: Int): Float {
 private fun discCenter(size: IntSize): Offset = Offset(size.width / 2f, size.height / 2f)
 
 private fun discRadius(size: IntSize): Float = min(size.width, size.height) / 2f
+
+private fun isWithinDisc(
+    point: Offset,
+    center: Offset,
+    radius: Float,
+): Boolean {
+    if (radius <= 0f) {
+        return false
+    }
+    val dx = point.x - center.x
+    val dy = point.y - center.y
+    return sqrt((dx * dx) + (dy * dy)) <= radius
+}
 
 private fun isWithinScratchRegion(
     point: Offset,

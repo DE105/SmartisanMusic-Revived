@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,9 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -160,27 +159,19 @@ internal fun PlaybackLyricsOverlay(
     lyricsLines: List<String>,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = modifier.graphicsLayer {
-            compositingStrategy = CompositingStrategy.Offscreen
-        },
-    ) {
-        Image(
-            painter = painterResource(R.drawable.mask_playing_lyric),
-            contentDescription = stringResource(R.string.lyrics),
-            contentScale = ContentScale.FillBounds,
+    Box(modifier = modifier) {
+        Box(
             modifier = Modifier
                 .matchParentSize()
-                .drawWithCache {
-                    onDrawWithContent {
-                        drawContent()
-                        drawRect(
-                            color = Color.Black.copy(alpha = 0.02f),
-                            blendMode = BlendMode.SrcOver,
-                        )
-                    }
-                },
-        )
+                .clip(CircleShape),
+        ) {
+            Image(
+                painter = painterResource(R.drawable.mask_playing_lyric),
+                contentDescription = stringResource(R.string.lyrics),
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
