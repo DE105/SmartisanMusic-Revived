@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">Music</string>
+    <string name="back">返回</string>
     <string name="edit">编辑</string>
     <string name="tab_play_list">播放列表</string>
     <string name="new_playlist">新建播放列表</string>
@@ -11,6 +12,10 @@
     <string name="show_album">本地歌曲所属的专辑将显示在这里</string>
     <string name="no_song">暂无歌曲</string>
     <string name="show_song">本地歌曲将显示在这里</string>
+    <string name="unknown_album">未知专辑</string>
+    <string name="many_artist">多位艺术家</string>
+    <string name="album_track_count">%1$d 首歌曲</string>
+    <string name="listview_header_list">列表</string>
     <string name="listview_header_tile">平铺</string>
     <string name="tab_local_search">搜索</string>
     <string name="library_root">本地音乐</string>
@@ -19,6 +24,8 @@
     <string name="previous_song">上一首</string>
     <string name="next_song">下一首</string>
     <string name="play">播放</string>
+    <string name="play_all">全部播放</string>
+    <string name="play_shuffle">随机播放</string>
     <string name="pause">暂停</string>
     <string name="favorite">收藏</string>
     <string name="volume">音量</string>

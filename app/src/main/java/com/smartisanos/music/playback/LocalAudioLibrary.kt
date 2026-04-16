@@ -2,6 +2,8 @@ package com.smartisanos.music.playback
 
 import android.content.ContentUris
 import android.content.Context
+import android.net.Uri
+import android.os.Bundle
 import android.provider.MediaStore
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -39,8 +41,11 @@ class LocalAudioLibrary(
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.ALBUM_ARTIST,
+            MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.TRACK,
+            MediaStore.Audio.Media.YEAR,
             MediaStore.Audio.Media.DATE_ADDED,
         )
         val selection = buildString {
@@ -62,8 +67,11 @@ class LocalAudioLibrary(
                 val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
                 val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
                 val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                val albumArtistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ARTIST)
+                val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
                 val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 val trackColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
+                val yearColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idColumn)
@@ -74,8 +82,12 @@ class LocalAudioLibrary(
                         ?.takeIf { it.isNotBlank() && it != MediaStore.UNKNOWN_STRING }
                         ?: context.getString(R.string.unknown_artist)
                     val album = cursor.getString(albumColumn)?.takeIf { it.isNotBlank() }
+                    val albumArtist = cursor.getString(albumArtistColumn)
+                        ?.takeIf { it.isNotBlank() && it != MediaStore.UNKNOWN_STRING }
+                    val albumId = cursor.getLong(albumIdColumn).takeIf { it > 0L }
                     val durationMs = cursor.getLong(durationColumn)
                     val trackNumber = cursor.getInt(trackColumn).takeIf { it > 0 }
+                    val year = cursor.getInt(yearColumn).takeIf { it > 0 }
                     val mediaUri = ContentUris.withAppendedId(collection, id)
 
                     val metadataBuilder = MediaMetadata.Builder()
@@ -91,8 +103,26 @@ class LocalAudioLibrary(
                         metadataBuilder.setAlbumTitle(album)
                     }
 
+                    if (!albumArtist.isNullOrBlank()) {
+                        metadataBuilder.setAlbumArtist(albumArtist)
+                    }
+
+                    if (albumId != null) {
+                        metadataBuilder
+                            .setArtworkUri(albumArtworkUri(albumId))
+                            .setExtras(
+                                Bundle().apply {
+                                    putLong(AlbumIdExtraKey, albumId)
+                                },
+                            )
+                    }
+
                     if (trackNumber != null) {
                         metadataBuilder.setTrackNumber(trackNumber)
+                    }
+
+                    if (year != null) {
+                        metadataBuilder.setReleaseYear(year)
                     }
 
                     items += MediaItem.Builder()
@@ -120,5 +150,13 @@ class LocalAudioLibrary(
 
     companion object {
         const val ROOT_ID = "root"
+        const val AlbumIdExtraKey = "com.smartisanos.music.extra.ALBUM_ID"
+
+        fun albumArtworkUri(albumId: Long): Uri {
+            return ContentUris.withAppendedId(
+                Uri.parse("content://media/external/audio/albumart"),
+                albumId,
+            )
+        }
     }
 }

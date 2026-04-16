@@ -12,7 +12,13 @@
 2. 按需查看 `reverse/decompiled/音乐_6.8.0/resources/` 下的 `layout/`、`drawable-xxhdpi-v4/`、`values-xxhdpi-v4/` 与 `AndroidManifest.xml`，确认原版结构、尺寸和资源命名。
 3. 打开 Android 官方最新文档，再核对当前实现方案后开始编码。Android 相关文档统一以 `developer.android.com` 为准，常用入口包括 `https://developer.android.com/compose`、`https://developer.android.com/develop/ui/compose/navigation`、`https://developer.android.com/media/media3`、`https://developer.android.com/training/permissions/requesting`。Kotlin 版本以 `https://kotlinlang.org/docs/releases.html` 为准，Compose 版本以 `https://developer.android.com/develop/ui/compose/bom/bom-mapping` 为准，最终可解析版本再用官方仓库元数据确认。
 4. 文档结论确认后再修改代码，避免基于过期 API、旧博客或记忆直接实现。
-5. 完成开发后运行对应的 Gradle 构建与测试命令，再提交变更。
+5. 完成开发后运行对应的 Gradle 构建与测试命令，保留代码和资源改动在工作区，等待用户真机或模拟器测试。
+6. 只有在用户明确说明测试通过并要求提交时，才执行 `git add` 与 `git commit`。
+7. 提交代码后同步跟进 `reverse/音乐_6.8.0-逆向整理与复刻规划.md`，更新当前工程现状、阶段判断和最近提交记录，确保复刻规划与实际实现保持一致。
+
+## Git 提交与测试确认
+
+开发代理完成代码改动和本地构建验证后，应先停在未提交状态，向用户说明改动范围、验证命令和当前工作区状态。用户会先进行实际测试；测试通过并发出明确提交指令后，代理再按提交规范完成暂存和提交。
 
 ## 项目结构与模块组织
 

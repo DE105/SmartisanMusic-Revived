@@ -1,7 +1,5 @@
 package com.smartisanos.music.ui.components
 
-import android.graphics.BitmapFactory
-import android.media.MediaMetadataRetriever
 import android.widget.ImageView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -32,7 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -245,18 +242,7 @@ private fun PlaybackBarArtwork(
 ) {
     val context = LocalContext.current
     val artwork by produceState<ImageBitmap?>(initialValue = null, mediaItem.mediaId) {
-        value = runCatching {
-            val uri = mediaItem.localConfiguration?.uri ?: return@runCatching null
-            val retriever = MediaMetadataRetriever()
-            try {
-                retriever.setDataSource(context, uri)
-                retriever.embeddedPicture?.let { bytes ->
-                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                }
-            } finally {
-                retriever.release()
-            }
-        }.getOrNull()
+        value = loadEmbeddedArtwork(context, mediaItem)
     }
 
     Box(

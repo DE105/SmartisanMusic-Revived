@@ -38,7 +38,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.smartisanos.music.R
 import com.smartisanos.music.playback.ProvidePlaybackController
+import com.smartisanos.music.ui.album.AlbumViewMode
 import com.smartisanos.music.ui.components.GlobalPlaybackBar
+import com.smartisanos.music.ui.components.SecondaryPageTransition
 import com.smartisanos.music.ui.components.SmartisanBottomBar
 import com.smartisanos.music.ui.components.SmartisanTopBar
 import com.smartisanos.music.ui.components.SmartisanTopBarIconButton
@@ -50,7 +52,7 @@ import com.smartisanos.music.ui.playback.PlaybackScreen
 
 private val ShellBackground = Color(0xFFF7F7F7)
 private val SearchIconSize = 34.dp
-private val AlbumTileIconSize = 18.dp
+private val AlbumViewModeIconSize = 18.dp
 private val PlaybackOverlayEasing = Easing { fraction ->
     1f - (1f - fraction) * (1f - fraction)
 }
@@ -66,6 +68,13 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
 
     ProvidePlaybackController {
         var playbackVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+        var albumViewMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(AlbumViewMode.Tile) }
+        var selectedAlbumId by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
+        var selectedAlbumTitle by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
+        val closeAlbumDetail = {
+            selectedAlbumId = null
+            selectedAlbumTitle = null
+        }
 
         LaunchedEffect(playbackLaunchRequest) {
             if (playbackLaunchRequest > 0) {
@@ -99,7 +108,45 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                         .padding(innerPadding)
                         .consumeWindowInsets(innerPadding),
                 ) {
-                    MusicShellTopBar(destination = currentDestination)
+                    val toggleAlbumViewMode = {
+                        albumViewMode = when (albumViewMode) {
+                            AlbumViewMode.List -> AlbumViewMode.Tile
+                            AlbumViewMode.Tile -> AlbumViewMode.List
+                        }
+                    }
+                    if (currentDestination == MusicDestination.Album) {
+                        SecondaryPageTransition(
+                            secondaryKey = selectedAlbumId,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = "album top bar",
+                            primaryContent = {
+                                MusicShellTopBar(
+                                    destination = currentDestination,
+                                    albumViewMode = albumViewMode,
+                                    albumDetailTitle = null,
+                                    onAlbumViewModeToggle = toggleAlbumViewMode,
+                                    onAlbumBack = closeAlbumDetail,
+                                )
+                            },
+                            secondaryContent = {
+                                MusicShellTopBar(
+                                    destination = currentDestination,
+                                    albumViewMode = albumViewMode,
+                                    albumDetailTitle = selectedAlbumTitle,
+                                    onAlbumViewModeToggle = toggleAlbumViewMode,
+                                    onAlbumBack = closeAlbumDetail,
+                                )
+                            },
+                        )
+                    } else {
+                        MusicShellTopBar(
+                            destination = currentDestination,
+                            albumViewMode = albumViewMode,
+                            albumDetailTitle = null,
+                            onAlbumViewModeToggle = toggleAlbumViewMode,
+                            onAlbumBack = closeAlbumDetail,
+                        )
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -108,6 +155,13 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                     ) {
                         MusicNavHost(
                             navController = navController,
+                            albumViewMode = albumViewMode,
+                            selectedAlbumId = selectedAlbumId,
+                            onAlbumSelected = { id, title ->
+                                selectedAlbumId = id
+                                selectedAlbumTitle = title
+                            },
+                            onAlbumBack = closeAlbumDetail,
                             modifier = Modifier.fillMaxSize(),
                         )
                         GlobalPlaybackBar(
@@ -154,19 +208,37 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
 }
 
 @Composable
-private fun MusicShellTopBar(destination: MusicDestination) {
-    val showsEdit = destination == MusicDestination.Playlist ||
-        destination == MusicDestination.Album ||
-        destination == MusicDestination.Songs
-    val showsSearch = destination == MusicDestination.Playlist ||
-        destination == MusicDestination.Artist ||
-        destination == MusicDestination.Album ||
-        destination == MusicDestination.Songs
-    val showsTile = destination == MusicDestination.Album
+private fun MusicShellTopBar(
+    destination: MusicDestination,
+    albumViewMode: AlbumViewMode,
+    albumDetailTitle: String?,
+    onAlbumViewModeToggle: () -> Unit,
+    onAlbumBack: () -> Unit,
+) {
+    val isAlbumDetail = destination == MusicDestination.Album && albumDetailTitle != null
+    val showsEdit = !isAlbumDetail && (
+        destination == MusicDestination.Playlist ||
+            destination == MusicDestination.Album ||
+            destination == MusicDestination.Songs
+        )
+    val showsSearch = !isAlbumDetail && (
+        destination == MusicDestination.Playlist ||
+            destination == MusicDestination.Artist ||
+            destination == MusicDestination.Album ||
+            destination == MusicDestination.Songs
+        )
+    val showsAlbumViewModeToggle = !isAlbumDetail && destination == MusicDestination.Album
 
     SmartisanTopBar(
-        title = destination.label,
-        leftContent = if (showsEdit) {
+        title = albumDetailTitle ?: destination.label,
+        leftContent = if (isAlbumDetail) {
+            {
+                SmartisanTopBarTextButton(
+                    text = stringResource(R.string.back),
+                    onClick = onAlbumBack,
+                )
+            }
+        } else if (showsEdit) {
             {
                 SmartisanTopBarTextButton(
                     text = stringResource(R.string.edit),
@@ -175,17 +247,30 @@ private fun MusicShellTopBar(destination: MusicDestination) {
         } else {
             null
         },
-        rightContent = if (showsSearch || showsTile) {
+        rightContent = if (showsSearch || showsAlbumViewModeToggle) {
             {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    if (showsTile) {
+                    if (showsAlbumViewModeToggle) {
                         SmartisanTopBarIconButton(
-                            iconRes = R.drawable.btn_display_tile2,
-                            pressedIconRes = R.drawable.btn_display_tile2_down,
-                            contentDescription = stringResource(R.string.listview_header_tile),
-                            iconSize = AlbumTileIconSize,
+                            iconRes = if (albumViewMode == AlbumViewMode.Tile) {
+                                R.drawable.btn_display_list2
+                            } else {
+                                R.drawable.btn_display_tile2
+                            },
+                            pressedIconRes = if (albumViewMode == AlbumViewMode.Tile) {
+                                R.drawable.btn_display_list2_down
+                            } else {
+                                R.drawable.btn_display_tile2_down
+                            },
+                            contentDescription = if (albumViewMode == AlbumViewMode.Tile) {
+                                stringResource(R.string.listview_header_list)
+                            } else {
+                                stringResource(R.string.listview_header_tile)
+                            },
+                            iconSize = AlbumViewModeIconSize,
+                            onClick = onAlbumViewModeToggle,
                         )
                     }
                     if (showsSearch) {
