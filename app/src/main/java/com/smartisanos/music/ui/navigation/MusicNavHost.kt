@@ -18,8 +18,11 @@ fun MusicNavHost(
     modifier: Modifier = Modifier,
     albumViewMode: AlbumViewMode = AlbumViewMode.Tile,
     selectedAlbumId: String? = null,
+    selectedArtistId: String? = null,
     onAlbumSelected: (String, String) -> Unit = { _, _ -> },
     onAlbumBack: () -> Unit = {},
+    onArtistSelected: (String, String) -> Unit = { _, _ -> },
+    onArtistBack: () -> Unit = {},
 ) {
     NavHost(
         navController = navController,
@@ -30,7 +33,11 @@ fun MusicNavHost(
             PlaylistScreen()
         }
         composable(MusicDestination.Artist.route) {
-            ArtistScreen()
+            ArtistScreen(
+                selectedArtistId = selectedArtistId,
+                onArtistSelected = onArtistSelected,
+                onArtistBack = onArtistBack,
+            )
         }
         composable(MusicDestination.Album.route) {
             AlbumScreen(
