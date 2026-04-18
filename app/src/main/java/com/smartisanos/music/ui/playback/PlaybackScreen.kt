@@ -93,7 +93,10 @@ import androidx.media3.common.Player
 import com.smartisanos.music.R
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.data.settings.PlaybackSettings
+import com.smartisanos.music.playback.EmbeddedLyrics
 import com.smartisanos.music.playback.LocalPlaybackController
+import com.smartisanos.music.playback.extractEmbeddedLyrics
+import com.smartisanos.music.playback.loadEmbeddedLyrics
 import com.smartisanos.music.playback.setScratchSeekModeEnabled
 import com.smartisanos.music.ui.components.loadEmbeddedArtwork
 import kotlinx.coroutines.delay
@@ -133,6 +136,7 @@ private const val ScratchHubDeadZoneRatio = 0.22f
 private const val ScratchMaxAngleStepDegrees = 54f
 private const val ScratchPreviewTimeoutMs = 260L
 private const val ScratchPreviewSettleToleranceMs = 24L
+private const val DiscRotationDiscontinuityThresholdMs = 260L
 private const val OriginalNeedlePivotX = 0.82f
 private const val OriginalNeedlePivotY = 0.08f
 private const val NeedleRestRotationDegrees = -12f
@@ -333,7 +337,13 @@ fun PlaybackScreen(
         animationSpec = tween(durationMillis = 220),
         label = "needleRotation",
     )
-    val lyricsLines = remember(title, artist, primaryLyricLine, secondaryLyricLine, tertiaryLyricLine) {
+    val fallbackLyricsLines = remember(
+        title,
+        artist,
+        primaryLyricLine,
+        secondaryLyricLine,
+        tertiaryLyricLine,
+    ) {
         listOf(
             title,
             artist,
@@ -341,6 +351,20 @@ fun PlaybackScreen(
             secondaryLyricLine,
             tertiaryLyricLine,
         )
+    }
+    val controllerTracks = controller?.currentTracks
+    val trackLyrics = remember(state.mediaItem?.mediaId, controllerTracks) {
+        controllerTracks?.let(::extractEmbeddedLyrics)
+    }
+    val embeddedLyrics by produceState<EmbeddedLyrics?>(
+        initialValue = trackLyrics,
+        key1 = state.mediaItem?.mediaId,
+        key2 = state.mediaItem?.localConfiguration?.uri,
+        key3 = trackLyrics,
+    ) {
+        value = trackLyrics ?: state.mediaItem?.let { mediaItem ->
+            loadEmbeddedLyrics(context, mediaItem)
+        }
     }
     val albumArtwork by produceState<ImageBitmap?>(
         initialValue = null,
@@ -424,11 +448,15 @@ fun PlaybackScreen(
                     albumArtwork = albumArtwork,
                     showLyrics = showLyrics,
                     keepScreenAwake = keepScreenAwake,
-                    lyricsLines = lyricsLines,
+                    embeddedLyrics = embeddedLyrics,
+                    fallbackLyricsLines = fallbackLyricsLines,
                     needleRotation = needleRotation,
                     mediaId = state.mediaItem?.mediaId,
                     positionSnapshotElapsedRealtimeMs = state.positionSnapshotElapsedRealtimeMs,
-                    discRotationRunning = state.isPlaying && !scratchDragging && scratchPreviewPositionMs == null,
+                    discRotationRunning = state.isPlaying &&
+                        !showLyrics &&
+                        !scratchDragging &&
+                        scratchPreviewPositionMs == null,
                     onMoreClick = {
                         showMorePanel = true
                     },
@@ -786,7 +814,8 @@ private fun PlaybackTurntableSection(
     albumArtwork: ImageBitmap?,
     showLyrics: Boolean,
     keepScreenAwake: Boolean,
-    lyricsLines: List<String>,
+    embeddedLyrics: EmbeddedLyrics?,
+    fallbackLyricsLines: List<String>,
     needleRotation: Float,
     mediaId: String?,
     positionSnapshotElapsedRealtimeMs: Long,
@@ -862,39 +891,21 @@ private fun PlaybackTurntableSection(
                 .width(turntableWidth)
                 .height(turntableHeight),
         ) {
-            Image(
-                painter = painterResource(R.drawable.playing_lp),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.matchParentSize(),
-            )
-            Image(
-                painter = painterResource(R.drawable.playing_cover_lp),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .matchParentSize()
-                    .graphicsLayer {
-                        rotationZ = discRotation
-                    },
-            )
-            if (albumArtwork != null) {
-                PlaybackTurntableAlbumArt(
-                    artwork = albumArtwork,
-                    turntableWidth = turntableWidth,
-                    discRotation = discRotation,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .zIndex(1f),
+            if (showLyrics) {
+                PlaybackLyricsOverlay(
+                    lyrics = embeddedLyrics,
+                    fallbackLines = fallbackLyricsLines,
+                    currentPositionMs = currentPositionMs,
+                    modifier = Modifier.matchParentSize(),
                 )
-                if (!hidePlayerAxisEnabled) {
-                    PlaybackTurntableAxisOverlay(
-                        turntableWidth = turntableWidth,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .zIndex(1.1f),
-                    )
-                }
+            } else {
+                PlaybackTurntableDisc(
+                    albumArtwork = albumArtwork,
+                    discRotation = discRotation,
+                    hidePlayerAxisEnabled = hidePlayerAxisEnabled,
+                    turntableWidth = turntableWidth,
+                    modifier = Modifier.matchParentSize(),
+                )
             }
             Box(
                 modifier = Modifier
@@ -969,17 +980,6 @@ private fun PlaybackTurntableSection(
                         )
                     },
             )
-            AnimatedVisibility(
-                visible = showLyrics,
-                enter = fadeIn(animationSpec = tween(220)),
-                exit = fadeOut(animationSpec = tween(180)),
-                modifier = Modifier.matchParentSize(),
-            ) {
-                PlaybackLyricsOverlay(
-                    lyricsLines = lyricsLines,
-                    modifier = Modifier.matchParentSize(),
-                )
-            }
             if (!showLyrics) {
                 OriginalNeedleStack(
                     needleRotation = needleRotation,
@@ -987,6 +987,52 @@ private fun PlaybackTurntableSection(
                     modifier = Modifier
                         .matchParentSize()
                         .zIndex(2f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaybackTurntableDisc(
+    albumArtwork: ImageBitmap?,
+    discRotation: Float,
+    hidePlayerAxisEnabled: Boolean,
+    turntableWidth: Dp,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        Image(
+            painter = painterResource(R.drawable.playing_lp),
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.matchParentSize(),
+        )
+        Image(
+            painter = painterResource(R.drawable.playing_cover_lp),
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer {
+                    rotationZ = discRotation
+                },
+        )
+        if (albumArtwork != null) {
+            PlaybackTurntableAlbumArt(
+                artwork = albumArtwork,
+                turntableWidth = turntableWidth,
+                discRotation = discRotation,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .zIndex(1f),
+            )
+            if (!hidePlayerAxisEnabled) {
+                PlaybackTurntableAxisOverlay(
+                    turntableWidth = turntableWidth,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .zIndex(1.1f),
                 )
             }
         }
@@ -1406,28 +1452,52 @@ private fun rememberSmoothDiscRotation(
     running: Boolean,
 ): Float {
     val latestPositionMs by rememberUpdatedState(positionMs)
-    val latestSnapshotElapsedRealtimeMs by rememberUpdatedState(positionSnapshotElapsedRealtimeMs)
+    var anchorPositionMs by remember(mediaId) {
+        mutableLongStateOf(positionMs)
+    }
+    var anchorFrameTimeNanos by remember(mediaId) {
+        mutableLongStateOf(Long.MIN_VALUE)
+    }
+    var lastReportedPositionMs by remember(mediaId) {
+        mutableLongStateOf(positionMs)
+    }
     var rotation by remember(mediaId) {
         mutableFloatStateOf(discRotationFromPosition(positionMs))
     }
 
     LaunchedEffect(mediaId, running) {
         if (running) {
+            anchorPositionMs = latestPositionMs
+            anchorFrameTimeNanos = Long.MIN_VALUE
+            lastReportedPositionMs = latestPositionMs
             while (isActive) {
-                withFrameNanos {
+                withFrameNanos { frameTimeNanos ->
+                    if (anchorFrameTimeNanos == Long.MIN_VALUE) {
+                        anchorFrameTimeNanos = frameTimeNanos
+                    }
                     val elapsedMs = (
-                        SystemClock.elapsedRealtime() - latestSnapshotElapsedRealtimeMs
-                    ).coerceAtLeast(0L)
-                    rotation = discRotationFromPosition(latestPositionMs + elapsedMs)
+                        frameTimeNanos - anchorFrameTimeNanos
+                    ) / 1_000_000L
+                    rotation = discRotationFromPosition(anchorPositionMs + elapsedMs)
                 }
             }
         } else {
+            anchorFrameTimeNanos = Long.MIN_VALUE
             rotation = discRotationFromPosition(latestPositionMs)
         }
     }
 
-    LaunchedEffect(mediaId, positionMs, running) {
-        if (!running) {
+    LaunchedEffect(mediaId, positionMs, positionSnapshotElapsedRealtimeMs, running) {
+        if (running) {
+            if (abs(latestPositionMs - lastReportedPositionMs) >= DiscRotationDiscontinuityThresholdMs) {
+                anchorPositionMs = latestPositionMs
+                anchorFrameTimeNanos = Long.MIN_VALUE
+            }
+            lastReportedPositionMs = latestPositionMs
+        } else {
+            anchorPositionMs = positionMs
+            anchorFrameTimeNanos = Long.MIN_VALUE
+            lastReportedPositionMs = positionMs
             rotation = discRotationFromPosition(positionMs)
         }
     }

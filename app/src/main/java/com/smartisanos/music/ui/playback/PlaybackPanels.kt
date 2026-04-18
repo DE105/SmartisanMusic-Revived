@@ -5,9 +5,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -21,6 +26,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -39,16 +46,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import com.smartisanos.music.R
+import com.smartisanos.music.playback.EmbeddedLyrics
+import kotlin.math.abs
 
+// Reverse resources:
+// - lrc_layout.xml: full-height ListView with 80dp vertical fading edges
+// - lrc_item_layout.xml: text_size_lryric=15sp and lineSpacingExtra=6dp
+// - values-xxhdpi-v4/dimens.xml: lrc_horizontal_padding=53.599976dp
 private val PlaybackLyricsPrimaryStyle = TextStyle(
-    fontSize = 16.sp,
+    fontSize = 15.sp,
     fontWeight = FontWeight.Medium,
-    color = Color(0xB01B1B1B),
+    color = Color(0xFF4A69B3),
     textAlign = TextAlign.Center,
 )
 private val PlaybackLyricsSecondaryStyle = TextStyle(
-    fontSize = 14.sp,
-    color = Color(0x66333333),
+    fontSize = 15.sp,
+    color = Color(0xFF4F5050),
     textAlign = TextAlign.Center,
 )
 private val PlaybackMoreActionTitleStyle = TextStyle(
@@ -68,6 +81,10 @@ private val PlaybackMoreActionRowHeight = 72.dp
 private val PlaybackMoreActionIconSize = 24.dp
 private val PlaybackMoreActionCancelWidth = 54.dp
 private val PlaybackMoreActionCancelHeight = 32.dp
+private val PlaybackLyricsHorizontalPadding = 53.6.dp
+private val PlaybackLyricsLineSpacing = 4.dp
+private val PlaybackLyricsRowHeight = 24.dp
+private val PlaybackLyricsParagraphGap = 16.dp
 
 @Composable
 internal fun PlaybackBottomControls(
@@ -116,10 +133,52 @@ internal fun PlaybackBottomControls(
 
 @Composable
 internal fun PlaybackLyricsOverlay(
-    lyricsLines: List<String>,
+    lyrics: EmbeddedLyrics?,
+    fallbackLines: List<String>,
+    currentPositionMs: Long,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier) {
+    val lyricsTimingKey = if (lyrics?.isTimeSynced == true) currentPositionMs else Long.MIN_VALUE
+    val renderModel = remember(lyrics, fallbackLines, lyricsTimingKey) {
+        buildPlaybackLyricsRenderModel(
+            lyrics = lyrics,
+            fallbackLines = fallbackLines,
+            currentPositionMs = currentPositionMs,
+        )
+    }
+    val listState = rememberLazyListState()
+
+    BoxWithConstraints(modifier = modifier) {
+        val centerPadding = remember(maxHeight) {
+            ((maxHeight - PlaybackLyricsRowHeight) / 2f).coerceAtLeast(0.dp)
+        }
+        val visualCenterIndex by remember(listState, renderModel) {
+            derivedStateOf {
+                if (renderModel.mode != PlaybackLyricsMode.Static) {
+                    renderModel.alphaAnchorIndex
+                } else {
+                    val layoutInfo = listState.layoutInfo
+                    val visibleItems = layoutInfo.visibleItemsInfo
+                    if (visibleItems.isEmpty()) {
+                        renderModel.alphaAnchorIndex
+                    } else {
+                        val viewportCenter = (
+                            layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset
+                        ) / 2
+                        visibleItems.minByOrNull { item ->
+                            abs((item.offset + (item.size / 2)) - viewportCenter)
+                        }?.index ?: renderModel.alphaAnchorIndex
+                    }
+                }
+            }
+        }
+
+        LaunchedEffect(renderModel.focusIndex, renderModel.mode) {
+            if (renderModel.mode != PlaybackLyricsMode.Static) {
+                listState.scrollToItem(index = renderModel.focusIndex)
+            }
+        }
+
         Box(
             modifier = Modifier
                 .matchParentSize()
@@ -132,33 +191,137 @@ internal fun PlaybackLyricsOverlay(
                 modifier = Modifier.matchParentSize(),
             )
         }
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 54.dp, vertical = 80.dp),
-            verticalArrangement = Arrangement.Center,
+                .padding(horizontal = PlaybackLyricsHorizontalPadding),
+            state = listState,
+            userScrollEnabled = renderModel.mode == PlaybackLyricsMode.Static,
+            contentPadding = PaddingValues(vertical = centerPadding),
+            verticalArrangement = Arrangement.spacedBy(PlaybackLyricsLineSpacing),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            lyricsLines.forEachIndexed { index, line ->
-                val style = if (index == 2) PlaybackLyricsPrimaryStyle else PlaybackLyricsSecondaryStyle
-                val alpha = when (index) {
-                    0, 4 -> 0.28f
-                    1, 3 -> 0.46f
-                    else -> 0.92f
+            itemsIndexed(
+                items = renderModel.lines,
+                key = { index, text -> "${renderModel.mode}-$index-$text" },
+            ) { index, text ->
+                val highlighted = renderModel.highlightedIndex == index
+                val style = if (highlighted) {
+                    PlaybackLyricsPrimaryStyle
+                } else {
+                    PlaybackLyricsSecondaryStyle
                 }
-                Text(
-                    text = line,
-                    style = style.copy(color = style.color.copy(alpha = alpha)),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                )
+                        .height(
+                            if (text.isBlank()) {
+                                PlaybackLyricsParagraphGap
+                            } else {
+                                PlaybackLyricsRowHeight
+                            },
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (text.isNotBlank()) {
+                        Text(
+                            text = text,
+                            style = style.copy(
+                                color = style.color.copy(
+                                    alpha = alphaForDistance(abs(index - visualCenterIndex)),
+                                ),
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
             }
         }
     }
 }
+
+internal enum class PlaybackLyricsMode {
+    Timed,
+    Static,
+    Fallback,
+}
+
+internal data class PlaybackLyricsRenderModel(
+    val mode: PlaybackLyricsMode,
+    val lines: List<String>,
+    val focusIndex: Int,
+    val alphaAnchorIndex: Int,
+    val highlightedIndex: Int?,
+)
+
+internal fun buildPlaybackLyricsRenderModel(
+    lyrics: EmbeddedLyrics?,
+    fallbackLines: List<String>,
+    currentPositionMs: Long,
+): PlaybackLyricsRenderModel {
+    if (lyrics == null || lyrics.lines.isEmpty()) {
+        return buildFallbackPlaybackLyricsRenderModel(fallbackLines)
+    }
+
+    return if (lyrics.isTimeSynced) {
+        buildTimedPlaybackLyricsRenderModel(lyrics, currentPositionMs)
+    } else {
+        buildStaticPlaybackLyricsRenderModel(lyrics)
+    }
+}
+
+private fun buildFallbackPlaybackLyricsRenderModel(
+    fallbackLines: List<String>,
+): PlaybackLyricsRenderModel {
+    val focusIndex = fallbackLines.lastIndex
+        .coerceAtLeast(0)
+        .coerceAtMost(2)
+    return PlaybackLyricsRenderModel(
+        mode = PlaybackLyricsMode.Fallback,
+        lines = fallbackLines,
+        focusIndex = focusIndex,
+        alphaAnchorIndex = focusIndex,
+        highlightedIndex = focusIndex,
+    )
+}
+
+private fun buildTimedPlaybackLyricsRenderModel(
+    lyrics: EmbeddedLyrics,
+    currentPositionMs: Long,
+): PlaybackLyricsRenderModel {
+    val activeIndex = lyrics.lines
+        .indexOfLast { (it.timestampMs ?: Long.MAX_VALUE) <= currentPositionMs }
+    val focusIndex = activeIndex.takeIf { it >= 0 } ?: 0
+    return PlaybackLyricsRenderModel(
+        mode = PlaybackLyricsMode.Timed,
+        lines = lyrics.lines.map { it.text },
+        focusIndex = focusIndex,
+        alphaAnchorIndex = focusIndex,
+        highlightedIndex = activeIndex.takeIf { it >= 0 },
+    )
+}
+
+private fun buildStaticPlaybackLyricsRenderModel(
+    lyrics: EmbeddedLyrics,
+): PlaybackLyricsRenderModel = PlaybackLyricsRenderModel(
+    mode = PlaybackLyricsMode.Static,
+    lines = lyrics.lines.map { it.text },
+    focusIndex = 0,
+    alphaAnchorIndex = 0,
+    highlightedIndex = null,
+)
+
+private fun alphaForDistance(distance: Int): Float =
+    when (distance) {
+        0 -> 1f
+        1 -> 0.84f
+        2 -> 0.68f
+        3 -> 0.52f
+        4 -> 0.36f
+        else -> 0.2f
+    }
 
 @Composable
 internal fun PlaybackMoreActionPanel(
