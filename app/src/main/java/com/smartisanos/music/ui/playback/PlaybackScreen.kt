@@ -49,6 +49,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -86,10 +87,12 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
+import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.playback.LocalPlaybackController
 import com.smartisanos.music.playback.setScratchSeekModeEnabled
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.min
@@ -176,6 +179,10 @@ fun PlaybackScreen(
 ) {
     val controller = LocalPlaybackController.current
     val context = LocalContext.current
+    val exclusionsStore = remember(context.applicationContext) {
+        LibraryExclusionsStore(context.applicationContext)
+    }
+    val scope = rememberCoroutineScope()
     val view = LocalView.current
     val scratchSoundController = remember(context) {
         ScratchSoundController(context)
@@ -501,6 +508,19 @@ fun PlaybackScreen(
                     },
                     onScratchToggle = {
                         scratchEnabled = !scratchEnabled
+                        showMorePanel = false
+                    },
+                    onDeleteClick = {
+                        val mediaId = state.mediaItem?.mediaId
+                        if (!mediaId.isNullOrBlank()) {
+                            scope.launch {
+                                exclusionsStore.hideMediaIds(setOf(mediaId))
+                            }
+                            val index = controller?.currentMediaItemIndex ?: -1
+                            if (index >= 0) {
+                                controller?.removeMediaItem(index)
+                            }
+                        }
                         showMorePanel = false
                     },
                     onDismiss = {

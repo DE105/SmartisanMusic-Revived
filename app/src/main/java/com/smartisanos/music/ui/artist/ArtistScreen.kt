@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +63,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaBrowser
 import com.smartisanos.music.R
+import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.await
 import com.smartisanos.music.ui.components.SecondaryPageTransition
@@ -135,6 +137,10 @@ fun ArtistScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val playbackBrowser = LocalPlaybackBrowser.current
+    val exclusionsStore = remember(context.applicationContext) {
+        LibraryExclusionsStore(context.applicationContext)
+    }
+    val libraryRevision by exclusionsStore.revision.collectAsState(initial = 0)
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { }
@@ -171,7 +177,7 @@ fun ArtistScreen(
         }
     }
 
-    LaunchedEffect(playbackBrowser, permissionVersion) {
+    LaunchedEffect(playbackBrowser, permissionVersion, libraryRevision) {
         val browser = playbackBrowser ?: run {
             songs = emptyList()
             return@LaunchedEffect

@@ -21,6 +21,16 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.ListeningExecutorService
 import com.google.common.util.concurrent.MoreExecutors
 import com.smartisanos.music.MainActivity
+import com.smartisanos.music.data.library.LibraryExclusions
+import com.smartisanos.music.data.library.LibraryExclusionsStore
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.util.concurrent.Executors
 
 class PlaybackService : MediaLibraryService() {
@@ -29,10 +39,15 @@ class PlaybackService : MediaLibraryService() {
     private var mediaLibrarySession: MediaLibrarySession? = null
     private lateinit var localAudioLibrary: LocalAudioLibrary
     private lateinit var libraryExecutor: ListeningExecutorService
+    private lateinit var libraryExclusionsStore: LibraryExclusionsStore
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    @Volatile private var exclusionsSnapshot: LibraryExclusions = LibraryExclusions()
+    private val exclusionsReady = CompletableDeferred<LibraryExclusions>()
 
     override fun onCreate() {
         super.onCreate()
         localAudioLibrary = LocalAudioLibrary(this)
+        libraryExclusionsStore = LibraryExclusionsStore(this)
         libraryExecutor = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor())
 
         val audioAttributes = AudioAttributes.Builder()
@@ -53,6 +68,20 @@ class PlaybackService : MediaLibraryService() {
         )
             .setSessionActivity(createSessionActivityPendingIntent())
             .build()
+
+        serviceScope.launch(Dispatchers.IO) {
+            libraryExclusionsStore.exclusions.collect { exclusions ->
+                exclusionsSnapshot = exclusions
+                if (!exclusionsReady.isCompleted) {
+                    exclusionsReady.complete(exclusions)
+                }
+                mediaLibrarySession?.notifyChildrenChanged(
+                    LocalAudioLibrary.ROOT_ID,
+                    Int.MAX_VALUE,
+                    null,
+                )
+            }
+        }
     }
 
     override fun onGetSession(
@@ -60,6 +89,10 @@ class PlaybackService : MediaLibraryService() {
     ): MediaLibrarySession? = mediaLibrarySession
 
     override fun onDestroy() {
+        if (!exclusionsReady.isCompleted) {
+            exclusionsReady.complete(exclusionsSnapshot)
+        }
+        serviceScope.cancel()
         mediaLibrarySession?.release()
         mediaLibrarySession = null
 
@@ -83,7 +116,19 @@ class PlaybackService : MediaLibraryService() {
         if (!hasAudioPermission()) {
             return emptyList()
         }
+        val exclusions = if (exclusionsReady.isCompleted) {
+            exclusionsSnapshot
+        } else {
+            runBlocking { exclusionsReady.await() }
+        }
         return localAudioLibrary.getAudioItems()
+            .asSequence()
+            .filter { item ->
+                val relativePath = item.mediaMetadata.extras
+                    ?.getString(LocalAudioLibrary.RelativePathExtraKey)
+                !exclusions.isMediaHidden(item.mediaId, relativePath)
+            }
+            .toList()
     }
 
     private fun createSessionActivityPendingIntent(): PendingIntent {

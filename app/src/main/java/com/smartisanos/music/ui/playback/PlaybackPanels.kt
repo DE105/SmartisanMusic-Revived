@@ -220,6 +220,7 @@ internal fun PlaybackMoreActionPanel(
     onSleepTimerClick: () -> Unit,
     onLyricsToggle: () -> Unit,
     onScratchToggle: () -> Unit,
+    onDeleteClick: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -235,6 +236,7 @@ internal fun PlaybackMoreActionPanel(
             onSleepTimerClick = onSleepTimerClick,
             onLyricsToggle = onLyricsToggle,
             onScratchToggle = onScratchToggle,
+            onDeleteClick = onDeleteClick,
             onDismiss = onDismiss,
         )
         Spacer(modifier = Modifier.height(bottomInset))
@@ -279,6 +281,7 @@ private fun PlaybackMoreActionGrid(
     onSleepTimerClick: () -> Unit,
     onLyricsToggle: () -> Unit,
     onScratchToggle: () -> Unit,
+    onDeleteClick: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     Box(
@@ -357,7 +360,7 @@ private fun PlaybackMoreActionGrid(
                     label = stringResource(R.string.delete),
                     normalRes = R.drawable.more_select_icon_delete,
                     pressedRes = R.drawable.more_select_icon_delete,
-                    onClick = onDismiss,
+                    onClick = onDeleteClick,
                 )
             }
         }

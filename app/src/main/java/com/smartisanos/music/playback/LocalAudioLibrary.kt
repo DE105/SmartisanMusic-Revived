@@ -47,6 +47,7 @@ class LocalAudioLibrary(
             MediaStore.Audio.Media.TRACK,
             MediaStore.Audio.Media.YEAR,
             MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.MediaColumns.RELATIVE_PATH,
         )
         val selection = buildString {
             append("${MediaStore.Audio.Media.IS_MUSIC} != 0")
@@ -72,6 +73,7 @@ class LocalAudioLibrary(
                 val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 val trackColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
                 val yearColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
+                val relativePathColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.RELATIVE_PATH)
 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idColumn)
@@ -88,7 +90,17 @@ class LocalAudioLibrary(
                     val durationMs = cursor.getLong(durationColumn)
                     val trackNumber = cursor.getInt(trackColumn).takeIf { it > 0 }
                     val year = cursor.getInt(yearColumn).takeIf { it > 0 }
+                    val relativePath = cursor.getString(relativePathColumn)?.takeIf { it.isNotBlank() }
                     val mediaUri = ContentUris.withAppendedId(collection, id)
+
+                    val extras = Bundle().apply {
+                        if (!relativePath.isNullOrBlank()) {
+                            putString(RelativePathExtraKey, relativePath)
+                        }
+                        if (albumId != null) {
+                            putLong(AlbumIdExtraKey, albumId)
+                        }
+                    }
 
                     val metadataBuilder = MediaMetadata.Builder()
                         .setTitle(title)
@@ -108,14 +120,10 @@ class LocalAudioLibrary(
                     }
 
                     if (albumId != null) {
-                        metadataBuilder
-                            .setArtworkUri(albumArtworkUri(albumId))
-                            .setExtras(
-                                Bundle().apply {
-                                    putLong(AlbumIdExtraKey, albumId)
-                                },
-                            )
+                        metadataBuilder.setArtworkUri(albumArtworkUri(albumId))
                     }
+
+                    metadataBuilder.setExtras(extras)
 
                     if (trackNumber != null) {
                         metadataBuilder.setTrackNumber(trackNumber)
@@ -151,6 +159,7 @@ class LocalAudioLibrary(
     companion object {
         const val ROOT_ID = "root"
         const val AlbumIdExtraKey = "com.smartisanos.music.extra.ALBUM_ID"
+        const val RelativePathExtraKey = "com.smartisanos.music.extra.RELATIVE_PATH"
 
         fun albumArtworkUri(albumId: Long): Uri {
             return ContentUris.withAppendedId(

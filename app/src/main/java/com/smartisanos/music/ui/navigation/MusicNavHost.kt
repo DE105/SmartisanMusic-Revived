@@ -19,10 +19,18 @@ fun MusicNavHost(
     albumViewMode: AlbumViewMode = AlbumViewMode.Tile,
     selectedAlbumId: String? = null,
     selectedArtistId: String? = null,
+    showFolderPage: Boolean = false,
+    folderEditMode: Boolean = false,
+    selectedDirectoryKey: String? = null,
     onAlbumSelected: (String, String) -> Unit = { _, _ -> },
     onAlbumBack: () -> Unit = {},
     onArtistSelected: (String, String) -> Unit = { _, _ -> },
     onArtistBack: () -> Unit = {},
+    onMoreEntryClick: (String) -> Unit = {},
+    onFolderBack: () -> Unit = {},
+    onDirectorySelected: (String, String) -> Unit = { _, _ -> },
+    onDirectoryBack: () -> Unit = {},
+    onDirectoryEditSelectionChanged: (Set<String>) -> Unit = {},
 ) {
     NavHost(
         navController = navController,
@@ -51,7 +59,16 @@ fun MusicNavHost(
             SongsScreen()
         }
         composable(MusicDestination.More.route) {
-            MoreScreen()
+            MoreScreen(
+                showFolderPage = showFolderPage,
+                folderEditMode = folderEditMode,
+                selectedDirectoryKey = selectedDirectoryKey,
+                onEntryClick = onMoreEntryClick,
+                onFolderBack = onFolderBack,
+                onDirectorySelected = onDirectorySelected,
+                onDirectoryBack = onDirectoryBack,
+                onDirectoryEditSelectionChanged = onDirectoryEditSelectionChanged,
+            )
         }
     }
 }

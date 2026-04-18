@@ -2,6 +2,7 @@ package com.smartisanos.music.ui.more
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -30,6 +31,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smartisanos.music.R
+import com.smartisanos.music.ui.components.SecondaryPageTransition
+import com.smartisanos.music.ui.folder.FolderScreen
 
 private val MoreRowBackground = Color(0xFFFDFDFD)
 private val MoreRowPressedBackground = Color(0xFFCACACA)
@@ -46,6 +49,7 @@ private val MoreRowHeight = 61.dp
 private val MoreRowLeadingPadding = 11.6.dp
 private val MoreRowTrailingPadding = 0.dp
 private val MoreRowIconTextSpacing = 10.dp
+private const val FolderPageKey = "folder"
 
 private enum class MorePrimaryEntry(
     @param:StringRes val labelRes: Int,
@@ -71,19 +75,44 @@ private enum class MorePrimaryEntry(
 
 @Composable
 fun MoreScreen(
+    showFolderPage: Boolean,
+    folderEditMode: Boolean,
+    selectedDirectoryKey: String?,
     modifier: Modifier = Modifier,
     onEntryClick: (String) -> Unit = {},
+    onFolderBack: () -> Unit = {},
+    onDirectorySelected: (String, String) -> Unit = { _, _ -> },
+    onDirectoryBack: () -> Unit = {},
+    onDirectoryEditSelectionChanged: (Set<String>) -> Unit = {},
 ) {
-    Column(
+    BackHandler(enabled = showFolderPage, onBack = onFolderBack)
+    SecondaryPageTransition(
+        secondaryKey = if (showFolderPage) FolderPageKey else null,
         modifier = modifier.fillMaxSize(),
-    ) {
-        MorePrimaryEntry.entries.forEach { entry ->
-            MoreMenuRow(
-                entry = entry,
-                onClick = { onEntryClick(entry.name) },
+        label = "more folder page",
+        primaryContent = {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                MorePrimaryEntry.entries.forEach { entry ->
+                    MoreMenuRow(
+                        entry = entry,
+                        onClick = { onEntryClick(entry.name) },
+                    )
+                }
+            }
+        },
+        secondaryContent = {
+            FolderScreen(
+                editMode = folderEditMode,
+                selectedDirectoryKey = selectedDirectoryKey,
+                onDirectorySelected = onDirectorySelected,
+                onDirectoryBack = onDirectoryBack,
+                onEditSelectionChanged = onDirectoryEditSelectionChanged,
+                modifier = Modifier.fillMaxSize(),
             )
-        }
-    }
+        },
+    )
 }
 
 @Composable

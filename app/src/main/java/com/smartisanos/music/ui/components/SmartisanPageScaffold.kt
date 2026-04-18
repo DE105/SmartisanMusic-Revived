@@ -49,6 +49,13 @@ private val TitleBarButtonPressedBackground = Color(0xFFEFEFEF)
 private val TitleBarButtonBorder = Color(0xFFDCDCDC)
 private val TitleBarActionText = Color(0x8F000000)
 private val TitleBarActionPressedText = Color(0xFF515257)
+private val TitleBarDangerBackground = Color(0xFFEE9B98)
+private val TitleBarDangerPressedBackground = Color(0xFFE48784)
+private val TitleBarDangerBorder = Color(0xFFD77C79)
+private val TitleBarDangerText = Color.White
+private val TitleBarDangerDisabledBackground = Color(0xFFF2F2F2)
+private val TitleBarDangerDisabledBorder = Color(0xFFDCDCDC)
+private val TitleBarDangerDisabledText = Color(0x66000000)
 
 private val TopBarHorizontalPadding = 10.dp
 private val TopBarButtonHeight = 30.dp
@@ -187,6 +194,59 @@ fun SmartisanTopBarTextButton(
             text = text,
             style = TopBarButtonTextStyle,
             color = if (pressed) TitleBarActionPressedText else TitleBarActionText,
+        )
+    }
+}
+
+@Composable
+fun SmartisanTopBarDangerButton(
+    text: String,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {},
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+
+    val borderColor = when {
+        enabled -> TitleBarDangerBorder
+        else -> TitleBarDangerDisabledBorder
+    }
+    val backgroundColor = when {
+        !enabled -> TitleBarDangerDisabledBackground
+        pressed -> TitleBarDangerPressedBackground
+        else -> TitleBarDangerBackground
+    }
+    val textColor = when {
+        enabled -> TitleBarDangerText
+        else -> TitleBarDangerDisabledText
+    }
+
+    Box(
+        modifier = modifier
+            .width(TopBarButtonWidth)
+            .height(TopBarButtonHeight)
+            .border(
+                width = 1.dp,
+                color = borderColor,
+                shape = RoundedCornerShape(TopBarButtonCorner),
+            )
+            .background(
+                color = backgroundColor,
+                shape = RoundedCornerShape(TopBarButtonCorner),
+            )
+            .clickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = TopBarButtonTextStyle,
+            color = textColor,
         )
     }
 }

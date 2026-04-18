@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">Music</string>
     <string name="back">返回</string>
+    <string name="done">完成</string>
     <string name="edit">编辑</string>
     <string name="setting">设置</string>
     <string name="tab_style">风格</string>
@@ -16,6 +17,8 @@
     <string name="show_album">本地歌曲所属的专辑将显示在这里</string>
     <string name="no_song">暂无歌曲</string>
     <string name="show_song">本地歌曲将显示在这里</string>
+    <string name="no_folder">暂无文件夹</string>
+    <string name="show_folder">本地歌曲所在的文件夹将显示在这里</string>
     <string name="unknown_album">未知专辑</string>
     <string name="many_artist">多位艺术家</string>
     <string name="album_track_count">%1$d 首歌曲</string>
@@ -62,4 +65,5 @@
     <string name="audio_permission_subtitle">授权后才能扫描本地音乐并显示歌曲列表</string>
     <string name="audio_permission_action">授予权限</string>
     <string name="audio_permission_settings">打开设置</string>
+    <string name="toggle_directory_visibility">隐藏显示</string>
 </resources>
