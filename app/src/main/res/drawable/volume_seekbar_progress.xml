@@ -3,15 +3,21 @@
     <item
         android:id="@android:id/background"
         android:gravity="center_vertical"
-        android:height="60dp"
-        android:drawable="@drawable/progressbar_volume_bg" />
+        android:height="180px">
+        <nine-patch
+            android:src="@drawable/progressbar_volume_bg"
+            android:dither="true" />
+    </item>
     <item
         android:id="@android:id/progress"
         android:gravity="center_vertical"
-        android:height="60dp">
+        android:height="180px">
         <clip
             android:gravity="left"
-            android:clipOrientation="horizontal"
-            android:drawable="@drawable/progressbar_volume" />
+            android:clipOrientation="horizontal">
+            <nine-patch
+                android:src="@drawable/progressbar_volume"
+                android:dither="true" />
+        </clip>
     </item>
 </layer-list>

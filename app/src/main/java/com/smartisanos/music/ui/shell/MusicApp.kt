@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -40,6 +41,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.smartisanos.music.R
 import com.smartisanos.music.data.library.LibraryExclusionsStore
+import com.smartisanos.music.data.settings.PlaybackSettings
+import com.smartisanos.music.data.settings.PlaybackSettingsStore
 import com.smartisanos.music.playback.ProvidePlaybackController
 import com.smartisanos.music.ui.album.AlbumViewMode
 import com.smartisanos.music.ui.components.GlobalPlaybackBar
@@ -50,6 +53,7 @@ import com.smartisanos.music.ui.components.SmartisanTopBarIconButton
 import com.smartisanos.music.ui.components.SmartisanTopBarShadow
 import com.smartisanos.music.ui.components.SmartisanTopBarTextButton
 import com.smartisanos.music.ui.components.SmartisanTopBarDangerButton
+import com.smartisanos.music.ui.more.MoreSecondaryPage
 import com.smartisanos.music.ui.navigation.MusicDestination
 import com.smartisanos.music.ui.navigation.MusicNavHost
 import com.smartisanos.music.ui.playback.PlaybackScreen
@@ -58,11 +62,10 @@ import kotlinx.coroutines.launch
 private val ShellBackground = Color(0xFFF7F7F7)
 private val SearchIconSize = 34.dp
 private val AlbumViewModeIconSize = 18.dp
+private val SettingsIconSize = 18.dp
 private val PlaybackOverlayEasing = Easing { fraction ->
     1f - (1f - fraction) * (1f - fraction)
 }
-
-private const val MoreFolderPageKey = "folder"
 
 @Composable
 fun MusicApp(playbackLaunchRequest: Int = 0) {
@@ -81,7 +84,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
         var selectedAlbumTitle by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
         var selectedArtistId by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
         var selectedArtistTitle by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
-        var showFolderPage by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+        var moreSecondaryPage by rememberSaveable { androidx.compose.runtime.mutableStateOf<MoreSecondaryPage?>(null) }
         var folderEditMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
         var selectedDirectoryKey by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
         var selectedDirectoryTitle by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
@@ -89,7 +92,14 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
         val exclusionsStore = remember(context.applicationContext) {
             LibraryExclusionsStore(context.applicationContext)
         }
+        val playbackSettingsStore = remember(context.applicationContext) {
+            PlaybackSettingsStore(context.applicationContext)
+        }
+        val playbackSettings by playbackSettingsStore.settings.collectAsState(
+            initial = PlaybackSettings(),
+        )
         val appScope = rememberCoroutineScope()
+        val showFolderPage = moreSecondaryPage == MoreSecondaryPage.Folder
         val folderDetailVisible = showFolderPage && selectedDirectoryKey != null
         val folderOverviewEditing = showFolderPage && !folderDetailVisible && folderEditMode
 
@@ -102,7 +112,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
             selectedArtistTitle = null
         }
         val closeFolderPage = {
-            showFolderPage = false
+            moreSecondaryPage = null
             folderEditMode = false
             selectedDirectoryKey = null
             selectedDirectoryTitle = null
@@ -121,6 +131,15 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                     selectedDirectoryKeysInEdit = emptySet()
                 }
                 else -> closeFolderPage()
+            }
+        }
+        val handleMoreBack = {
+            when (moreSecondaryPage) {
+                MoreSecondaryPage.Folder -> handleFolderBack()
+                MoreSecondaryPage.Settings -> {
+                    moreSecondaryPage = null
+                }
+                null -> Unit
             }
         }
 
@@ -212,7 +231,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                         )
                     } else if (currentDestination == MusicDestination.More) {
                         SecondaryPageTransition(
-                            secondaryKey = if (showFolderPage) MoreFolderPageKey else null,
+                            secondaryKey = moreSecondaryPage,
                             modifier = Modifier.fillMaxWidth(),
                             label = "more top bar",
                             primaryContent = {
@@ -222,70 +241,88 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                     detailTitle = null,
                                     onAlbumViewModeToggle = toggleAlbumViewMode,
                                     onDetailBack = closeAlbumDetail,
+                                    onMoreSettingsClick = {
+                                        moreSecondaryPage = MoreSecondaryPage.Settings
+                                    },
                                 )
                             },
-                            secondaryContent = {
-                                val title = selectedDirectoryTitle ?: stringResource(R.string.tab_directory)
-                                val showsFolderDetail = selectedDirectoryKey != null
-                                val showsFolderEditActions = !showsFolderDetail && folderEditMode
-                                SmartisanTopBar(
-                                    title = title,
-                                    leftContent = {
-                                        when {
-                                            showsFolderDetail -> SmartisanTopBarTextButton(
-                                                text = stringResource(R.string.tab_directory),
-                                                onClick = handleFolderBack,
-                                            )
-                                            showsFolderEditActions -> SmartisanTopBarTextButton(
-                                                text = stringResource(R.string.done),
-                                                onClick = handleFolderBack,
-                                            )
-                                            else -> SmartisanTopBarTextButton(
-                                                text = currentDestination.label,
-                                                onClick = handleFolderBack,
-                                            )
-                                        }
-                                    },
-                                    rightContent = if (showsFolderDetail) {
-                                        null
-                                    } else {
-                                        {
-                                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                if (showsFolderEditActions) {
-                                                    SmartisanTopBarDangerButton(
-                                                        text = stringResource(R.string.delete),
-                                                        enabled = selectedDirectoryKeysInEdit.isNotEmpty(),
-                                                        onClick = {
-                                                            val targets = selectedDirectoryKeysInEdit
-                                                            if (targets.isEmpty()) {
-                                                                return@SmartisanTopBarDangerButton
-                                                            }
-                                                            appScope.launch {
-                                                                exclusionsStore.hideDirectoryKeys(targets)
-                                                            }
-                                                            folderEditMode = false
-                                                            selectedDirectoryKeysInEdit = emptySet()
-                                                        },
+                            secondaryContent = { page ->
+                                when (page) {
+                                    MoreSecondaryPage.Folder -> {
+                                        val title = selectedDirectoryTitle ?: stringResource(R.string.tab_directory)
+                                        val showsFolderDetail = selectedDirectoryKey != null
+                                        val showsFolderEditActions = !showsFolderDetail && folderEditMode
+                                        SmartisanTopBar(
+                                            title = title,
+                                            leftContent = {
+                                                when {
+                                                    showsFolderDetail -> SmartisanTopBarTextButton(
+                                                        text = stringResource(R.string.tab_directory),
+                                                        onClick = handleMoreBack,
                                                     )
-                                                } else {
-                                                    SmartisanTopBarIconButton(
-                                                        iconRes = R.drawable.search_icon,
-                                                        pressedIconRes = R.drawable.search_icon_down,
-                                                        contentDescription = stringResource(R.string.tab_local_search),
-                                                        iconSize = SearchIconSize,
+                                                    showsFolderEditActions -> SmartisanTopBarTextButton(
+                                                        text = stringResource(R.string.done),
+                                                        onClick = handleMoreBack,
                                                     )
-                                                    SmartisanTopBarTextButton(
-                                                        text = stringResource(R.string.edit),
-                                                        onClick = {
-                                                            selectedDirectoryKeysInEdit = emptySet()
-                                                            folderEditMode = true
-                                                        },
+                                                    else -> SmartisanTopBarTextButton(
+                                                        text = currentDestination.label,
+                                                        onClick = handleMoreBack,
                                                     )
                                                 }
-                                            }
-                                        }
-                                    },
-                                )
+                                            },
+                                            rightContent = if (showsFolderDetail) {
+                                                null
+                                            } else {
+                                                {
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                        if (showsFolderEditActions) {
+                                                            SmartisanTopBarDangerButton(
+                                                                text = stringResource(R.string.delete),
+                                                                enabled = selectedDirectoryKeysInEdit.isNotEmpty(),
+                                                                onClick = {
+                                                                    val targets = selectedDirectoryKeysInEdit
+                                                                    if (targets.isEmpty()) {
+                                                                        return@SmartisanTopBarDangerButton
+                                                                    }
+                                                                    appScope.launch {
+                                                                        exclusionsStore.hideDirectoryKeys(targets)
+                                                                    }
+                                                                    folderEditMode = false
+                                                                    selectedDirectoryKeysInEdit = emptySet()
+                                                                },
+                                                            )
+                                                        } else {
+                                                            SmartisanTopBarIconButton(
+                                                                iconRes = R.drawable.search_icon,
+                                                                pressedIconRes = R.drawable.search_icon_down,
+                                                                contentDescription = stringResource(R.string.tab_local_search),
+                                                                iconSize = SearchIconSize,
+                                                            )
+                                                            SmartisanTopBarTextButton(
+                                                                text = stringResource(R.string.edit),
+                                                                onClick = {
+                                                                    selectedDirectoryKeysInEdit = emptySet()
+                                                                    folderEditMode = true
+                                                                },
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                        )
+                                    }
+                                    MoreSecondaryPage.Settings -> {
+                                        SmartisanTopBar(
+                                            title = stringResource(R.string.setting),
+                                            leftContent = {
+                                                SmartisanTopBarTextButton(
+                                                    text = currentDestination.label,
+                                                    onClick = handleMoreBack,
+                                                )
+                                            },
+                                        )
+                                    }
+                                }
                             },
                         )
                     } else {
@@ -308,9 +345,10 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                             albumViewMode = albumViewMode,
                             selectedAlbumId = selectedAlbumId,
                             selectedArtistId = selectedArtistId,
-                            showFolderPage = showFolderPage,
+                            moreSecondaryPage = moreSecondaryPage,
                             folderEditMode = folderEditMode,
                             selectedDirectoryKey = selectedDirectoryKey,
+                            playbackSettings = playbackSettings,
                             onAlbumSelected = { id, title ->
                                 selectedAlbumId = id
                                 selectedAlbumTitle = title
@@ -323,10 +361,10 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                             onArtistBack = closeArtistDetail,
                             onMoreEntryClick = { entryName ->
                                 if (entryName == "Folder") {
-                                    showFolderPage = true
+                                    moreSecondaryPage = MoreSecondaryPage.Folder
                                 }
                             },
-                            onFolderBack = handleFolderBack,
+                            onMoreSecondaryBack = handleMoreBack,
                             onDirectorySelected = { key, title ->
                                 folderEditMode = false
                                 selectedDirectoryKeysInEdit = emptySet()
@@ -339,6 +377,21 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                             },
                             onDirectoryEditSelectionChanged = { selection ->
                                 selectedDirectoryKeysInEdit = selection
+                            },
+                            onScratchEnabledChange = { enabled ->
+                                appScope.launch {
+                                    playbackSettingsStore.setScratchEnabled(enabled)
+                                }
+                            },
+                            onHidePlayerAxisEnabledChange = { enabled ->
+                                appScope.launch {
+                                    playbackSettingsStore.setHidePlayerAxisEnabled(enabled)
+                                }
+                            },
+                            onPopcornSoundEnabledChange = { enabled ->
+                                appScope.launch {
+                                    playbackSettingsStore.setPopcornSoundEnabled(enabled)
+                                }
                             },
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -375,7 +428,13 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                 ),
             ) {
                 PlaybackScreen(
+                    playbackSettings = playbackSettings,
                     modifier = Modifier.fillMaxSize(),
+                    onScratchEnabledChange = { enabled ->
+                        appScope.launch {
+                            playbackSettingsStore.setScratchEnabled(enabled)
+                        }
+                    },
                     onCollapse = {
                         playbackVisible = false
                     },
@@ -392,6 +451,7 @@ private fun MusicShellTopBar(
     detailTitle: String?,
     onAlbumViewModeToggle: () -> Unit,
     onDetailBack: () -> Unit,
+    onMoreSettingsClick: () -> Unit = {},
 ) {
     val showsDetail = detailTitle != null
     val showsSettings = !showsDetail && destination == MusicDestination.More
@@ -420,8 +480,12 @@ private fun MusicShellTopBar(
             }
         } else if (showsSettings) {
             {
-                SmartisanTopBarTextButton(
-                    text = stringResource(R.string.setting),
+                SmartisanTopBarIconButton(
+                    iconRes = R.drawable.tabbar_setting,
+                    pressedIconRes = R.drawable.tabbar_setting_white,
+                    contentDescription = stringResource(R.string.setting),
+                    iconSize = SettingsIconSize,
+                    onClick = onMoreSettingsClick,
                 )
             }
         } else if (showsEdit) {

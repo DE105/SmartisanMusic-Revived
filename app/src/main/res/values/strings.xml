@@ -55,9 +55,9 @@
     <string name="sleep_timer">定时关闭播放</string>
     <string name="lyrics">歌词</string>
     <string name="always_on">常亮</string>
-    <string name="switch_audio_output_source">切换音频输出源</string>
-    <string name="speaker">扬声器</string>
-    <string name="bluetooth">蓝牙</string>
+    <string name="player_axis_enabled">隐藏唱机中轴</string>
+    <string name="popcorn_sound">唱盘爆豆音</string>
+    <string name="popcorn_sound_tips">播放时会模仿真实唱片磨损，产生一种类似雨点的“爆豆音”杂声</string>
     <string name="playback_more_primary_line">暂无内嵌歌词</string>
     <string name="playback_more_secondary_line">歌词遮罩和交互层已接入当前播放页</string>
     <string name="playback_more_tertiary_line">轻触“歌词”可切换唱盘与歌词遮罩</string>

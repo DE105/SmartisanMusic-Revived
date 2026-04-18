@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -48,6 +49,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -61,6 +63,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
@@ -70,6 +73,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -88,8 +92,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
 import com.smartisanos.music.data.library.LibraryExclusionsStore
+import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.playback.LocalPlaybackController
 import com.smartisanos.music.playback.setScratchSeekModeEnabled
+import com.smartisanos.music.ui.components.loadEmbeddedArtwork
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -99,6 +105,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kotlin.math.sqrt
+import kotlin.random.Random
 
 private val PlaybackPageBackground = Color(0xFFFDFDFB)
 private val PlaybackTopBarFill = Brush.verticalGradient(
@@ -131,6 +138,9 @@ private const val OriginalNeedlePivotY = 0.08f
 private const val NeedleRestRotationDegrees = -12f
 private const val NeedlePlaybackStartRotationDegrees = 12f
 private const val NeedlePlaybackSweepDegrees = 10f
+private const val PlaybackAlbumArtDiameterRatio = 405f / 1080f
+private const val PlaybackTurntableAxisDiameterRatio = 62f / 1080f
+private const val PlaybackTurntableAxisSourceDiameterPx = 60
 private val PlaybackSeekBarHeight = 41.dp
 private val PlaybackSeekBarSideWidth = 51.3.dp
 private val PlaybackSeekTrackHeight = 8.dp
@@ -167,13 +177,10 @@ internal data class PlaybackScreenState(
     val positionSnapshotElapsedRealtimeMs: Long = 0L,
 )
 
-internal enum class PlaybackOutputRoute {
-    Speaker,
-    Bluetooth,
-}
-
 @Composable
 fun PlaybackScreen(
+    playbackSettings: PlaybackSettings,
+    onScratchEnabledChange: (Boolean) -> Unit,
     onCollapse: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -187,15 +194,16 @@ fun PlaybackScreen(
     val scratchSoundController = remember(context) {
         ScratchSoundController(context)
     }
+    val popcornSoundController = remember(context) {
+        VinylPopcornSoundController(context)
+    }
     var state by remember(controller) {
         mutableStateOf(controller.snapshot(context))
     }
     var showMorePanel by rememberSaveable { mutableStateOf(false) }
     var showLyrics by rememberSaveable { mutableStateOf(false) }
     var keepScreenAwake by rememberSaveable { mutableStateOf(false) }
-    var scratchEnabled by rememberSaveable { mutableStateOf(true) }
     var favoriteEnabled by rememberSaveable { mutableStateOf(false) }
-    var selectedRoute by rememberSaveable { mutableStateOf(PlaybackOutputRoute.Speaker) }
     var scratchPreviewPositionMs by remember { mutableStateOf<Long?>(null) }
     var scratchDragging by remember { mutableStateOf(false) }
     var scratchResumePlayback by remember { mutableStateOf(false) }
@@ -236,6 +244,12 @@ fun PlaybackScreen(
         }
     }
 
+    DisposableEffect(popcornSoundController) {
+        onDispose {
+            popcornSoundController.release()
+        }
+    }
+
     DisposableEffect(view, keepScreenAwake) {
         val previousValue = view.keepScreenOn
         view.keepScreenOn = keepScreenAwake
@@ -252,8 +266,8 @@ fun PlaybackScreen(
         }
     }
 
-    LaunchedEffect(controller, scratchEnabled, showLyrics) {
-        if (!scratchEnabled || showLyrics) {
+    LaunchedEffect(controller, playbackSettings.scratchEnabled, showLyrics) {
+        if (!playbackSettings.scratchEnabled || showLyrics) {
             scratchDragging = false
             scratchPreviewPositionMs = null
             if (scratchResumePlayback) {
@@ -262,6 +276,25 @@ fun PlaybackScreen(
             scratchResumePlayback = false
             controller?.setScratchSeekModeEnabled(false)
             scratchSoundController.stop()
+        }
+    }
+
+    LaunchedEffect(
+        playbackSettings.popcornSoundEnabled,
+        state.isPlaying,
+        scratchDragging,
+    ) {
+        if (!playbackSettings.popcornSoundEnabled || !state.isPlaying || scratchDragging) {
+            popcornSoundController.stop()
+            return@LaunchedEffect
+        }
+        try {
+            while (isActive) {
+                popcornSoundController.playRandomPop()
+                delay(Random.nextLong(from = 860L, until = 1_640L))
+            }
+        } finally {
+            popcornSoundController.stop()
         }
     }
 
@@ -308,6 +341,15 @@ fun PlaybackScreen(
             secondaryLyricLine,
             tertiaryLyricLine,
         )
+    }
+    val albumArtwork by produceState<ImageBitmap?>(
+        initialValue = null,
+        key1 = state.mediaItem?.mediaId,
+        key2 = state.mediaItem?.mediaMetadata?.artworkUri,
+    ) {
+        value = state.mediaItem?.let { mediaItem ->
+            loadEmbeddedArtwork(context, mediaItem)
+        }
     }
 
     LaunchedEffect(scratchDragging, scratchPreviewPositionMs, state.currentPositionMs) {
@@ -377,7 +419,9 @@ fun PlaybackScreen(
                     scale = scale,
                     currentPositionMs = displayPositionMs,
                     durationMs = durationMs,
-                    scratchEnabled = scratchEnabled,
+                    scratchEnabled = playbackSettings.scratchEnabled,
+                    hidePlayerAxisEnabled = playbackSettings.hidePlayerAxisEnabled,
+                    albumArtwork = albumArtwork,
                     showLyrics = showLyrics,
                     keepScreenAwake = keepScreenAwake,
                     lyricsLines = lyricsLines,
@@ -436,12 +480,10 @@ fun PlaybackScreen(
                 )
             }
             Spacer(modifier = Modifier.weight(1f))
-            PlaybackBottomPager(
+            PlaybackBottomControls(
                 width = turntableWidth,
                 bottomInset = bottomInset,
                 state = state,
-                selectedRoute = selectedRoute,
-                onRouteSelected = { selectedRoute = it },
                 onRepeatClick = {
                     controller?.repeatMode =
                         if (state.repeatMode == Player.REPEAT_MODE_OFF) {
@@ -496,7 +538,7 @@ fun PlaybackScreen(
                         .fillMaxWidth(),
                     favoriteEnabled = favoriteEnabled,
                     showLyrics = showLyrics,
-                    scratchEnabled = scratchEnabled,
+                    scratchEnabled = playbackSettings.scratchEnabled,
                     bottomInset = bottomInset,
                     onFavoriteToggle = { favoriteEnabled = !favoriteEnabled },
                     onSleepTimerClick = {
@@ -507,7 +549,7 @@ fun PlaybackScreen(
                         showMorePanel = false
                     },
                     onScratchToggle = {
-                        scratchEnabled = !scratchEnabled
+                        onScratchEnabledChange(!playbackSettings.scratchEnabled)
                         showMorePanel = false
                     },
                     onDeleteClick = {
@@ -705,11 +747,11 @@ private fun PlaybackTimeSeekBar(
                         .height(PlaybackSeekThumbHeight)
                         .align(Alignment.CenterStart)
                         .offset {
+                            val thumbWidthPx = with(density) { PlaybackSeekThumbWidth.roundToPx() }
                             IntOffset(
                                 x = (
-                                    (trackWidthPx - with(density) { PlaybackSeekThumbWidth.roundToPx() }) *
-                                        shownFraction
-                                ).roundToInt().coerceAtLeast(0),
+                                    (trackWidthPx * shownFraction) - (thumbWidthPx / 2f)
+                                ).roundToInt(),
                                 y = 0,
                             )
                         },
@@ -740,6 +782,8 @@ private fun PlaybackTurntableSection(
     currentPositionMs: Long,
     durationMs: Long,
     scratchEnabled: Boolean,
+    hidePlayerAxisEnabled: Boolean,
+    albumArtwork: ImageBitmap?,
     showLyrics: Boolean,
     keepScreenAwake: Boolean,
     lyricsLines: List<String>,
@@ -818,25 +862,39 @@ private fun PlaybackTurntableSection(
                 .width(turntableWidth)
                 .height(turntableHeight),
         ) {
-            Box(
+            Image(
+                painter = painterResource(R.drawable.playing_lp),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.matchParentSize(),
+            )
+            Image(
+                painter = painterResource(R.drawable.playing_cover_lp),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer {
                         rotationZ = discRotation
                     },
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.playing_lp),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.matchParentSize(),
+            )
+            if (albumArtwork != null) {
+                PlaybackTurntableAlbumArt(
+                    artwork = albumArtwork,
+                    turntableWidth = turntableWidth,
+                    discRotation = discRotation,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .zIndex(1f),
                 )
-                Image(
-                    painter = painterResource(R.drawable.playing_cover_lp),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.matchParentSize(),
-                )
+                if (!hidePlayerAxisEnabled) {
+                    PlaybackTurntableAxisOverlay(
+                        turntableWidth = turntableWidth,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .zIndex(1.1f),
+                    )
+                }
             }
             Box(
                 modifier = Modifier
@@ -932,6 +990,52 @@ private fun PlaybackTurntableSection(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun PlaybackTurntableAlbumArt(
+    artwork: ImageBitmap,
+    turntableWidth: Dp,
+    discRotation: Float,
+    modifier: Modifier = Modifier,
+) {
+    Image(
+        bitmap = artwork,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = modifier
+            .size(turntableWidth * PlaybackAlbumArtDiameterRatio)
+            .graphicsLayer {
+                rotationZ = discRotation
+            }
+            .clip(CircleShape),
+    )
+}
+
+@Composable
+private fun PlaybackTurntableAxisOverlay(
+    turntableWidth: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val axisBitmap = ImageBitmap.imageResource(id = R.drawable.playing_lp)
+    val srcLeft = (axisBitmap.width - PlaybackTurntableAxisSourceDiameterPx) / 2
+    val srcTop = (axisBitmap.height - PlaybackTurntableAxisSourceDiameterPx) / 2
+
+    Canvas(
+        modifier = modifier
+            .size(turntableWidth * PlaybackTurntableAxisDiameterRatio)
+            .clip(CircleShape),
+    ) {
+        drawImage(
+            image = axisBitmap,
+            srcOffset = IntOffset(srcLeft, srcTop),
+            srcSize = IntSize(
+                PlaybackTurntableAxisSourceDiameterPx,
+                PlaybackTurntableAxisSourceDiameterPx,
+            ),
+            dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+        )
     }
 }
 

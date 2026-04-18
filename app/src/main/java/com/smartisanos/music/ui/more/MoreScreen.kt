@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smartisanos.music.R
+import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.ui.components.SecondaryPageTransition
 import com.smartisanos.music.ui.folder.FolderScreen
 
@@ -49,7 +50,11 @@ private val MoreRowHeight = 61.dp
 private val MoreRowLeadingPadding = 11.6.dp
 private val MoreRowTrailingPadding = 0.dp
 private val MoreRowIconTextSpacing = 10.dp
-private const val FolderPageKey = "folder"
+
+enum class MoreSecondaryPage {
+    Folder,
+    Settings,
+}
 
 private enum class MorePrimaryEntry(
     @param:StringRes val labelRes: Int,
@@ -75,21 +80,25 @@ private enum class MorePrimaryEntry(
 
 @Composable
 fun MoreScreen(
-    showFolderPage: Boolean,
+    secondaryPage: MoreSecondaryPage?,
     folderEditMode: Boolean,
     selectedDirectoryKey: String?,
+    playbackSettings: PlaybackSettings,
     modifier: Modifier = Modifier,
     onEntryClick: (String) -> Unit = {},
-    onFolderBack: () -> Unit = {},
+    onSecondaryBack: () -> Unit = {},
     onDirectorySelected: (String, String) -> Unit = { _, _ -> },
     onDirectoryBack: () -> Unit = {},
     onDirectoryEditSelectionChanged: (Set<String>) -> Unit = {},
+    onScratchEnabledChange: (Boolean) -> Unit = {},
+    onHidePlayerAxisEnabledChange: (Boolean) -> Unit = {},
+    onPopcornSoundEnabledChange: (Boolean) -> Unit = {},
 ) {
-    BackHandler(enabled = showFolderPage, onBack = onFolderBack)
+    BackHandler(enabled = secondaryPage != null, onBack = onSecondaryBack)
     SecondaryPageTransition(
-        secondaryKey = if (showFolderPage) FolderPageKey else null,
+        secondaryKey = secondaryPage,
         modifier = modifier.fillMaxSize(),
-        label = "more folder page",
+        label = "more secondary page",
         primaryContent = {
             Column(
                 modifier = Modifier.fillMaxSize(),
@@ -102,15 +111,24 @@ fun MoreScreen(
                 }
             }
         },
-        secondaryContent = {
-            FolderScreen(
-                editMode = folderEditMode,
-                selectedDirectoryKey = selectedDirectoryKey,
-                onDirectorySelected = onDirectorySelected,
-                onDirectoryBack = onDirectoryBack,
-                onEditSelectionChanged = onDirectoryEditSelectionChanged,
-                modifier = Modifier.fillMaxSize(),
-            )
+        secondaryContent = { page ->
+            when (page) {
+                MoreSecondaryPage.Folder -> FolderScreen(
+                    editMode = folderEditMode,
+                    selectedDirectoryKey = selectedDirectoryKey,
+                    onDirectorySelected = onDirectorySelected,
+                    onDirectoryBack = onDirectoryBack,
+                    onEditSelectionChanged = onDirectoryEditSelectionChanged,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                MoreSecondaryPage.Settings -> SettingsScreen(
+                    playbackSettings = playbackSettings,
+                    modifier = Modifier.fillMaxSize(),
+                    onScratchEnabledChange = onScratchEnabledChange,
+                    onHidePlayerAxisEnabledChange = onHidePlayerAxisEnabledChange,
+                    onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,
+                )
+            }
         },
     )
 }

@@ -18,8 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -42,13 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import com.smartisanos.music.R
-import kotlin.math.absoluteValue
 
-private const val RouterPageIndex = 0
-private const val ControllerPageIndex = 1
-
-private val PlaybackRouterTextColor = Color(0x66333333)
-private val PlaybackRouterTextSelectedColor = Color(0xFF4A4A4A)
 private val PlaybackLyricsPrimaryStyle = TextStyle(
     fontSize = 16.sp,
     fontWeight = FontWeight.Medium,
@@ -57,11 +48,6 @@ private val PlaybackLyricsPrimaryStyle = TextStyle(
 )
 private val PlaybackLyricsSecondaryStyle = TextStyle(
     fontSize = 14.sp,
-    color = Color(0x66333333),
-    textAlign = TextAlign.Center,
-)
-private val PlaybackPanelLabelStyle = TextStyle(
-    fontSize = 11.sp,
     color = Color(0x66333333),
     textAlign = TextAlign.Center,
 )
@@ -84,12 +70,10 @@ private val PlaybackMoreActionCancelWidth = 54.dp
 private val PlaybackMoreActionCancelHeight = 32.dp
 
 @Composable
-internal fun PlaybackBottomPager(
+internal fun PlaybackBottomControls(
     width: Dp,
     bottomInset: Dp,
     state: PlaybackScreenState,
-    selectedRoute: PlaybackOutputRoute,
-    onRouteSelected: (PlaybackOutputRoute) -> Unit,
     onRepeatClick: () -> Unit,
     onPreviousClick: () -> Unit,
     onPlayPauseClick: () -> Unit,
@@ -97,70 +81,36 @@ internal fun PlaybackBottomPager(
     onShuffleClick: () -> Unit,
     onVolumeChange: (Float) -> Unit,
 ) {
-    val pagerState = rememberPagerState(
-        initialPage = ControllerPageIndex,
-        pageCount = { 2 },
-    )
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        HorizontalPager(
-            state = pagerState,
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(186.dp),
-            beyondViewportPageCount = 1,
-        ) { page ->
-            val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
-                .absoluteValue
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        alpha = 1f - pageOffset.coerceIn(0f, 1f) * 0.18f
-                    },
-                contentAlignment = Alignment.TopCenter,
-            ) {
-                if (page == ControllerPageIndex) {
-                    Column(
-                        modifier = Modifier
-                            .width(width)
-                            .padding(bottom = 15.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        PlaybackControlButtons(
-                            isPlaying = state.isPlaying,
-                            repeatMode = state.repeatMode,
-                            shuffleEnabled = state.shuffleEnabled,
-                            scale = width.value / 360f,
-                            onRepeatClick = onRepeatClick,
-                            onPreviousClick = onPreviousClick,
-                            onPlayPauseClick = onPlayPauseClick,
-                            onNextClick = onNextClick,
-                            onShuffleClick = onShuffleClick,
-                        )
-                        PlaybackVolumeBar(
-                            modifier = Modifier.padding(top = 18.dp),
-                            width = width,
-                            value = state.volume.coerceIn(0f, 1f),
-                            onValueChange = onVolumeChange,
-                        )
-                    }
-                } else {
-                    PlaybackRouterPage(
-                        width = width,
-                        selectedRoute = selectedRoute,
-                        onRouteSelected = onRouteSelected,
-                    )
-                }
-            }
+                .width(width)
+                .height(186.dp)
+                .padding(bottom = 19.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            PlaybackControlButtons(
+                isPlaying = state.isPlaying,
+                repeatMode = state.repeatMode,
+                shuffleEnabled = state.shuffleEnabled,
+                scale = width.value / 360f,
+                onRepeatClick = onRepeatClick,
+                onPreviousClick = onPreviousClick,
+                onPlayPauseClick = onPlayPauseClick,
+                onNextClick = onNextClick,
+                onShuffleClick = onShuffleClick,
+            )
+            PlaybackVolumeBar(
+                modifier = Modifier.padding(top = 18.dp),
+                width = width,
+                value = state.volume.coerceIn(0f, 1f),
+                onValueChange = onVolumeChange,
+            )
         }
-        PlaybackPagerIndicator(
-            currentPage = pagerState.currentPage,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        Spacer(modifier = Modifier.height((10.dp + bottomInset).coerceAtLeast(12.dp)))
+        Spacer(modifier = Modifier.height((14.dp + bottomInset).coerceAtLeast(16.dp)))
     }
 }
 
@@ -463,58 +413,6 @@ private fun RowScope.PlaybackMoreActionButton(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 2.dp, start = 4.dp, end = 4.dp),
-        )
-    }
-}
-
-@Composable
-private fun PlaybackRouterPage(
-    width: Dp,
-    selectedRoute: PlaybackOutputRoute,
-    onRouteSelected: (PlaybackOutputRoute) -> Unit,
-) {
-    Column(
-        modifier = Modifier.width(width).fillMaxHeight().padding(top = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(text = stringResource(R.string.switch_audio_output_source), style = PlaybackPanelLabelStyle)
-        AndroidDrawableImage(
-            drawableRes = R.drawable.playing_divide_line,
-            modifier = Modifier.fillMaxWidth().height(1.dp).padding(top = 14.dp),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            PlaybackRouteOption(stringResource(R.string.speaker), selectedRoute == PlaybackOutputRoute.Speaker) { onRouteSelected(PlaybackOutputRoute.Speaker) }
-            Spacer(modifier = Modifier.width(37.dp))
-            PlaybackRouteOption(stringResource(R.string.bluetooth), selectedRoute == PlaybackOutputRoute.Bluetooth) { onRouteSelected(PlaybackOutputRoute.Bluetooth) }
-        }
-    }
-}
-
-@Composable
-private fun PlaybackRouteOption(text: String, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        text = text,
-        style = PlaybackPanelLabelStyle.copy(fontSize = 13.sp, color = if (selected) PlaybackRouterTextSelectedColor else PlaybackRouterTextColor),
-        modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
-    )
-}
-
-@Composable
-private fun PlaybackPagerIndicator(currentPage: Int, modifier: Modifier = Modifier) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Image(
-            painter = painterResource(if (currentPage == RouterPageIndex) R.drawable.playing_dot_bluetooth_black else R.drawable.playing_dot_bluetooth_white),
-            contentDescription = null,
-            modifier = Modifier.width(13.dp).height(12.dp),
-        )
-        Image(
-            painter = painterResource(if (currentPage == ControllerPageIndex) R.drawable.playing_dot_black else R.drawable.playing_dot_white),
-            contentDescription = null,
-            modifier = Modifier.width(13.dp).height(12.dp),
         )
     }
 }
