@@ -2,6 +2,10 @@
     <string name="app_name">Music</string>
     <string name="back">返回</string>
     <string name="edit">编辑</string>
+    <string name="setting">设置</string>
+    <string name="tab_style">风格</string>
+    <string name="collect_music">我喜欢的歌曲</string>
+    <string name="tab_directory">文件夹</string>
     <string name="tab_play_list">播放列表</string>
     <string name="new_playlist">新建播放列表</string>
     <string name="no_playlist">暂无播放列表</string>

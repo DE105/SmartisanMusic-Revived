@@ -252,6 +252,7 @@ private fun MusicShellTopBar(
     onDetailBack: () -> Unit,
 ) {
     val showsDetail = detailTitle != null
+    val showsSettings = !showsDetail && destination == MusicDestination.More
     val showsEdit = !showsDetail && (
         destination == MusicDestination.Playlist ||
             destination == MusicDestination.Album ||
@@ -261,7 +262,8 @@ private fun MusicShellTopBar(
         destination == MusicDestination.Playlist ||
             destination == MusicDestination.Artist ||
             destination == MusicDestination.Album ||
-            destination == MusicDestination.Songs
+            destination == MusicDestination.Songs ||
+            destination == MusicDestination.More
         )
     val showsAlbumViewModeToggle = !showsDetail && destination == MusicDestination.Album
 
@@ -272,6 +274,12 @@ private fun MusicShellTopBar(
                 SmartisanTopBarTextButton(
                     text = stringResource(R.string.back),
                     onClick = onDetailBack,
+                )
+            }
+        } else if (showsSettings) {
+            {
+                SmartisanTopBarTextButton(
+                    text = stringResource(R.string.setting),
                 )
             }
         } else if (showsEdit) {
