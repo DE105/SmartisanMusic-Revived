@@ -35,6 +35,8 @@ import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.ui.components.SecondaryPageTransition
 import com.smartisanos.music.ui.folder.FolderScreen
 import com.smartisanos.music.ui.genre.GenreScreen
+import com.smartisanos.music.ui.loved.LovedSongsScreen
+import androidx.media3.common.MediaItem
 
 private val MoreRowBackground = Color(0xFFFDFDFD)
 private val MoreRowPressedBackground = Color(0xFFCACACA)
@@ -54,6 +56,7 @@ private val MoreRowIconTextSpacing = 10.dp
 
 enum class MoreSecondaryPage {
     Folder,
+    LovedSongs,
     Settings,
     Style,
 }
@@ -95,6 +98,8 @@ fun MoreScreen(
     onDirectoryEditSelectionChanged: (Set<String>) -> Unit = {},
     onGenreSelected: (String, String) -> Unit = { _, _ -> },
     onGenreBack: () -> Unit = {},
+    onRequestAddToPlaylist: (List<MediaItem>) -> Unit = {},
+    onRequestAddToQueue: (List<MediaItem>) -> Unit = {},
     onScratchEnabledChange: (Boolean) -> Unit = {},
     onHidePlayerAxisEnabledChange: (Boolean) -> Unit = {},
     onPopcornSoundEnabledChange: (Boolean) -> Unit = {},
@@ -125,6 +130,11 @@ fun MoreScreen(
                     onDirectoryBack = onDirectoryBack,
                     onEditSelectionChanged = onDirectoryEditSelectionChanged,
                     modifier = Modifier.fillMaxSize(),
+                )
+                MoreSecondaryPage.LovedSongs -> LovedSongsScreen(
+                    modifier = Modifier.fillMaxSize(),
+                    onRequestAddToPlaylist = onRequestAddToPlaylist,
+                    onRequestAddToQueue = onRequestAddToQueue,
                 )
                 MoreSecondaryPage.Settings -> SettingsScreen(
                     playbackSettings = playbackSettings,

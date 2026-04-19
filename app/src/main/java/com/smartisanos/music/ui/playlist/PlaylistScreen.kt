@@ -311,6 +311,9 @@ fun PlaylistScreen(
     if (pendingTrackActionItem != null && activePlaylist != null) {
         val targetItem = pendingTrackActionItem
         PlaylistTrackActionDialog(
+            thirdActionText = stringResource(R.string.delete_track),
+            thirdActionIconRes = R.drawable.more_select_icon_delete,
+            thirdActionPressedIconRes = R.drawable.more_select_icon_delete,
             onDismiss = {
                 pendingTrackActionMediaId = null
             },
@@ -322,7 +325,7 @@ fun PlaylistScreen(
                 pendingTrackActionMediaId = null
                 onRequestAddToQueue(listOf(targetItem))
             },
-            onRemoveClick = {
+            onThirdActionClick = {
                 pendingTrackActionMediaId = null
                 selectedTrackIdsInEdit = setOf(targetItem.mediaId)
                 showDeleteTracksDialog = true

@@ -44,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -91,6 +92,7 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
+import com.smartisanos.music.data.favorite.FavoriteSongsRepository
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.playback.EmbeddedLyrics
@@ -195,6 +197,10 @@ fun PlaybackScreen(
     val exclusionsStore = remember(context.applicationContext) {
         LibraryExclusionsStore(context.applicationContext)
     }
+    val favoriteRepository = remember(context.applicationContext) {
+        FavoriteSongsRepository.getInstance(context.applicationContext)
+    }
+    val favoriteIds by favoriteRepository.observeFavoriteIds().collectAsState(initial = emptySet())
     val scope = rememberCoroutineScope()
     val view = LocalView.current
     val scratchSoundController = remember(context) {
@@ -209,7 +215,6 @@ fun PlaybackScreen(
     var showMorePanel by rememberSaveable { mutableStateOf(false) }
     var showLyrics by rememberSaveable { mutableStateOf(false) }
     var keepScreenAwake by rememberSaveable { mutableStateOf(false) }
-    var favoriteEnabled by rememberSaveable { mutableStateOf(false) }
     var scratchPreviewPositionMs by remember { mutableStateOf<Long?>(null) }
     var scratchDragging by remember { mutableStateOf(false) }
     var scratchResumePlayback by remember { mutableStateOf(false) }
@@ -315,6 +320,8 @@ fun PlaybackScreen(
     val durationMs = state.durationMs.takeIf { it > 0L }
         ?: mediaMetadata?.durationMs
         ?: 0L
+    val currentMediaId = state.mediaItem?.mediaId
+    val favoriteEnabled = !currentMediaId.isNullOrBlank() && currentMediaId in favoriteIds
     val livePositionMs = state.currentPositionMs.coerceIn(0L, durationMs.coerceAtLeast(0L))
     val displayPositionMs = scratchPreviewPositionMs
         ?.coerceIn(0L, durationMs.coerceAtLeast(0L))
@@ -578,7 +585,12 @@ fun PlaybackScreen(
                         state.mediaItem?.let { onRequestAddToQueue(listOf(it)) }
                         showMorePanel = false
                     },
-                    onFavoriteToggle = { favoriteEnabled = !favoriteEnabled },
+                    onFavoriteToggle = {
+                        val mediaId = currentMediaId ?: return@PlaybackMoreActionPanel
+                        scope.launch {
+                            favoriteRepository.toggle(mediaId)
+                        }
+                    },
                     onSleepTimerClick = {
                         showMorePanel = false
                     },

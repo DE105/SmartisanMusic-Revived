@@ -261,10 +261,13 @@ internal fun PlaylistPickerDialog(
 @Composable
 internal fun PlaylistTrackActionDialog(
     modifier: Modifier = Modifier,
+    thirdActionText: String,
+    thirdActionIconRes: Int,
+    thirdActionPressedIconRes: Int,
     onDismiss: () -> Unit,
     onAddToPlaylistClick: () -> Unit,
     onAddToQueueClick: () -> Unit,
-    onRemoveClick: () -> Unit,
+    onThirdActionClick: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
@@ -282,20 +285,26 @@ internal fun PlaylistTrackActionDialog(
         dragHandle = null,
     ) {
         PlaylistTrackActionSheetContent(
+            thirdActionText = thirdActionText,
+            thirdActionIconRes = thirdActionIconRes,
+            thirdActionPressedIconRes = thirdActionPressedIconRes,
             onDismiss = onDismiss,
             onAddToPlaylistClick = onAddToPlaylistClick,
             onAddToQueueClick = onAddToQueueClick,
-            onRemoveClick = onRemoveClick,
+            onThirdActionClick = onThirdActionClick,
         )
     }
 }
 
 @Composable
 private fun PlaylistTrackActionSheetContent(
+    thirdActionText: String,
+    thirdActionIconRes: Int,
+    thirdActionPressedIconRes: Int,
     onDismiss: () -> Unit,
     onAddToPlaylistClick: () -> Unit,
     onAddToQueueClick: () -> Unit,
-    onRemoveClick: () -> Unit,
+    onThirdActionClick: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -375,13 +384,13 @@ private fun PlaylistTrackActionSheetContent(
                 )
                 PlaylistTrackActionDivider()
                 PlaylistTrackActionButton(
-                    iconRes = R.drawable.more_select_icon_delete,
-                    pressedIconRes = R.drawable.more_select_icon_delete,
-                    text = stringResource(R.string.delete_track),
+                    iconRes = thirdActionIconRes,
+                    pressedIconRes = thirdActionPressedIconRes,
+                    text = thirdActionText,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxSize(),
-                    onClick = onRemoveClick,
+                    onClick = onThirdActionClick,
                 )
             }
         }

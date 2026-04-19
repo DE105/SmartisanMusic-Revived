@@ -19,11 +19,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,7 +43,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
+import com.smartisanos.music.data.favorite.FavoriteSongsRepository
 import com.smartisanos.music.playback.LocalPlaybackController
+import kotlinx.coroutines.launch
 
 private val PlaybackBarTitleColor = Color(0xCC000000)
 private val PlaybackBarSubtitleColor = Color(0x66000000)
@@ -75,7 +78,11 @@ fun GlobalPlaybackBar(
 ) {
     val context = LocalContext.current
     val controller = LocalPlaybackController.current ?: return
-    val favoriteState = remember { mutableStateMapOf<String, Boolean>() }
+    val favoriteRepository = remember(context.applicationContext) {
+        FavoriteSongsRepository.getInstance(context.applicationContext)
+    }
+    val favoriteIds by favoriteRepository.observeFavoriteIds().collectAsState(initial = emptySet())
+    val scope = rememberCoroutineScope()
     var snapshot by remember(controller) {
         mutableStateOf(
             PlaybackBarSnapshot(
@@ -102,7 +109,7 @@ fun GlobalPlaybackBar(
 
     val mediaItem = snapshot.mediaItem ?: return
     val mediaId = mediaItem.mediaId
-    val isFavorite = favoriteState[mediaId] == true
+    val isFavorite = mediaId in favoriteIds
     val title = mediaItem.mediaMetadata.displayTitle?.toString()
         ?: mediaItem.mediaMetadata.title?.toString()
         ?: context.getString(R.string.unknown_song_title)
@@ -189,7 +196,9 @@ fun GlobalPlaybackBar(
                         },
                         contentDescription = stringResource(R.string.favorite),
                         onClick = {
-                            favoriteState[mediaId] = !isFavorite
+                            scope.launch {
+                                favoriteRepository.toggle(mediaId)
+                            }
                         },
                     )
                     PlaybackBarButton(

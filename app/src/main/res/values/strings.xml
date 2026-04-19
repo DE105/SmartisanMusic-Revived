@@ -29,6 +29,8 @@
     <string name="playlist_sort_score">评分</string>
     <string name="playlist_sort_play_count">播放次数</string>
     <string name="playlist_sort_added_time">添加时间</string>
+    <string name="time">时间</string>
+    <string name="song_name">歌名</string>
     <string name="playlist_delete_confirm">确认删除选中的播放列表？</string>
     <string name="playlist_delete_single_confirm">确认删除此播放列表？</string>
     <string name="playlist_remove_song_confirm">确认删除选中的歌曲?</string>
@@ -44,6 +46,8 @@
     <string name="show_album">本地歌曲所属的专辑将显示在这里</string>
     <string name="no_song">暂无歌曲</string>
     <string name="show_song">本地歌曲将显示在这里</string>
+    <string name="no_saved_song">暂无收藏的歌曲</string>
+    <string name="show_saved_song">收藏的歌曲会显示在这里</string>
     <string name="no_folder">暂无文件夹</string>
     <string name="show_folder">本地歌曲所在的文件夹将显示在这里</string>
     <string name="no_style">暂无风格</string>
@@ -79,6 +83,7 @@
     <string name="add_to_queue_success">已添加至播放队列</string>
     <string name="can_not_add_to_queue_single_repeat">单曲循环下不能添加歌曲至播放队列</string>
     <string name="love">喜欢</string>
+    <string name="cancel_love">取消喜欢</string>
     <string name="set_ringtone">设置铃声</string>
     <string name="djing">打碟</string>
     <string name="delete">删除</string>

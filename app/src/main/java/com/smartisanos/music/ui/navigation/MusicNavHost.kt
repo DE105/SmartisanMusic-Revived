@@ -112,6 +112,8 @@ fun MusicNavHost(
                 onDirectoryEditSelectionChanged = onDirectoryEditSelectionChanged,
                 onGenreSelected = onGenreSelected,
                 onGenreBack = onGenreBack,
+                onRequestAddToPlaylist = onRequestAddToPlaylist,
+                onRequestAddToQueue = onRequestAddToQueue,
                 onScratchEnabledChange = onScratchEnabledChange,
                 onHidePlayerAxisEnabledChange = onHidePlayerAxisEnabledChange,
                 onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,

@@ -263,10 +263,17 @@ fun SmartisanTopBarIconButton(
     iconSize: Dp,
     modifier: Modifier = Modifier,
     width: Dp = TopBarButtonWidth,
+    enabled: Boolean = true,
     onClick: () -> Unit = {},
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
+    val backgroundColor = when {
+        !enabled -> TitleBarDangerDisabledBackground
+        pressed -> TitleBarButtonPressedBackground
+        else -> TitleBarButtonBackground
+    }
+    val iconAlpha = if (enabled) 1f else 0.45f
 
     Box(
         modifier = modifier
@@ -278,10 +285,11 @@ fun SmartisanTopBarIconButton(
                 shape = RoundedCornerShape(TopBarButtonCorner),
             )
             .background(
-                color = if (pressed) TitleBarButtonPressedBackground else TitleBarButtonBackground,
+                color = backgroundColor,
                 shape = RoundedCornerShape(TopBarButtonCorner),
             )
             .clickable(
+                enabled = enabled,
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
@@ -294,6 +302,7 @@ fun SmartisanTopBarIconButton(
             ),
             contentDescription = contentDescription,
             modifier = Modifier.size(iconSize),
+            alpha = iconAlpha,
         )
     }
 }

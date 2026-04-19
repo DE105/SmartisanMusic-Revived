@@ -190,6 +190,9 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
         val handleMoreBack = {
             when (moreSecondaryPage) {
                 MoreSecondaryPage.Folder -> handleFolderBack()
+                MoreSecondaryPage.LovedSongs -> {
+                    moreSecondaryPage = null
+                }
                 MoreSecondaryPage.Settings -> {
                     moreSecondaryPage = null
                 }
@@ -374,6 +377,17 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                             },
                                         )
                                     }
+                                    MoreSecondaryPage.LovedSongs -> {
+                                        SmartisanTopBar(
+                                            title = stringResource(R.string.collect_music),
+                                            leftContent = {
+                                                SmartisanTopBarTextButton(
+                                                    text = stringResource(R.string.back),
+                                                    onClick = handleMoreBack,
+                                                )
+                                            },
+                                        )
+                                    }
                                     MoreSecondaryPage.Settings -> {
                                         SmartisanTopBar(
                                             title = stringResource(R.string.setting),
@@ -497,6 +511,10 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                     "Folder" -> {
                                         closeGenreDetail()
                                         moreSecondaryPage = MoreSecondaryPage.Folder
+                                    }
+                                    "LovedSongs" -> {
+                                        closeGenreDetail()
+                                        moreSecondaryPage = MoreSecondaryPage.LovedSongs
                                     }
                                     "Style" -> {
                                         closeGenreDetail()
