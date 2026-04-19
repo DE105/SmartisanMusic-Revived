@@ -34,6 +34,7 @@ import com.smartisanos.music.R
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.ui.components.SecondaryPageTransition
 import com.smartisanos.music.ui.folder.FolderScreen
+import com.smartisanos.music.ui.genre.GenreScreen
 
 private val MoreRowBackground = Color(0xFFFDFDFD)
 private val MoreRowPressedBackground = Color(0xFFCACACA)
@@ -54,6 +55,7 @@ private val MoreRowIconTextSpacing = 10.dp
 enum class MoreSecondaryPage {
     Folder,
     Settings,
+    Style,
 }
 
 private enum class MorePrimaryEntry(
@@ -83,6 +85,7 @@ fun MoreScreen(
     secondaryPage: MoreSecondaryPage?,
     folderEditMode: Boolean,
     selectedDirectoryKey: String?,
+    selectedGenreId: String?,
     playbackSettings: PlaybackSettings,
     modifier: Modifier = Modifier,
     onEntryClick: (String) -> Unit = {},
@@ -90,6 +93,8 @@ fun MoreScreen(
     onDirectorySelected: (String, String) -> Unit = { _, _ -> },
     onDirectoryBack: () -> Unit = {},
     onDirectoryEditSelectionChanged: (Set<String>) -> Unit = {},
+    onGenreSelected: (String, String) -> Unit = { _, _ -> },
+    onGenreBack: () -> Unit = {},
     onScratchEnabledChange: (Boolean) -> Unit = {},
     onHidePlayerAxisEnabledChange: (Boolean) -> Unit = {},
     onPopcornSoundEnabledChange: (Boolean) -> Unit = {},
@@ -127,6 +132,12 @@ fun MoreScreen(
                     onScratchEnabledChange = onScratchEnabledChange,
                     onHidePlayerAxisEnabledChange = onHidePlayerAxisEnabledChange,
                     onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,
+                )
+                MoreSecondaryPage.Style -> GenreScreen(
+                    selectedGenreId = selectedGenreId,
+                    onGenreSelected = onGenreSelected,
+                    onGenreBack = onGenreBack,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
         },

@@ -99,6 +99,8 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
         var folderEditMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
         var selectedDirectoryKey by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
         var selectedDirectoryTitle by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
+        var selectedGenreId by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
+        var selectedGenreTitle by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
         var selectedDirectoryKeysInEdit by remember { androidx.compose.runtime.mutableStateOf(emptySet<String>()) }
         val exclusionsStore = remember(context.applicationContext) {
             LibraryExclusionsStore(context.applicationContext)
@@ -115,8 +117,10 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
         val playlists by playlistRepository.playlists.collectAsState(initial = emptyList())
         val appScope = rememberCoroutineScope()
         val showFolderPage = moreSecondaryPage == MoreSecondaryPage.Folder
+        val showGenrePage = moreSecondaryPage == MoreSecondaryPage.Style
         val folderDetailVisible = showFolderPage && selectedDirectoryKey != null
         val folderOverviewEditing = showFolderPage && !folderDetailVisible && folderEditMode
+        val genreDetailVisible = showGenrePage && selectedGenreId != null
         var pendingPlaylistPickerMediaItems by remember { androidx.compose.runtime.mutableStateOf<List<MediaItem>?>(null) }
         var showExternalPlaylistCreateDialog by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
         var externalPlaylistCreateInitialValue by rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
@@ -139,6 +143,14 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
             selectedDirectoryKey = null
             selectedDirectoryTitle = null
             selectedDirectoryKeysInEdit = emptySet()
+        }
+        val closeGenreDetail = {
+            selectedGenreId = null
+            selectedGenreTitle = null
+        }
+        val closeGenrePage = {
+            closeGenreDetail()
+            moreSecondaryPage = null
         }
         val showToast = { textRes: Int ->
             Toast.makeText(context, context.getString(textRes), Toast.LENGTH_SHORT).show()
@@ -180,6 +192,13 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                 MoreSecondaryPage.Folder -> handleFolderBack()
                 MoreSecondaryPage.Settings -> {
                     moreSecondaryPage = null
+                }
+                MoreSecondaryPage.Style -> {
+                    if (genreDetailVisible) {
+                        closeGenreDetail()
+                    } else {
+                        closeGenrePage()
+                    }
                 }
                 null -> Unit
             }
@@ -366,6 +385,43 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                             },
                                         )
                                     }
+                                    MoreSecondaryPage.Style -> {
+                                        SecondaryPageTransition(
+                                            secondaryKey = selectedGenreId,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            label = "genre top bar",
+                                            primaryContent = {
+                                                SmartisanTopBar(
+                                                    title = stringResource(R.string.tab_style),
+                                                    leftContent = {
+                                                        SmartisanTopBarTextButton(
+                                                            text = currentDestination.label,
+                                                            onClick = handleMoreBack,
+                                                        )
+                                                    },
+                                                    rightContent = {
+                                                        SmartisanTopBarIconButton(
+                                                            iconRes = R.drawable.search_icon,
+                                                            pressedIconRes = R.drawable.search_icon_down,
+                                                            contentDescription = stringResource(R.string.tab_local_search),
+                                                            iconSize = SearchIconSize,
+                                                        )
+                                                    },
+                                                )
+                                            },
+                                            secondaryContent = {
+                                                SmartisanTopBar(
+                                                    title = selectedGenreTitle ?: stringResource(R.string.tab_style),
+                                                    leftContent = {
+                                                        SmartisanTopBarTextButton(
+                                                            text = stringResource(R.string.tab_style),
+                                                            onClick = handleMoreBack,
+                                                        )
+                                                    },
+                                                )
+                                            },
+                                        )
+                                    }
                                 }
                             },
                         )
@@ -424,6 +480,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                             moreSecondaryPage = moreSecondaryPage,
                             folderEditMode = folderEditMode,
                             selectedDirectoryKey = selectedDirectoryKey,
+                            selectedGenreId = selectedGenreId,
                             playbackSettings = playbackSettings,
                             onAlbumSelected = { id, title ->
                                 selectedAlbumId = id
@@ -436,8 +493,15 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                             },
                             onArtistBack = closeArtistDetail,
                             onMoreEntryClick = { entryName ->
-                                if (entryName == "Folder") {
-                                    moreSecondaryPage = MoreSecondaryPage.Folder
+                                when (entryName) {
+                                    "Folder" -> {
+                                        closeGenreDetail()
+                                        moreSecondaryPage = MoreSecondaryPage.Folder
+                                    }
+                                    "Style" -> {
+                                        closeGenreDetail()
+                                        moreSecondaryPage = MoreSecondaryPage.Style
+                                    }
                                 }
                             },
                             onMoreSecondaryBack = handleMoreBack,
@@ -454,6 +518,11 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                             onDirectoryEditSelectionChanged = { selection ->
                                 selectedDirectoryKeysInEdit = selection
                             },
+                            onGenreSelected = { id, title ->
+                                selectedGenreId = id
+                                selectedGenreTitle = title
+                            },
+                            onGenreBack = closeGenreDetail,
                             onSongsEditSelectionChanged = { selection ->
                                 selectedSongIdsInEdit = selection
                             },

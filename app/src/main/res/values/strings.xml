@@ -46,8 +46,11 @@
     <string name="show_song">本地歌曲将显示在这里</string>
     <string name="no_folder">暂无文件夹</string>
     <string name="show_folder">本地歌曲所在的文件夹将显示在这里</string>
+    <string name="no_style">暂无风格</string>
+    <string name="show_style">本地歌曲所属的风格将显示在这里</string>
     <string name="unknown_album">未知专辑</string>
     <string name="many_artist">多位艺术家</string>
+    <string name="unknown_style">未知风格</string>
     <string name="album_track_count">%1$d 首歌曲</string>
     <string name="artist_album_song_count">%1$d 张专辑，%2$d 首歌曲</string>
     <string name="listview_header_list">列表</string>
