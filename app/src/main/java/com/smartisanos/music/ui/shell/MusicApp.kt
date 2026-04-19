@@ -1,5 +1,6 @@
 package com.smartisanos.music.ui.shell
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.tween
@@ -39,10 +40,15 @@ import androidx.compose.ui.zIndex
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import com.smartisanos.music.R
 import com.smartisanos.music.data.library.LibraryExclusionsStore
+import com.smartisanos.music.data.playlist.PlaylistCreateResult
+import com.smartisanos.music.data.playlist.PlaylistRepository
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.data.settings.PlaybackSettingsStore
+import com.smartisanos.music.playback.LocalPlaybackController
 import com.smartisanos.music.playback.ProvidePlaybackController
 import com.smartisanos.music.ui.album.AlbumViewMode
 import com.smartisanos.music.ui.components.GlobalPlaybackBar
@@ -57,6 +63,8 @@ import com.smartisanos.music.ui.more.MoreSecondaryPage
 import com.smartisanos.music.ui.navigation.MusicDestination
 import com.smartisanos.music.ui.navigation.MusicNavHost
 import com.smartisanos.music.ui.playback.PlaybackScreen
+import com.smartisanos.music.ui.playlist.PlaylistNameDialog
+import com.smartisanos.music.ui.playlist.PlaylistPickerDialog
 import kotlinx.coroutines.launch
 
 private val ShellBackground = Color(0xFFF7F7F7)
@@ -78,12 +86,15 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
     val crossTextureBrush = rememberCrossTextureBrush()
 
     ProvidePlaybackController {
+        val playbackController = LocalPlaybackController.current
         var playbackVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
         var albumViewMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(AlbumViewMode.Tile) }
         var selectedAlbumId by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
         var selectedAlbumTitle by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
         var selectedArtistId by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
         var selectedArtistTitle by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
+        var songsEditMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+        var selectedSongIdsInEdit by rememberSaveable { androidx.compose.runtime.mutableStateOf(emptySet<String>()) }
         var moreSecondaryPage by rememberSaveable { androidx.compose.runtime.mutableStateOf<MoreSecondaryPage?>(null) }
         var folderEditMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
         var selectedDirectoryKey by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
@@ -95,13 +106,20 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
         val playbackSettingsStore = remember(context.applicationContext) {
             PlaybackSettingsStore(context.applicationContext)
         }
+        val playlistRepository = remember(context.applicationContext) {
+            PlaylistRepository.getInstance(context.applicationContext)
+        }
         val playbackSettings by playbackSettingsStore.settings.collectAsState(
             initial = PlaybackSettings(),
         )
+        val playlists by playlistRepository.playlists.collectAsState(initial = emptyList())
         val appScope = rememberCoroutineScope()
         val showFolderPage = moreSecondaryPage == MoreSecondaryPage.Folder
         val folderDetailVisible = showFolderPage && selectedDirectoryKey != null
         val folderOverviewEditing = showFolderPage && !folderDetailVisible && folderEditMode
+        var pendingPlaylistPickerMediaItems by remember { androidx.compose.runtime.mutableStateOf<List<MediaItem>?>(null) }
+        var showExternalPlaylistCreateDialog by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+        var externalPlaylistCreateInitialValue by rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
 
         val closeAlbumDetail = {
             selectedAlbumId = null
@@ -111,12 +129,36 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
             selectedArtistId = null
             selectedArtistTitle = null
         }
+        val closeSongsEdit = {
+            songsEditMode = false
+            selectedSongIdsInEdit = emptySet()
+        }
         val closeFolderPage = {
             moreSecondaryPage = null
             folderEditMode = false
             selectedDirectoryKey = null
             selectedDirectoryTitle = null
             selectedDirectoryKeysInEdit = emptySet()
+        }
+        val showToast = { textRes: Int ->
+            Toast.makeText(context, context.getString(textRes), Toast.LENGTH_SHORT).show()
+        }
+        val enqueueMediaItems = { items: List<MediaItem> ->
+            if (items.isEmpty()) {
+                Unit
+            }
+            if (playbackController?.repeatMode == Player.REPEAT_MODE_ONE) {
+                showToast(R.string.can_not_add_to_queue_single_repeat)
+            } else {
+                playbackController?.addMediaItems(items)
+                showToast(R.string.add_to_queue_success)
+            }
+        }
+        val requestAddToPlaylist = { items: List<MediaItem> ->
+            val candidates = items.filter { it.mediaId.isNotBlank() }
+            if (candidates.isNotEmpty()) {
+                pendingPlaylistPickerMediaItems = candidates
+            }
         }
         val handleFolderBack = {
             when {
@@ -181,7 +223,9 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                             AlbumViewMode.Tile -> AlbumViewMode.List
                         }
                     }
-                    if (currentDestination == MusicDestination.Album) {
+                    if (currentDestination == MusicDestination.Playlist) {
+                        Unit
+                    } else if (currentDestination == MusicDestination.Album) {
                         SecondaryPageTransition(
                             secondaryKey = selectedAlbumId,
                             modifier = Modifier.fillMaxWidth(),
@@ -325,6 +369,32 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                 }
                             },
                         )
+                    } else if (currentDestination == MusicDestination.Songs && songsEditMode) {
+                        SmartisanTopBar(
+                            title = currentDestination.label,
+                            leftContent = {
+                                SmartisanTopBarTextButton(
+                                    text = stringResource(R.string.done),
+                                    onClick = closeSongsEdit,
+                                )
+                            },
+                            rightContent = {
+                                SmartisanTopBarDangerButton(
+                                    text = stringResource(R.string.delete),
+                                    enabled = selectedSongIdsInEdit.isNotEmpty(),
+                                    onClick = {
+                                        val targets = selectedSongIdsInEdit
+                                        if (targets.isEmpty()) {
+                                            return@SmartisanTopBarDangerButton
+                                        }
+                                        appScope.launch {
+                                            exclusionsStore.hideMediaIds(targets)
+                                        }
+                                        closeSongsEdit()
+                                    },
+                                )
+                            },
+                        )
                     } else {
                         MusicShellTopBar(
                             destination = currentDestination,
@@ -332,6 +402,12 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                             detailTitle = null,
                             onAlbumViewModeToggle = toggleAlbumViewMode,
                             onDetailBack = closeAlbumDetail,
+                            onEditClick = {
+                                if (currentDestination == MusicDestination.Songs) {
+                                    songsEditMode = true
+                                    selectedSongIdsInEdit = emptySet()
+                                }
+                            },
                         )
                     }
                     Box(
@@ -378,6 +454,13 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                             onDirectoryEditSelectionChanged = { selection ->
                                 selectedDirectoryKeysInEdit = selection
                             },
+                            onSongsEditSelectionChanged = { selection ->
+                                selectedSongIdsInEdit = selection
+                            },
+                            songsEditMode = songsEditMode,
+                            selectedSongIdsInEdit = selectedSongIdsInEdit,
+                            onRequestAddToPlaylist = requestAddToPlaylist,
+                            onRequestAddToQueue = enqueueMediaItems,
                             onScratchEnabledChange = { enabled ->
                                 appScope.launch {
                                     playbackSettingsStore.setScratchEnabled(enabled)
@@ -401,9 +484,11 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                 playbackVisible = true
                             },
                         )
-                        SmartisanTopBarShadow(
-                            modifier = Modifier.align(Alignment.TopCenter),
-                        )
+                        if (currentDestination != MusicDestination.Playlist) {
+                            SmartisanTopBarShadow(
+                                modifier = Modifier.align(Alignment.TopCenter),
+                            )
+                        }
                     }
                 }
             }
@@ -430,6 +515,8 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                 PlaybackScreen(
                     playbackSettings = playbackSettings,
                     modifier = Modifier.fillMaxSize(),
+                    onRequestAddToPlaylist = requestAddToPlaylist,
+                    onRequestAddToQueue = enqueueMediaItems,
                     onScratchEnabledChange = { enabled ->
                         appScope.launch {
                             playbackSettingsStore.setScratchEnabled(enabled)
@@ -437,6 +524,55 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                     },
                     onCollapse = {
                         playbackVisible = false
+                    },
+                )
+            }
+            if (pendingPlaylistPickerMediaItems != null && !showExternalPlaylistCreateDialog) {
+                PlaylistPickerDialog(
+                    playlists = playlists,
+                    onDismiss = {
+                        pendingPlaylistPickerMediaItems = null
+                    },
+                    onCreateNewPlaylist = {
+                        appScope.launch {
+                            externalPlaylistCreateInitialValue = playlistRepository.suggestNextUntitledName()
+                            showExternalPlaylistCreateDialog = true
+                        }
+                    },
+                    onPlaylistSelected = { playlistId ->
+                        val mediaIds = pendingPlaylistPickerMediaItems?.map(MediaItem::mediaId).orEmpty()
+                        appScope.launch {
+                            val result = playlistRepository.addMediaIds(playlistId, mediaIds)
+                            when {
+                                result.addedCount > 0 -> showToast(R.string.playlist_added)
+                                result.duplicateCount > 0 -> showToast(R.string.playlist_song_exists)
+                            }
+                            pendingPlaylistPickerMediaItems = null
+                        }
+                    },
+                )
+            }
+            if (showExternalPlaylistCreateDialog) {
+                PlaylistNameDialog(
+                    title = stringResource(R.string.new_playlist),
+                    initialValue = externalPlaylistCreateInitialValue,
+                    selectAllOnOpen = true,
+                    onDismiss = {
+                        showExternalPlaylistCreateDialog = false
+                    },
+                    onConfirm = { input ->
+                        val mediaIds = pendingPlaylistPickerMediaItems?.map(MediaItem::mediaId).orEmpty()
+                        appScope.launch {
+                            when (val result = playlistRepository.createPlaylist(input, mediaIds)) {
+                                PlaylistCreateResult.EmptyName -> showToast(R.string.playlist_create_failed)
+                                PlaylistCreateResult.DuplicateName -> showToast(R.string.playlist_duplicate_name)
+                                is PlaylistCreateResult.Success -> {
+                                    showExternalPlaylistCreateDialog = false
+                                    pendingPlaylistPickerMediaItems = null
+                                    showToast(R.string.playlist_added)
+                                }
+                            }
+                        }
                     },
                 )
             }
@@ -451,12 +587,12 @@ private fun MusicShellTopBar(
     detailTitle: String?,
     onAlbumViewModeToggle: () -> Unit,
     onDetailBack: () -> Unit,
+    onEditClick: () -> Unit = {},
     onMoreSettingsClick: () -> Unit = {},
 ) {
     val showsDetail = detailTitle != null
     val showsSettings = !showsDetail && destination == MusicDestination.More
     val showsEdit = !showsDetail && (
-        destination == MusicDestination.Playlist ||
             destination == MusicDestination.Album ||
             destination == MusicDestination.Songs
         )
@@ -492,6 +628,7 @@ private fun MusicShellTopBar(
             {
                 SmartisanTopBarTextButton(
                     text = stringResource(R.string.edit),
+                    onClick = onEditClick,
                 )
             }
         } else {

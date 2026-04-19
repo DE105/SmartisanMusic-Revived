@@ -73,6 +73,7 @@ class LocalAudioLibrary(
                 val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 val trackColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
                 val yearColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
+                val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
                 val relativePathColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.RELATIVE_PATH)
 
                 while (cursor.moveToNext()) {
@@ -90,6 +91,7 @@ class LocalAudioLibrary(
                     val durationMs = cursor.getLong(durationColumn)
                     val trackNumber = cursor.getInt(trackColumn).takeIf { it > 0 }
                     val year = cursor.getInt(yearColumn).takeIf { it > 0 }
+                    val dateAddedSeconds = cursor.getLong(dateAddedColumn).takeIf { it > 0L }
                     val relativePath = cursor.getString(relativePathColumn)?.takeIf { it.isNotBlank() }
                     val mediaUri = ContentUris.withAppendedId(collection, id)
 
@@ -99,6 +101,9 @@ class LocalAudioLibrary(
                         }
                         if (albumId != null) {
                             putLong(AlbumIdExtraKey, albumId)
+                        }
+                        if (dateAddedSeconds != null) {
+                            putLong(DateAddedExtraKey, dateAddedSeconds)
                         }
                     }
 
@@ -160,6 +165,7 @@ class LocalAudioLibrary(
         const val ROOT_ID = "root"
         const val AlbumIdExtraKey = "com.smartisanos.music.extra.ALBUM_ID"
         const val RelativePathExtraKey = "com.smartisanos.music.extra.RELATIVE_PATH"
+        const val DateAddedExtraKey = "com.smartisanos.music.extra.DATE_ADDED"
 
         fun albumArtworkUri(albumId: Long): Uri {
             return ContentUris.withAppendedId(

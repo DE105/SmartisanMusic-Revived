@@ -329,6 +329,8 @@ internal fun PlaybackMoreActionPanel(
     showLyrics: Boolean,
     scratchEnabled: Boolean,
     bottomInset: Dp,
+    onAddToPlaylistClick: () -> Unit,
+    onAddToQueueClick: () -> Unit,
     onFavoriteToggle: () -> Unit,
     onSleepTimerClick: () -> Unit,
     onLyricsToggle: () -> Unit,
@@ -345,6 +347,8 @@ internal fun PlaybackMoreActionPanel(
             favoriteEnabled = favoriteEnabled,
             showLyrics = showLyrics,
             scratchEnabled = scratchEnabled,
+            onAddToPlaylistClick = onAddToPlaylistClick,
+            onAddToQueueClick = onAddToQueueClick,
             onFavoriteToggle = onFavoriteToggle,
             onSleepTimerClick = onSleepTimerClick,
             onLyricsToggle = onLyricsToggle,
@@ -390,6 +394,8 @@ private fun PlaybackMoreActionGrid(
     favoriteEnabled: Boolean,
     showLyrics: Boolean,
     scratchEnabled: Boolean,
+    onAddToPlaylistClick: () -> Unit,
+    onAddToQueueClick: () -> Unit,
     onFavoriteToggle: () -> Unit,
     onSleepTimerClick: () -> Unit,
     onLyricsToggle: () -> Unit,
@@ -419,14 +425,14 @@ private fun PlaybackMoreActionGrid(
                     label = stringResource(R.string.add_to_playlist),
                     normalRes = R.drawable.more_select_icon_addlist,
                     pressedRes = R.drawable.more_select_icon_addlist_down,
-                    onClick = onDismiss,
+                    onClick = onAddToPlaylistClick,
                 )
                 PlaybackMoreActionDivider(vertical = true)
                 PlaybackMoreActionButton(
                     label = stringResource(R.string.add_to_queue),
                     normalRes = R.drawable.more_select_icon_addplay,
                     pressedRes = R.drawable.more_select_icon_addplay_down,
-                    onClick = onDismiss,
+                    onClick = onAddToQueueClick,
                 )
                 PlaybackMoreActionDivider(vertical = true)
                 PlaybackMoreActionButton(

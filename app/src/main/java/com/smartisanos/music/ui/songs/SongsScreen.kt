@@ -6,7 +6,8 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -47,11 +53,6 @@ import com.smartisanos.music.playback.await
 import com.smartisanos.music.ui.components.SmartisanBlankState
 import com.smartisanos.music.ui.components.audioPermission
 import com.smartisanos.music.ui.components.hasAudioPermission
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 private val SongsListBackground = Color(0xFFF8F8F8)
 private val SongRowBackground = Color(0xFFFDFDFD)
@@ -59,6 +60,8 @@ private val SongRowDivider = Color(0xFFE9E9E9)
 private val SongTitleColor = Color(0xC7000000)
 private val SongSubtitleColor = Color(0x73000000)
 private val SongPlayingColor = Color(0xFFE64040)
+private val SongSelectionBorder = Color(0x2E000000)
+private val SongSelectionFill = Color(0xFFE95A4E)
 
 private val SongTitleStyle = TextStyle(
     fontSize = 17.sp,
@@ -72,6 +75,21 @@ private val SongSubtitleStyle = TextStyle(
 
 @Composable
 fun SongsScreen(modifier: Modifier = Modifier) {
+    SongsScreen(
+        editMode = false,
+        selectedMediaIds = emptySet(),
+        onEditSelectionChanged = {},
+        modifier = modifier,
+    )
+}
+
+@Composable
+fun SongsScreen(
+    editMode: Boolean,
+    selectedMediaIds: Set<String>,
+    onEditSelectionChanged: (Set<String>) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val playbackBrowser = LocalPlaybackBrowser.current
@@ -89,10 +107,10 @@ fun SongsScreen(modifier: Modifier = Modifier) {
     }
     val hasPermission = hasAudioPermission(context)
 
-    DisposableEffect(lifecycleOwner, context) {
+    DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                permissionVersion++
+                permissionVersion += 1
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -115,7 +133,7 @@ fun SongsScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    LaunchedEffect(playbackBrowser, permissionVersion, libraryRevision) {
+    LaunchedEffect(playbackBrowser, permissionVersion, libraryRevision, hasPermission) {
         val browser = playbackBrowser ?: run {
             songs = emptyList()
             return@LaunchedEffect
@@ -171,15 +189,28 @@ fun SongsScreen(modifier: Modifier = Modifier) {
             items = songs,
             key = { _, item -> item.mediaId },
         ) { index, item ->
+            val selectedInEdit = item.mediaId in selectedMediaIds
+            val isCurrent = item.mediaId == currentMediaId
             SongRow(
                 mediaItem = item,
-                selected = item.mediaId == currentMediaId,
+                selected = if (editMode) selectedInEdit else isCurrent,
+                showPlayingIndicator = !editMode && isCurrent,
+                editMode = editMode,
                 modifier = Modifier.fillMaxWidth(),
                 onClick = {
-                    currentMediaId = item.mediaId
-                    playbackBrowser?.setMediaItems(songs, index, 0L)
-                    playbackBrowser?.prepare()
-                    playbackBrowser?.play()
+                    if (editMode) {
+                        onEditSelectionChanged(selectedMediaIds.toggle(item.mediaId))
+                    } else {
+                        currentMediaId = item.mediaId
+                        playbackBrowser?.setMediaItems(songs, index, 0L)
+                        playbackBrowser?.prepare()
+                        playbackBrowser?.play()
+                    }
+                },
+                onLongClick = {
+                    if (editMode) {
+                        onEditSelectionChanged(selectedMediaIds.toggle(item.mediaId))
+                    }
                 },
             )
         }
@@ -223,8 +254,11 @@ private fun SongsPermissionState(
 private fun SongRow(
     mediaItem: MediaItem,
     selected: Boolean,
+    showPlayingIndicator: Boolean,
+    editMode: Boolean = false,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
 ) {
     val metadata = mediaItem.mediaMetadata
     val title = metadata.displayTitle ?: metadata.title
@@ -233,7 +267,10 @@ private fun SongRow(
     Column(
         modifier = modifier
             .background(SongRowBackground)
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
     ) {
         Row(
             modifier = Modifier
@@ -243,6 +280,12 @@ private fun SongRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
+            if (editMode) {
+                SongSelectionCircle(
+                    selected = selected,
+                    modifier = Modifier.padding(end = 12.dp),
+                )
+            }
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center,
@@ -250,7 +293,7 @@ private fun SongRow(
                 Text(
                     text = title?.toString().orEmpty(),
                     style = SongTitleStyle,
-                    color = if (selected) SongPlayingColor else SongTitleColor,
+                    color = if (showPlayingIndicator) SongPlayingColor else SongTitleColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -262,7 +305,7 @@ private fun SongRow(
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
-            if (selected) {
+            if (showPlayingIndicator) {
                 Box(
                     modifier = Modifier.padding(start = 12.dp),
                 ) {
@@ -284,4 +327,38 @@ private fun SongRow(
                 .background(SongRowDivider),
         )
     }
+}
+
+@Composable
+private fun SongSelectionCircle(
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(22.dp)
+            .background(
+                color = if (selected) SongSelectionFill else Color.Transparent,
+                shape = CircleShape,
+            )
+            .border(
+                width = 1.dp,
+                color = if (selected) SongSelectionFill else SongSelectionBorder,
+                shape = CircleShape,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (selected) {
+            Text(
+                text = "✓",
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+private fun Set<String>.toggle(value: String): Set<String> {
+    return if (value in this) this - value else this + value
 }

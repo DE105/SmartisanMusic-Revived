@@ -186,6 +186,8 @@ fun PlaybackScreen(
     playbackSettings: PlaybackSettings,
     onScratchEnabledChange: (Boolean) -> Unit,
     onCollapse: () -> Unit,
+    onRequestAddToPlaylist: (List<MediaItem>) -> Unit = {},
+    onRequestAddToQueue: (List<MediaItem>) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val controller = LocalPlaybackController.current
@@ -568,6 +570,14 @@ fun PlaybackScreen(
                     showLyrics = showLyrics,
                     scratchEnabled = playbackSettings.scratchEnabled,
                     bottomInset = bottomInset,
+                    onAddToPlaylistClick = {
+                        state.mediaItem?.let { onRequestAddToPlaylist(listOf(it)) }
+                        showMorePanel = false
+                    },
+                    onAddToQueueClick = {
+                        state.mediaItem?.let { onRequestAddToQueue(listOf(it)) }
+                        showMorePanel = false
+                    },
                     onFavoriteToggle = { favoriteEnabled = !favoriteEnabled },
                     onSleepTimerClick = {
                         showMorePanel = false

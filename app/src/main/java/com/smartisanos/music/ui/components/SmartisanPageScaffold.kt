@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -164,6 +165,7 @@ fun SmartisanTopBarShadow(modifier: Modifier = Modifier) {
 @Composable
 fun SmartisanTopBarTextButton(
     text: String,
+    width: Dp = TopBarButtonWidth,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
 ) {
@@ -172,7 +174,7 @@ fun SmartisanTopBarTextButton(
 
     Box(
         modifier = modifier
-            .width(TopBarButtonWidth)
+            .width(width)
             .height(TopBarButtonHeight)
             .border(
                 width = 1.dp,
@@ -194,6 +196,8 @@ fun SmartisanTopBarTextButton(
             text = text,
             style = TopBarButtonTextStyle,
             color = if (pressed) TitleBarActionPressedText else TitleBarActionText,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

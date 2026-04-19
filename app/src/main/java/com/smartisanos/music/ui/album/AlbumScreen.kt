@@ -153,6 +153,8 @@ fun AlbumScreen(
     selectedAlbumId: String?,
     onAlbumSelected: (String, String) -> Unit,
     onAlbumBack: () -> Unit,
+    onAddToPlaylistRequest: (List<MediaItem>) -> Unit = {},
+    onAddToQueueRequest: (List<MediaItem>) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -271,6 +273,8 @@ fun AlbumScreen(
                     album = album,
                     currentMediaId = currentMediaId,
                     playbackBrowser = playbackBrowser,
+                    onAddToPlaylistRequest = onAddToPlaylistRequest,
+                    onAddToQueueRequest = onAddToQueueRequest,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -531,6 +535,8 @@ private fun AlbumDetail(
     album: AlbumSummary,
     currentMediaId: String?,
     playbackBrowser: MediaBrowser?,
+    onAddToPlaylistRequest: (List<MediaItem>) -> Unit,
+    onAddToQueueRequest: (List<MediaItem>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -540,7 +546,11 @@ private fun AlbumDetail(
         contentPadding = PaddingValues(bottom = MiniPlayerReservedHeight),
     ) {
         item(key = "${album.id}:header") {
-            AlbumDetailHeader(album = album)
+            AlbumDetailHeader(
+                album = album,
+                onAddToPlaylistClick = { onAddToPlaylistRequest(album.songs) },
+                onAddToQueueClick = { onAddToQueueRequest(album.songs) },
+            )
             AlbumDetailPlayActions(
                 onPlayAll = {
                     playbackBrowser?.playAlbum(album)
@@ -568,7 +578,11 @@ private fun AlbumDetail(
 }
 
 @Composable
-private fun AlbumDetailHeader(album: AlbumSummary) {
+private fun AlbumDetailHeader(
+    album: AlbumSummary,
+    onAddToPlaylistClick: () -> Unit,
+    onAddToQueueClick: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -617,10 +631,12 @@ private fun AlbumDetailHeader(album: AlbumSummary) {
                 AlbumHeaderIconButton(
                     iconRes = R.drawable.ablum_btn_addlist,
                     contentDescription = stringResource(R.string.add_to_playlist),
+                    onClick = onAddToPlaylistClick,
                 )
                 AlbumHeaderIconButton(
                     iconRes = R.drawable.ablum_btn_addplay,
                     contentDescription = stringResource(R.string.add_to_queue),
+                    onClick = onAddToQueueClick,
                 )
             }
         }
@@ -631,9 +647,16 @@ private fun AlbumDetailHeader(album: AlbumSummary) {
 private fun AlbumHeaderIconButton(
     @DrawableRes iconRes: Int,
     contentDescription: String,
+    onClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier.size(AlbumDetailIconSize),
+        modifier = Modifier
+            .size(AlbumDetailIconSize)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Image(

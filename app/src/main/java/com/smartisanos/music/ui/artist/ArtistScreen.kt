@@ -132,6 +132,8 @@ fun ArtistScreen(
     selectedArtistId: String?,
     onArtistSelected: (String, String) -> Unit,
     onArtistBack: () -> Unit,
+    onAddToPlaylistRequest: (List<MediaItem>) -> Unit = {},
+    onAddToQueueRequest: (List<MediaItem>) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -249,6 +251,8 @@ fun ArtistScreen(
                     artist = artist,
                     currentMediaId = currentMediaId,
                     playbackBrowser = playbackBrowser,
+                    onAddToPlaylistRequest = onAddToPlaylistRequest,
+                    onAddToQueueRequest = onAddToQueueRequest,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -339,6 +343,8 @@ private fun ArtistDetail(
     artist: ArtistSummary,
     currentMediaId: String?,
     playbackBrowser: MediaBrowser?,
+    onAddToPlaylistRequest: (List<MediaItem>) -> Unit,
+    onAddToQueueRequest: (List<MediaItem>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -348,7 +354,11 @@ private fun ArtistDetail(
         contentPadding = PaddingValues(bottom = MiniPlayerReservedHeight),
     ) {
         item(key = "${artist.id}:header") {
-            ArtistDetailHeader(artist = artist)
+            ArtistDetailHeader(
+                artist = artist,
+                onAddToPlaylistClick = { onAddToPlaylistRequest(artist.songs) },
+                onAddToQueueClick = { onAddToQueueRequest(artist.songs) },
+            )
             ArtistDetailPlayActions(
                 onPlayAll = {
                     playbackBrowser?.playArtist(artist)
@@ -376,7 +386,11 @@ private fun ArtistDetail(
 }
 
 @Composable
-private fun ArtistDetailHeader(artist: ArtistSummary) {
+private fun ArtistDetailHeader(
+    artist: ArtistSummary,
+    onAddToPlaylistClick: () -> Unit,
+    onAddToQueueClick: () -> Unit,
+) {
     val subtitle = stringResource(
         R.string.artist_album_song_count,
         artist.albumCount,
@@ -424,10 +438,12 @@ private fun ArtistDetailHeader(artist: ArtistSummary) {
                 ArtistHeaderIconButton(
                     iconRes = R.drawable.ablum_btn_addlist,
                     contentDescription = stringResource(R.string.add_to_playlist),
+                    onClick = onAddToPlaylistClick,
                 )
                 ArtistHeaderIconButton(
                     iconRes = R.drawable.ablum_btn_addplay,
                     contentDescription = stringResource(R.string.add_to_queue),
+                    onClick = onAddToQueueClick,
                 )
             }
         }
@@ -475,9 +491,16 @@ private fun ArtistArtwork(
 private fun ArtistHeaderIconButton(
     @DrawableRes iconRes: Int,
     contentDescription: String,
+    onClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier.size(ArtistDetailIconSize),
+        modifier = Modifier
+            .size(ArtistDetailIconSize)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Image(
