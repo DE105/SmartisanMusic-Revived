@@ -1,5 +1,7 @@
 package com.smartisanos.music.ui.navigation
 
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.media3.common.MediaItem
@@ -48,6 +50,18 @@ fun MusicNavHost(
         navController = navController,
         startDestination = MusicDestination.Playlist.route,
         modifier = modifier,
+        enterTransition = {
+            fadeIn()
+        },
+        exitTransition = {
+            fadeOut()
+        },
+        popEnterTransition = {
+            fadeIn()
+        },
+        popExitTransition = {
+            fadeOut()
+        },
     ) {
         composable(MusicDestination.Playlist.route) {
             PlaylistScreen(
