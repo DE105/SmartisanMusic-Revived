@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -133,6 +134,7 @@ internal fun PlaybackBottomControls(
 
 @Composable
 internal fun PlaybackLyricsOverlay(
+    mediaId: String?,
     lyrics: EmbeddedLyrics?,
     fallbackLines: List<String>,
     currentPositionMs: Long,
@@ -146,95 +148,98 @@ internal fun PlaybackLyricsOverlay(
             currentPositionMs = currentPositionMs,
         )
     }
-    val listState = rememberLazyListState()
 
-    BoxWithConstraints(modifier = modifier) {
-        val centerPadding = remember(maxHeight) {
-            ((maxHeight - PlaybackLyricsRowHeight) / 2f).coerceAtLeast(0.dp)
-        }
-        val visualCenterIndex by remember(listState, renderModel) {
-            derivedStateOf {
-                if (renderModel.mode != PlaybackLyricsMode.Static) {
-                    renderModel.alphaAnchorIndex
-                } else {
-                    val layoutInfo = listState.layoutInfo
-                    val visibleItems = layoutInfo.visibleItemsInfo
-                    if (visibleItems.isEmpty()) {
+    key(mediaId, lyrics, fallbackLines) {
+        val listState = rememberLazyListState()
+
+        BoxWithConstraints(modifier = modifier) {
+            val centerPadding = remember(maxHeight) {
+                ((maxHeight - PlaybackLyricsRowHeight) / 2f).coerceAtLeast(0.dp)
+            }
+            val visualCenterIndex by remember(listState, renderModel) {
+                derivedStateOf {
+                    if (renderModel.mode != PlaybackLyricsMode.Static) {
                         renderModel.alphaAnchorIndex
                     } else {
-                        val viewportCenter = (
-                            layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset
-                        ) / 2
-                        visibleItems.minByOrNull { item ->
-                            abs((item.offset + (item.size / 2)) - viewportCenter)
-                        }?.index ?: renderModel.alphaAnchorIndex
+                        val layoutInfo = listState.layoutInfo
+                        val visibleItems = layoutInfo.visibleItemsInfo
+                        if (visibleItems.isEmpty()) {
+                            renderModel.alphaAnchorIndex
+                        } else {
+                            val viewportCenter = (
+                                layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset
+                            ) / 2
+                            visibleItems.minByOrNull { item ->
+                                abs((item.offset + (item.size / 2)) - viewportCenter)
+                            }?.index ?: renderModel.alphaAnchorIndex
+                        }
                     }
                 }
             }
-        }
 
-        LaunchedEffect(renderModel.focusIndex, renderModel.mode) {
-            if (renderModel.mode != PlaybackLyricsMode.Static) {
-                listState.scrollToItem(index = renderModel.focusIndex)
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .clip(CircleShape),
-        ) {
-            Image(
-                painter = painterResource(R.drawable.mask_playing_lyric),
-                contentDescription = stringResource(R.string.lyrics),
-                contentScale = ContentScale.FillBounds,
-                modifier = Modifier.matchParentSize(),
-            )
-        }
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = PlaybackLyricsHorizontalPadding),
-            state = listState,
-            userScrollEnabled = renderModel.mode == PlaybackLyricsMode.Static,
-            contentPadding = PaddingValues(vertical = centerPadding),
-            verticalArrangement = Arrangement.spacedBy(PlaybackLyricsLineSpacing),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            itemsIndexed(
-                items = renderModel.lines,
-                key = { index, text -> "${renderModel.mode}-$index-$text" },
-            ) { index, text ->
-                val highlighted = renderModel.highlightedIndex == index
-                val style = if (highlighted) {
-                    PlaybackLyricsPrimaryStyle
-                } else {
-                    PlaybackLyricsSecondaryStyle
+            LaunchedEffect(renderModel.focusIndex, renderModel.mode) {
+                if (renderModel.mode != PlaybackLyricsMode.Static) {
+                    listState.scrollToItem(index = renderModel.focusIndex)
                 }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(
-                            if (text.isBlank()) {
-                                PlaybackLyricsParagraphGap
-                            } else {
-                                PlaybackLyricsRowHeight
-                            },
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (text.isNotBlank()) {
-                        Text(
-                            text = text,
-                            style = style.copy(
-                                color = style.color.copy(
-                                    alpha = alphaForDistance(abs(index - visualCenterIndex)),
-                                ),
+            }
+
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(CircleShape),
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.mask_playing_lyric),
+                    contentDescription = stringResource(R.string.lyrics),
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = PlaybackLyricsHorizontalPadding),
+                state = listState,
+                userScrollEnabled = renderModel.mode == PlaybackLyricsMode.Static,
+                contentPadding = PaddingValues(vertical = centerPadding),
+                verticalArrangement = Arrangement.spacedBy(PlaybackLyricsLineSpacing),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                itemsIndexed(
+                    items = renderModel.lines,
+                    key = { index, text -> "${renderModel.mode}-$index-$text" },
+                ) { index, text ->
+                    val highlighted = renderModel.highlightedIndex == index
+                    val style = if (highlighted) {
+                        PlaybackLyricsPrimaryStyle
+                    } else {
+                        PlaybackLyricsSecondaryStyle
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(
+                                if (text.isBlank()) {
+                                    PlaybackLyricsParagraphGap
+                                } else {
+                                    PlaybackLyricsRowHeight
+                                },
                             ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (text.isNotBlank()) {
+                            Text(
+                                text = text,
+                                style = style.copy(
+                                    color = style.color.copy(
+                                        alpha = alphaForDistance(abs(index - visualCenterIndex)),
+                                    ),
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                 }
             }
@@ -326,7 +331,7 @@ private fun alphaForDistance(distance: Int): Float =
 @Composable
 internal fun PlaybackMoreActionPanel(
     favoriteEnabled: Boolean,
-    showLyrics: Boolean,
+    visualPage: PlaybackVisualPage,
     scratchEnabled: Boolean,
     sleepTimerActive: Boolean,
     bottomInset: Dp,
@@ -347,7 +352,7 @@ internal fun PlaybackMoreActionPanel(
         PlaybackMoreActionTitleBar(onDismiss = onDismiss)
         PlaybackMoreActionGrid(
             favoriteEnabled = favoriteEnabled,
-            showLyrics = showLyrics,
+            visualPage = visualPage,
             scratchEnabled = scratchEnabled,
             sleepTimerActive = sleepTimerActive,
             onAddToPlaylistClick = onAddToPlaylistClick,
@@ -396,7 +401,7 @@ private fun PlaybackMoreActionTitleBar(onDismiss: () -> Unit) {
 @Composable
 private fun PlaybackMoreActionGrid(
     favoriteEnabled: Boolean,
-    showLyrics: Boolean,
+    visualPage: PlaybackVisualPage,
     scratchEnabled: Boolean,
     sleepTimerActive: Boolean,
     onAddToPlaylistClick: () -> Unit,
@@ -452,7 +457,7 @@ private fun PlaybackMoreActionGrid(
                     label = stringResource(R.string.lyrics),
                     normalRes = R.drawable.more_select_icon_lyric,
                     pressedRes = R.drawable.more_select_icon_lyric,
-                    selected = showLyrics,
+                    selected = visualPage == PlaybackVisualPage.Lyrics,
                     onClick = onLyricsToggle,
                 )
             }

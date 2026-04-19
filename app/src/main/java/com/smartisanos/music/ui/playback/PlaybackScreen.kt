@@ -194,6 +194,17 @@ internal data class PlaybackScreenState(
     val positionSnapshotElapsedRealtimeMs: Long = 0L,
 )
 
+internal enum class PlaybackVisualPage {
+    Cover,
+    Lyrics,
+}
+
+private data class PlaybackCoverPageState(
+    val isScratchDragging: Boolean = false,
+    val scratchPreviewPositionMs: Long? = null,
+    val resumePlaybackAfterScratch: Boolean = false,
+)
+
 @Composable
 fun PlaybackScreen(
     playbackSettings: PlaybackSettings,
@@ -226,12 +237,12 @@ fun PlaybackScreen(
     var showSleepTimerDialog by rememberSaveable { mutableStateOf(false) }
     var showSetRingtoneDialog by rememberSaveable { mutableStateOf(false) }
     var showWriteSettingsDialog by rememberSaveable { mutableStateOf(false) }
-    var showLyrics by rememberSaveable { mutableStateOf(false) }
-    var keepScreenAwake by rememberSaveable { mutableStateOf(false) }
+    var currentVisualPage by rememberSaveable { mutableStateOf(PlaybackVisualPage.Cover) }
+    var keepLyricsScreenAwake by rememberSaveable { mutableStateOf(false) }
     var pendingRingtoneUriString by rememberSaveable { mutableStateOf<String?>(null) }
-    var scratchPreviewPositionMs by remember { mutableStateOf<Long?>(null) }
-    var scratchDragging by remember { mutableStateOf(false) }
-    var scratchResumePlayback by remember { mutableStateOf(false) }
+    var coverPageState by remember(state.mediaItem?.mediaId) {
+        mutableStateOf(PlaybackCoverPageState())
+    }
     val sleepTimerState by PlaybackSleepTimer.state.collectAsState()
     val applyPendingRingtone by rememberUpdatedState(
         newValue = {
@@ -284,6 +295,26 @@ fun PlaybackScreen(
         }
     }
 
+    fun resetCoverPageInteraction(resumePlayback: Boolean) {
+        val shouldResumePlayback = resumePlayback && coverPageState.resumePlaybackAfterScratch
+        coverPageState = PlaybackCoverPageState()
+        if (shouldResumePlayback) {
+            controller?.play()
+        }
+        controller?.setScratchSeekModeEnabled(false)
+        scratchSoundController.stop()
+    }
+
+    fun setVisualPage(targetPage: PlaybackVisualPage) {
+        if (currentVisualPage == targetPage) {
+            return
+        }
+        currentVisualPage = targetPage
+        if (targetPage != PlaybackVisualPage.Cover) {
+            resetCoverPageInteraction(resumePlayback = true)
+        }
+    }
+
     DisposableEffect(controller) {
         val playbackController = controller
         playbackController?.volume = 1f
@@ -313,25 +344,22 @@ fun PlaybackScreen(
         }
     }
 
-    LaunchedEffect(controller, playbackSettings.scratchEnabled, showLyrics) {
-        if (!playbackSettings.scratchEnabled || showLyrics) {
-            scratchDragging = false
-            scratchPreviewPositionMs = null
-            if (scratchResumePlayback) {
-                controller?.play()
-            }
-            scratchResumePlayback = false
-            controller?.setScratchSeekModeEnabled(false)
-            scratchSoundController.stop()
+    LaunchedEffect(controller, playbackSettings.scratchEnabled, currentVisualPage) {
+        if (!playbackSettings.scratchEnabled || currentVisualPage != PlaybackVisualPage.Cover) {
+            resetCoverPageInteraction(resumePlayback = true)
         }
     }
 
     LaunchedEffect(
         playbackSettings.popcornSoundEnabled,
         state.isPlaying,
-        scratchDragging,
+        coverPageState.isScratchDragging,
     ) {
-        if (!playbackSettings.popcornSoundEnabled || !state.isPlaying || scratchDragging) {
+        if (
+            !playbackSettings.popcornSoundEnabled ||
+            !state.isPlaying ||
+            coverPageState.isScratchDragging
+        ) {
             popcornSoundController.stop()
             return@LaunchedEffect
         }
@@ -358,30 +386,18 @@ fun PlaybackScreen(
         ?: 0L
     val currentMediaId = state.mediaItem?.mediaId
     val favoriteEnabled = !currentMediaId.isNullOrBlank() && currentMediaId in favoriteIds
+    val coverPreviewPositionMs = coverPageState.scratchPreviewPositionMs
     val livePositionMs = state.currentPositionMs.coerceIn(0L, durationMs.coerceAtLeast(0L))
-    val displayPositionMs = scratchPreviewPositionMs
-        ?.coerceIn(0L, durationMs.coerceAtLeast(0L))
-        ?: livePositionMs
+    val displayPositionMs = if (currentVisualPage == PlaybackVisualPage.Cover) {
+        coverPreviewPositionMs
+            ?.coerceIn(0L, durationMs.coerceAtLeast(0L))
+            ?: livePositionMs
+    } else {
+        livePositionMs
+    }
     val primaryLyricLine = stringResource(R.string.playback_more_primary_line)
     val secondaryLyricLine = stringResource(R.string.playback_more_secondary_line)
     val tertiaryLyricLine = stringResource(R.string.playback_more_tertiary_line)
-    val progress = durationMs
-        .takeIf { it > 0L }
-        ?.let { displayPositionMs.toFloat() / it.toFloat() }
-        ?.coerceIn(0f, 1f)
-        ?: 0f
-    val needleShouldTouchRecord = state.mediaItem != null &&
-        (state.isPlaying || scratchDragging)
-    val targetNeedleRotation = if (needleShouldTouchRecord) {
-        NeedlePlaybackStartRotationDegrees + (progress * NeedlePlaybackSweepDegrees)
-    } else {
-        NeedleRestRotationDegrees
-    }
-    val needleRotation by animateFloatAsState(
-        targetValue = targetNeedleRotation,
-        animationSpec = tween(durationMillis = 220),
-        label = "needleRotation",
-    )
     val fallbackLyricsLines = remember(
         title,
         artist,
@@ -421,21 +437,42 @@ fun PlaybackScreen(
         }
     }
 
-    LaunchedEffect(scratchDragging, scratchPreviewPositionMs, state.currentPositionMs) {
-        val previewPosition = scratchPreviewPositionMs ?: return@LaunchedEffect
-        if (!scratchDragging && abs(state.currentPositionMs - previewPosition) <= ScratchPreviewSettleToleranceMs) {
-            scratchPreviewPositionMs = null
+    LaunchedEffect(
+        currentVisualPage,
+        coverPageState.isScratchDragging,
+        coverPageState.scratchPreviewPositionMs,
+        state.currentPositionMs,
+    ) {
+        if (currentVisualPage != PlaybackVisualPage.Cover) {
+            return@LaunchedEffect
+        }
+        val previewPosition = coverPageState.scratchPreviewPositionMs ?: return@LaunchedEffect
+        if (
+            !coverPageState.isScratchDragging &&
+            abs(state.currentPositionMs - previewPosition) <= ScratchPreviewSettleToleranceMs
+        ) {
+            coverPageState = coverPageState.copy(scratchPreviewPositionMs = null)
         }
     }
 
-    LaunchedEffect(scratchDragging, scratchPreviewPositionMs) {
-        val previewPosition = scratchPreviewPositionMs ?: return@LaunchedEffect
-        if (scratchDragging) {
+    LaunchedEffect(
+        currentVisualPage,
+        coverPageState.isScratchDragging,
+        coverPageState.scratchPreviewPositionMs,
+    ) {
+        if (currentVisualPage != PlaybackVisualPage.Cover) {
+            return@LaunchedEffect
+        }
+        val previewPosition = coverPageState.scratchPreviewPositionMs ?: return@LaunchedEffect
+        if (coverPageState.isScratchDragging) {
             return@LaunchedEffect
         }
         delay(ScratchPreviewTimeoutMs)
-        if (!scratchDragging && scratchPreviewPositionMs == previewPosition) {
-            scratchPreviewPositionMs = null
+        if (
+            !coverPageState.isScratchDragging &&
+            coverPageState.scratchPreviewPositionMs == previewPosition
+        ) {
+            coverPageState = coverPageState.copy(scratchPreviewPositionMs = null)
         }
     }
 
@@ -482,39 +519,49 @@ fun PlaybackScreen(
                     .padding(top = 16.dp),
                 contentAlignment = Alignment.TopCenter,
             ) {
-                PlaybackTurntableSection(
+                PlaybackVisualStage(
                     modifier = Modifier.width(turntableWidth),
                     turntableWidth = turntableWidth,
                     scale = scale,
-                    currentPositionMs = displayPositionMs,
+                    currentVisualPage = currentVisualPage,
+                    coverPositionMs = displayPositionMs,
+                    lyricsPositionMs = livePositionMs,
                     durationMs = durationMs,
                     scratchEnabled = playbackSettings.scratchEnabled,
                     hidePlayerAxisEnabled = playbackSettings.hidePlayerAxisEnabled,
                     albumArtwork = albumArtwork,
-                    showLyrics = showLyrics,
-                    keepScreenAwake = keepScreenAwake,
+                    keepLyricsScreenAwake = keepLyricsScreenAwake,
                     embeddedLyrics = embeddedLyrics,
                     fallbackLyricsLines = fallbackLyricsLines,
-                    needleRotation = needleRotation,
+                    hasMediaItem = state.mediaItem != null,
+                    isPlaying = state.isPlaying,
+                    isScratchDragging = coverPageState.isScratchDragging,
+                    scratchPreviewPositionMs = coverPageState.scratchPreviewPositionMs,
                     mediaId = state.mediaItem?.mediaId,
                     positionSnapshotElapsedRealtimeMs = state.positionSnapshotElapsedRealtimeMs,
-                    discRotationRunning = state.isPlaying &&
-                        !showLyrics &&
-                        !scratchDragging &&
-                        scratchPreviewPositionMs == null,
                     onMoreClick = {
                         showMorePanel = true
                     },
-                    onRecordTap = {
-                        showLyrics = !showLyrics
+                    onVisualPageToggle = {
+                        setVisualPage(
+                            if (currentVisualPage == PlaybackVisualPage.Cover) {
+                                PlaybackVisualPage.Lyrics
+                            } else {
+                                PlaybackVisualPage.Cover
+                            },
+                        )
                     },
-                    onKeepScreenToggle = {
-                        keepScreenAwake = !keepScreenAwake
+                    onKeepLyricsScreenAwakeToggle = {
+                        keepLyricsScreenAwake = !keepLyricsScreenAwake
                     },
                     onScratchStart = {
-                        scratchDragging = true
-                        scratchResumePlayback = state.isPlaying
-                        if (scratchResumePlayback) {
+                        val resumePlaybackAfterScratch = state.isPlaying
+                        coverPageState = coverPageState.copy(
+                            isScratchDragging = true,
+                            scratchPreviewPositionMs = livePositionMs,
+                            resumePlaybackAfterScratch = resumePlaybackAfterScratch,
+                        )
+                        if (resumePlaybackAfterScratch) {
                             controller?.pause()
                         }
                         controller?.setScratchSeekModeEnabled(true)
@@ -527,28 +574,26 @@ fun PlaybackScreen(
                         scratchSoundController.onScratchMotion(positionMs, deltaAngle)
                     },
                     onScratchPositionChange = { positionMs, _ ->
-                        scratchPreviewPositionMs = positionMs
+                        coverPageState = coverPageState.copy(
+                            scratchPreviewPositionMs = positionMs,
+                        )
                     },
                     onScratchEnd = { positionMs ->
-                        scratchDragging = false
-                        scratchPreviewPositionMs = positionMs
+                        val resumePlaybackAfterScratch = coverPageState.resumePlaybackAfterScratch
+                        coverPageState = coverPageState.copy(
+                            isScratchDragging = false,
+                            scratchPreviewPositionMs = positionMs,
+                            resumePlaybackAfterScratch = false,
+                        )
                         controller?.seekTo(positionMs)
-                        if (scratchResumePlayback) {
+                        if (resumePlaybackAfterScratch) {
                             controller?.play()
                         }
-                        scratchResumePlayback = false
                         controller?.setScratchSeekModeEnabled(false)
                         scratchSoundController.stop()
                     },
                     onScratchCancel = {
-                        scratchDragging = false
-                        scratchPreviewPositionMs = null
-                        if (scratchResumePlayback) {
-                            controller?.play()
-                        }
-                        scratchResumePlayback = false
-                        controller?.setScratchSeekModeEnabled(false)
-                        scratchSoundController.stop()
+                        resetCoverPageInteraction(resumePlayback = true)
                     },
                 )
             }
@@ -610,7 +655,7 @@ fun PlaybackScreen(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth(),
                     favoriteEnabled = favoriteEnabled,
-                    showLyrics = showLyrics,
+                    visualPage = currentVisualPage,
                     scratchEnabled = playbackSettings.scratchEnabled,
                     sleepTimerActive = sleepTimerState.isActive,
                     bottomInset = bottomInset,
@@ -637,7 +682,13 @@ fun PlaybackScreen(
                         showSleepTimerDialog = true
                     },
                     onLyricsToggle = {
-                        showLyrics = !showLyrics
+                        setVisualPage(
+                            if (currentVisualPage == PlaybackVisualPage.Cover) {
+                                PlaybackVisualPage.Lyrics
+                            } else {
+                                PlaybackVisualPage.Cover
+                            },
+                        )
                         showMorePanel = false
                     },
                     onScratchToggle = {
@@ -939,25 +990,28 @@ private fun PlaybackTimeSeekBar(
 }
 
 @Composable
-private fun PlaybackTurntableSection(
+private fun PlaybackVisualStage(
     turntableWidth: Dp,
     scale: Float,
-    currentPositionMs: Long,
+    currentVisualPage: PlaybackVisualPage,
+    coverPositionMs: Long,
+    lyricsPositionMs: Long,
     durationMs: Long,
     scratchEnabled: Boolean,
     hidePlayerAxisEnabled: Boolean,
     albumArtwork: ImageBitmap?,
-    showLyrics: Boolean,
-    keepScreenAwake: Boolean,
+    keepLyricsScreenAwake: Boolean,
     embeddedLyrics: EmbeddedLyrics?,
     fallbackLyricsLines: List<String>,
-    needleRotation: Float,
+    hasMediaItem: Boolean,
+    isPlaying: Boolean,
+    isScratchDragging: Boolean,
+    scratchPreviewPositionMs: Long?,
     mediaId: String?,
     positionSnapshotElapsedRealtimeMs: Long,
-    discRotationRunning: Boolean,
     onMoreClick: () -> Unit,
-    onRecordTap: () -> Unit,
-    onKeepScreenToggle: () -> Unit,
+    onVisualPageToggle: () -> Unit,
+    onKeepLyricsScreenAwakeToggle: () -> Unit,
     onScratchStart: () -> Unit,
     onScratchMotion: (Long, Float) -> Unit,
     onScratchPositionChange: (Long, Float) -> Unit,
@@ -969,26 +1023,7 @@ private fun PlaybackTurntableSection(
     val moreButtonMargin = 12.dp * scale
     val moreButtonTopMargin = 38.dp * scale
     val actionButtonSize = PlaybackActionButtonSize * scale
-    var discSize by remember { mutableStateOf(IntSize.Zero) }
-    var scratchActive by remember { mutableStateOf(false) }
-    var scratchPositionMs by remember { mutableLongStateOf(0L) }
-    var lastAngleDegrees by remember { mutableFloatStateOf(Float.NaN) }
-    val latestDiscSize by rememberUpdatedState(discSize)
-    val latestRecordTap by rememberUpdatedState(onRecordTap)
-    val scratchAvailable by rememberUpdatedState(scratchEnabled && !showLyrics && durationMs > 0L)
-    val latestPositionMs by rememberUpdatedState(currentPositionMs)
-    val latestDurationMs by rememberUpdatedState(durationMs)
-    val latestScratchStart by rememberUpdatedState(onScratchStart)
-    val latestScratchMotion by rememberUpdatedState(onScratchMotion)
-    val latestScratchPositionChange by rememberUpdatedState(onScratchPositionChange)
-    val latestScratchEnd by rememberUpdatedState(onScratchEnd)
-    val latestScratchCancel by rememberUpdatedState(onScratchCancel)
-    val discRotation = rememberSmoothDiscRotation(
-        mediaId = mediaId,
-        positionMs = currentPositionMs,
-        positionSnapshotElapsedRealtimeMs = positionSnapshotElapsedRealtimeMs,
-        running = discRotationRunning,
-    )
+    val isLyricsPage = currentVisualPage == PlaybackVisualPage.Lyrics
 
     Box(
         modifier = modifier.height(turntableHeight + 52.dp * scale),
@@ -1004,13 +1039,13 @@ private fun PlaybackTurntableSection(
                 .size(actionButtonSize),
             onClick = onMoreClick,
         )
-        if (showLyrics) {
-            val screenSwitchNormalRes = if (keepScreenAwake) {
+        if (isLyricsPage) {
+            val screenSwitchNormalRes = if (keepLyricsScreenAwake) {
                 R.drawable.sun_btn_on
             } else {
                 R.drawable.sun_btn_off
             }
-            val screenSwitchPressedRes = if (keepScreenAwake) {
+            val screenSwitchPressedRes = if (keepLyricsScreenAwake) {
                 R.drawable.sun_btn_on_down
             } else {
                 R.drawable.sun_btn_off_down
@@ -1024,7 +1059,7 @@ private fun PlaybackTurntableSection(
                     .zIndex(2f)
                     .padding(end = moreButtonMargin, top = moreButtonTopMargin)
                     .size(actionButtonSize),
-                onClick = onKeepScreenToggle,
+                onClick = onKeepLyricsScreenAwakeToggle,
             )
         }
         Box(
@@ -1034,114 +1069,228 @@ private fun PlaybackTurntableSection(
                 .height(turntableHeight),
             contentAlignment = Alignment.Center,
         ) {
-            if (showLyrics) {
-                PlaybackLyricsOverlay(
-                    lyrics = embeddedLyrics,
-                    fallbackLines = fallbackLyricsLines,
-                    currentPositionMs = currentPositionMs,
-                    modifier = Modifier
-                        .matchParentSize()
-                        .then(
-                            if (keepScreenAwake) {
-                                Modifier.keepScreenOn()
-                            } else {
-                                Modifier
-                            },
-                        ),
-                )
-            } else {
-                PlaybackTurntableDisc(
-                    albumArtwork = albumArtwork,
-                    discRotation = discRotation,
-                    hidePlayerAxisEnabled = hidePlayerAxisEnabled,
+            when (currentVisualPage) {
+                PlaybackVisualPage.Cover -> PlaybackCoverPage(
                     turntableWidth = turntableWidth,
+                    scale = scale,
+                    currentPositionMs = coverPositionMs,
+                    durationMs = durationMs,
+                    scratchEnabled = scratchEnabled,
+                    hidePlayerAxisEnabled = hidePlayerAxisEnabled,
+                    albumArtwork = albumArtwork,
+                    hasMediaItem = hasMediaItem,
+                    isPlaying = isPlaying,
+                    isScratchDragging = isScratchDragging,
+                    scratchPreviewPositionMs = scratchPreviewPositionMs,
+                    mediaId = mediaId,
+                    positionSnapshotElapsedRealtimeMs = positionSnapshotElapsedRealtimeMs,
+                    onVisualPageToggle = onVisualPageToggle,
+                    onScratchStart = onScratchStart,
+                    onScratchMotion = onScratchMotion,
+                    onScratchPositionChange = onScratchPositionChange,
+                    onScratchEnd = onScratchEnd,
+                    onScratchCancel = onScratchCancel,
                     modifier = Modifier.matchParentSize(),
                 )
-            }
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .onSizeChanged { discSize = it }
-                    .zIndex(3f)
-                    .pointerInput(showLyrics) {
-                        detectTapGestures(
-                            onTap = { offset ->
-                                val center = discCenter(latestDiscSize)
-                                val radius = discRadius(latestDiscSize)
-                                if (isWithinDisc(offset, center, radius)) {
-                                    latestRecordTap()
-                                }
-                            },
-                        )
-                    }
-                    .pointerInput(scratchAvailable) {
-                        detectDragGestures(
-                            onDragStart = { offset ->
-                                if (!scratchAvailable) {
-                                    return@detectDragGestures
-                                }
-                                val center = discCenter(discSize)
-                                val radius = discRadius(discSize)
-                                if (!isWithinScratchRegion(offset, center, radius)) {
-                                    return@detectDragGestures
-                                }
-                                scratchActive = true
-                                scratchPositionMs = latestPositionMs.coerceIn(0L, latestDurationMs)
-                                lastAngleDegrees = angleDegrees(offset, center)
-                                latestScratchStart()
-                                latestScratchPositionChange(scratchPositionMs, 0f)
-                            },
-                            onDrag = { change, _ ->
-                                if (!scratchActive) {
-                                    return@detectDragGestures
-                                }
-                                val center = discCenter(discSize)
-                                val currentAngle = angleDegrees(change.position, center)
-                                var deltaAngle = normalizeAngleDelta(currentAngle - lastAngleDegrees)
-                                deltaAngle = deltaAngle.coerceIn(
-                                    -ScratchMaxAngleStepDegrees,
-                                    ScratchMaxAngleStepDegrees,
-                                )
-                                lastAngleDegrees = currentAngle
 
-                                val targetPosition = (
-                                    scratchPositionMs + (deltaAngle / 360f) * ScratchCycleDurationMs
-                                ).roundToLong().coerceIn(0L, latestDurationMs)
-                                latestScratchMotion(targetPosition, deltaAngle)
-                                if (targetPosition != scratchPositionMs) {
-                                    scratchPositionMs = targetPosition
-                                    latestScratchPositionChange(targetPosition, deltaAngle)
-                                }
-                                change.consume()
-                            },
-                            onDragEnd = {
-                                if (scratchActive) {
-                                    latestScratchEnd(scratchPositionMs)
-                                }
-                                scratchActive = false
-                                lastAngleDegrees = Float.NaN
-                            },
-                            onDragCancel = {
-                                if (scratchActive) {
-                                    latestScratchCancel()
-                                }
-                                scratchActive = false
-                                lastAngleDegrees = Float.NaN
-                            },
-                        )
-                    },
-            )
-            if (!showLyrics) {
-                OriginalNeedleStack(
-                    needleRotation = needleRotation,
-                    scale = scale,
-                    modifier = Modifier
-                        .matchParentSize()
-                        .zIndex(2f),
+                PlaybackVisualPage.Lyrics -> PlaybackLyricsPage(
+                    mediaId = mediaId,
+                    lyrics = embeddedLyrics,
+                    fallbackLyricsLines = fallbackLyricsLines,
+                    currentPositionMs = lyricsPositionMs,
+                    keepLyricsScreenAwake = keepLyricsScreenAwake,
+                    onVisualPageToggle = onVisualPageToggle,
+                    modifier = Modifier.matchParentSize(),
                 )
             }
         }
     }
+}
+
+@Composable
+private fun PlaybackCoverPage(
+    turntableWidth: Dp,
+    scale: Float,
+    currentPositionMs: Long,
+    durationMs: Long,
+    scratchEnabled: Boolean,
+    hidePlayerAxisEnabled: Boolean,
+    albumArtwork: ImageBitmap?,
+    hasMediaItem: Boolean,
+    isPlaying: Boolean,
+    isScratchDragging: Boolean,
+    scratchPreviewPositionMs: Long?,
+    mediaId: String?,
+    positionSnapshotElapsedRealtimeMs: Long,
+    onVisualPageToggle: () -> Unit,
+    onScratchStart: () -> Unit,
+    onScratchMotion: (Long, Float) -> Unit,
+    onScratchPositionChange: (Long, Float) -> Unit,
+    onScratchEnd: (Long) -> Unit,
+    onScratchCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val progress = durationMs
+        .takeIf { it > 0L }
+        ?.let { currentPositionMs.toFloat() / it.toFloat() }
+        ?.coerceIn(0f, 1f)
+        ?: 0f
+    val targetNeedleRotation = if (hasMediaItem && (isPlaying || isScratchDragging)) {
+        NeedlePlaybackStartRotationDegrees + (progress * NeedlePlaybackSweepDegrees)
+    } else {
+        NeedleRestRotationDegrees
+    }
+    val needleRotation by animateFloatAsState(
+        targetValue = targetNeedleRotation,
+        animationSpec = tween(durationMillis = 220),
+        label = "needleRotation",
+    )
+    var discSize by remember { mutableStateOf(IntSize.Zero) }
+    var scratchActive by remember(mediaId) { mutableStateOf(false) }
+    var scratchPositionMs by remember(mediaId) {
+        mutableLongStateOf(currentPositionMs.coerceIn(0L, durationMs))
+    }
+    var lastAngleDegrees by remember(mediaId) { mutableFloatStateOf(Float.NaN) }
+    val latestDiscSize by rememberUpdatedState(discSize)
+    val latestVisualPageToggle by rememberUpdatedState(onVisualPageToggle)
+    val scratchAvailable by rememberUpdatedState(scratchEnabled && durationMs > 0L)
+    val latestPositionMs by rememberUpdatedState(currentPositionMs)
+    val latestDurationMs by rememberUpdatedState(durationMs)
+    val latestScratchStart by rememberUpdatedState(onScratchStart)
+    val latestScratchMotion by rememberUpdatedState(onScratchMotion)
+    val latestScratchPositionChange by rememberUpdatedState(onScratchPositionChange)
+    val latestScratchEnd by rememberUpdatedState(onScratchEnd)
+    val latestScratchCancel by rememberUpdatedState(onScratchCancel)
+    val discRotation = rememberSmoothDiscRotation(
+        mediaId = mediaId,
+        positionMs = currentPositionMs,
+        positionSnapshotElapsedRealtimeMs = positionSnapshotElapsedRealtimeMs,
+        running = isPlaying && !isScratchDragging && scratchPreviewPositionMs == null,
+    )
+
+    Box(modifier = modifier) {
+        PlaybackTurntableDisc(
+            albumArtwork = albumArtwork,
+            discRotation = discRotation,
+            hidePlayerAxisEnabled = hidePlayerAxisEnabled,
+            turntableWidth = turntableWidth,
+            modifier = Modifier.matchParentSize(),
+        )
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .onSizeChanged { discSize = it }
+                .zIndex(3f)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = { offset ->
+                            val center = discCenter(latestDiscSize)
+                            val radius = discRadius(latestDiscSize)
+                            if (isWithinDisc(offset, center, radius)) {
+                                latestVisualPageToggle()
+                            }
+                        },
+                    )
+                }
+                .pointerInput(scratchAvailable) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            if (!scratchAvailable) {
+                                return@detectDragGestures
+                            }
+                            val center = discCenter(discSize)
+                            val radius = discRadius(discSize)
+                            if (!isWithinScratchRegion(offset, center, radius)) {
+                                return@detectDragGestures
+                            }
+                            scratchActive = true
+                            scratchPositionMs = latestPositionMs.coerceIn(0L, latestDurationMs)
+                            lastAngleDegrees = angleDegrees(offset, center)
+                            latestScratchStart()
+                            latestScratchPositionChange(scratchPositionMs, 0f)
+                        },
+                        onDrag = { change, _ ->
+                            if (!scratchActive) {
+                                return@detectDragGestures
+                            }
+                            val center = discCenter(discSize)
+                            val currentAngle = angleDegrees(change.position, center)
+                            var deltaAngle = normalizeAngleDelta(currentAngle - lastAngleDegrees)
+                            deltaAngle = deltaAngle.coerceIn(
+                                -ScratchMaxAngleStepDegrees,
+                                ScratchMaxAngleStepDegrees,
+                            )
+                            lastAngleDegrees = currentAngle
+
+                            val targetPosition = (
+                                scratchPositionMs + (deltaAngle / 360f) * ScratchCycleDurationMs
+                            ).roundToLong().coerceIn(0L, latestDurationMs)
+                            latestScratchMotion(targetPosition, deltaAngle)
+                            if (targetPosition != scratchPositionMs) {
+                                scratchPositionMs = targetPosition
+                                latestScratchPositionChange(targetPosition, deltaAngle)
+                            }
+                            change.consume()
+                        },
+                        onDragEnd = {
+                            if (scratchActive) {
+                                latestScratchEnd(scratchPositionMs)
+                            }
+                            scratchActive = false
+                            lastAngleDegrees = Float.NaN
+                        },
+                        onDragCancel = {
+                            if (scratchActive) {
+                                latestScratchCancel()
+                            }
+                            scratchActive = false
+                            lastAngleDegrees = Float.NaN
+                        },
+                    )
+                },
+        )
+        OriginalNeedleStack(
+            needleRotation = needleRotation,
+            scale = scale,
+            modifier = Modifier
+                .matchParentSize()
+                .zIndex(2f),
+        )
+    }
+}
+
+@Composable
+private fun PlaybackLyricsPage(
+    mediaId: String?,
+    lyrics: EmbeddedLyrics?,
+    fallbackLyricsLines: List<String>,
+    currentPositionMs: Long,
+    keepLyricsScreenAwake: Boolean,
+    onVisualPageToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val latestVisualPageToggle by rememberUpdatedState(onVisualPageToggle)
+    PlaybackLyricsOverlay(
+        mediaId = mediaId,
+        lyrics = lyrics,
+        fallbackLines = fallbackLyricsLines,
+        currentPositionMs = currentPositionMs,
+        modifier = modifier
+            .then(
+                if (keepLyricsScreenAwake) {
+                    Modifier.keepScreenOn()
+                } else {
+                    Modifier
+                },
+            )
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        latestVisualPageToggle()
+                    },
+                )
+            },
+    )
 }
 
 @Composable
