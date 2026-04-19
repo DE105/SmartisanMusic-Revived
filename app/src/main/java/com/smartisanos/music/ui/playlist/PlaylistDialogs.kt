@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
@@ -29,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -51,12 +53,11 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import com.smartisanos.music.R
 import com.smartisanos.music.data.playlist.UserPlaylistSummary
+import com.smartisanos.music.ui.components.SmartisanDialogCard
+import com.smartisanos.music.ui.components.SmartisanDialogInsetDivider
+import com.smartisanos.music.ui.components.SmartisanDialogTitleStyle
 
-private val DialogCardShape = RoundedCornerShape(12.dp)
 private val ActionSheetShape = RectangleShape
-private val DialogCardBackground = Color.White
-private val DialogTitleColor = Color(0xCC000000)
-private val DialogDivider = Color(0xFFE6E6E6)
 private val DialogTextFieldBorder = Color(0xFFE2E2E2)
 private val DialogTextFieldBackground = Color(0xFFF7F8F9)
 private val DialogPlaceholder = Color(0x66000000)
@@ -69,11 +70,6 @@ private val DialogButtonText = Color(0x8F000000)
 private val ActionSheetScrim = Color(0x73000000)
 private val ActionSheetDivider = Color(0xFFEAEAEA)
 
-private val DialogTitleStyle = TextStyle(
-    fontSize = 16.sp,
-    fontWeight = FontWeight.SemiBold,
-    color = DialogTitleColor,
-)
 private val PlaylistActionSheetTitleStyle = TextStyle(
     fontSize = 15.sp,
     fontWeight = FontWeight.SemiBold,
@@ -86,7 +82,7 @@ private val DialogTextFieldStyle = TextStyle(
 private val PlaylistPickerTitleStyle = TextStyle(
     fontSize = 16.sp,
     fontWeight = FontWeight.Medium,
-    color = DialogTitleColor,
+    color = Color(0xCC000000),
 )
 private val PlaylistPickerSubtitleStyle = TextStyle(
     fontSize = 13.sp,
@@ -127,12 +123,12 @@ internal fun PlaylistNameDialog(
         keyboardController?.show()
     }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            modifier = modifier
-                .width(308.dp)
-                .background(DialogCardBackground, DialogCardShape),
-        ) {
+    SmartisanDialogCard(
+        onDismiss = onDismiss,
+        modifier = modifier,
+        width = 308.dp,
+    ) {
+        Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -141,15 +137,10 @@ internal fun PlaylistNameDialog(
             ) {
                 androidx.compose.material3.Text(
                     text = title,
-                    style = DialogTitleStyle,
+                    style = SmartisanDialogTitleStyle,
                 )
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(DialogDivider),
-            )
+            SmartisanDialogInsetDivider()
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -208,12 +199,12 @@ internal fun PlaylistPickerDialog(
     onCreateNewPlaylist: () -> Unit,
     onPlaylistSelected: (String) -> Unit,
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            modifier = modifier
-                .width(320.dp)
-                .background(DialogCardBackground, DialogCardShape),
-        ) {
+    SmartisanDialogCard(
+        onDismiss = onDismiss,
+        modifier = modifier,
+        width = 320.dp,
+    ) {
+        Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -222,35 +213,28 @@ internal fun PlaylistPickerDialog(
             ) {
                 androidx.compose.material3.Text(
                     text = stringResource(R.string.playlist_picker_title),
-                    style = DialogTitleStyle,
+                    style = SmartisanDialogTitleStyle,
                 )
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(DialogDivider),
-            )
+            SmartisanDialogInsetDivider()
             PlaylistPickerCreateRow(onClick = onCreateNewPlaylist)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(DialogDivider),
-            )
+            SmartisanDialogInsetDivider()
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 320.dp),
             ) {
-                items(
+                itemsIndexed(
                     items = playlists,
-                    key = UserPlaylistSummary::id,
-                ) { playlist ->
+                    key = { _, playlist -> playlist.id },
+                ) { index, playlist ->
                     PlaylistPickerRow(
                         playlist = playlist,
                         onClick = { onPlaylistSelected(playlist.id) },
                     )
+                    if (index < playlists.lastIndex) {
+                        SmartisanDialogInsetDivider()
+                    }
                 }
             }
         }

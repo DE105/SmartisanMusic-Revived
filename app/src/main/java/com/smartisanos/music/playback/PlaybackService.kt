@@ -93,6 +93,7 @@ class PlaybackService : MediaLibraryService() {
             exclusionsReady.complete(exclusionsSnapshot)
         }
         serviceScope.cancel()
+        PlaybackSleepTimer.cancel()
         mediaLibrarySession?.release()
         mediaLibrarySession = null
 
@@ -149,6 +150,8 @@ class PlaybackService : MediaLibraryService() {
             val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
                 .buildUpon()
                 .add(ScratchSeekModeCommand)
+                .add(StartSleepTimerCommand)
+                .add(CancelSleepTimerCommand)
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(sessionCommands)
@@ -240,6 +243,22 @@ class PlaybackService : MediaLibraryService() {
                 player?.setSeekParameters(
                     if (enabled) SeekParameters.EXACT else SeekParameters.DEFAULT,
                 )
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            if (customCommand.customAction == StartSleepTimerAction) {
+                val durationMs = args.getLong(SleepTimerDurationMsKey, 0L)
+                if (durationMs <= 0L) {
+                    return Futures.immediateFuture(
+                        SessionResult(SessionResult.RESULT_ERROR_BAD_VALUE),
+                    )
+                }
+                PlaybackSleepTimer.start(durationMs) {
+                    player?.pause()
+                }
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            if (customCommand.customAction == CancelSleepTimerAction) {
+                PlaybackSleepTimer.cancel()
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
             return super.onCustomCommand(session, controller, customCommand, args)

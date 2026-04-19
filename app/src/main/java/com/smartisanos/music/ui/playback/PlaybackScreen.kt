@@ -1,13 +1,19 @@
 package com.smartisanos.music.ui.playback
 
 import android.content.Context
+import android.content.Intent
 import android.media.AudioManager
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.SystemClock
+import android.provider.Settings
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.SeekBar
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -97,13 +103,18 @@ import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.playback.EmbeddedLyrics
 import com.smartisanos.music.playback.LocalPlaybackController
+import com.smartisanos.music.playback.PlaybackSleepTimer
+import com.smartisanos.music.playback.cancelSleepTimer
 import com.smartisanos.music.playback.extractEmbeddedLyrics
 import com.smartisanos.music.playback.loadEmbeddedLyrics
 import com.smartisanos.music.playback.setScratchSeekModeEnabled
+import com.smartisanos.music.playback.startSleepTimer
 import com.smartisanos.music.ui.components.loadEmbeddedArtwork
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.min
@@ -213,11 +224,45 @@ fun PlaybackScreen(
         mutableStateOf(controller.snapshot(context))
     }
     var showMorePanel by rememberSaveable { mutableStateOf(false) }
+    var showSleepTimerDialog by rememberSaveable { mutableStateOf(false) }
+    var showSetRingtoneDialog by rememberSaveable { mutableStateOf(false) }
+    var showWriteSettingsDialog by rememberSaveable { mutableStateOf(false) }
     var showLyrics by rememberSaveable { mutableStateOf(false) }
     var keepScreenAwake by rememberSaveable { mutableStateOf(false) }
+    var pendingRingtoneUriString by rememberSaveable { mutableStateOf<String?>(null) }
     var scratchPreviewPositionMs by remember { mutableStateOf<Long?>(null) }
     var scratchDragging by remember { mutableStateOf(false) }
     var scratchResumePlayback by remember { mutableStateOf(false) }
+    val sleepTimerState by PlaybackSleepTimer.state.collectAsState()
+    val applyPendingRingtone by rememberUpdatedState(
+        newValue = {
+            val ringtoneUriString = pendingRingtoneUriString
+            pendingRingtoneUriString = null
+            val ringtoneUri = ringtoneUriString
+                ?.takeIf { it.isNotBlank() }
+                ?.let(Uri::parse)
+                ?: run {
+                    context.toast(R.string.can_not_set_ringtone)
+                    return@rememberUpdatedState
+                }
+            scope.launch {
+                val success = withContext(Dispatchers.IO) {
+                    context.applicationContext.trySetDefaultRingtone(ringtoneUri)
+                }
+                context.toast(if (success) R.string.ring_success else R.string.ring_fault)
+            }
+        },
+    )
+    val writeSettingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) {
+        if (Settings.System.canWrite(context)) {
+            applyPendingRingtone()
+        } else {
+            pendingRingtoneUriString = null
+            context.toast(R.string.ringtone_permission_missing)
+        }
+    }
 
     BackHandler {
         if (showMorePanel) {
@@ -576,6 +621,7 @@ fun PlaybackScreen(
                     favoriteEnabled = favoriteEnabled,
                     showLyrics = showLyrics,
                     scratchEnabled = playbackSettings.scratchEnabled,
+                    sleepTimerActive = sleepTimerState.isActive,
                     bottomInset = bottomInset,
                     onAddToPlaylistClick = {
                         state.mediaItem?.let { onRequestAddToPlaylist(listOf(it)) }
@@ -591,8 +637,13 @@ fun PlaybackScreen(
                             favoriteRepository.toggle(mediaId)
                         }
                     },
+                    onSetRingtoneClick = {
+                        showMorePanel = false
+                        showSetRingtoneDialog = true
+                    },
                     onSleepTimerClick = {
                         showMorePanel = false
+                        showSleepTimerDialog = true
                     },
                     onLyricsToggle = {
                         showLyrics = !showLyrics
@@ -620,6 +671,77 @@ fun PlaybackScreen(
                     },
                 )
             }
+        }
+
+        if (showSleepTimerDialog) {
+            PlaybackSleepTimerDialog(
+                state = sleepTimerState,
+                onDismiss = {
+                    showSleepTimerDialog = false
+                },
+                onDurationSelected = { durationMs ->
+                    showSleepTimerDialog = false
+                    if (durationMs > 0L) {
+                        controller?.startSleepTimer(durationMs)
+                    } else {
+                        controller?.cancelSleepTimer()
+                        if (sleepTimerState.isActive) {
+                            context.toast(R.string.sleep_timer_stopped)
+                        }
+                    }
+                },
+            )
+        }
+
+        if (showSetRingtoneDialog) {
+            PlaybackConfirmDialog(
+                title = stringResource(R.string.set_ringtone),
+                message = stringResource(R.string.choise_seting_name),
+                confirmText = stringResource(R.string.done),
+                dismissText = stringResource(R.string.cancel),
+                onConfirm = {
+                    showSetRingtoneDialog = false
+                    val ringtoneUri = state.mediaItem?.localConfiguration?.uri
+                    if (ringtoneUri == null) {
+                        context.toast(R.string.can_not_set_ringtone)
+                        return@PlaybackConfirmDialog
+                    }
+                    pendingRingtoneUriString = ringtoneUri.toString()
+                    if (Settings.System.canWrite(context)) {
+                        applyPendingRingtone()
+                    } else {
+                        showWriteSettingsDialog = true
+                    }
+                },
+                onDismiss = {
+                    showSetRingtoneDialog = false
+                },
+            )
+        }
+
+        if (showWriteSettingsDialog) {
+            PlaybackConfirmDialog(
+                title = stringResource(R.string.set_ringtone),
+                message = stringResource(R.string.ringtone_permission_message),
+                confirmText = stringResource(R.string.continue_action),
+                dismissText = stringResource(R.string.cancel),
+                onConfirm = {
+                    showWriteSettingsDialog = false
+                    val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                    }
+                    if (intent.resolveActivity(context.packageManager) == null) {
+                        pendingRingtoneUriString = null
+                        context.toast(R.string.ring_fault)
+                        return@PlaybackConfirmDialog
+                    }
+                    writeSettingsLauncher.launch(intent)
+                },
+                onDismiss = {
+                    showWriteSettingsDialog = false
+                    pendingRingtoneUriString = null
+                },
+            )
         }
     }
 }
@@ -1549,6 +1671,20 @@ private fun Context.setMusicStreamVolumeFraction(value: Float) {
         .roundToInt()
         .coerceIn(0, maxVolume)
     audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVolume, 0)
+}
+
+private fun Context.toast(stringRes: Int) {
+    android.widget.Toast.makeText(this, getString(stringRes), android.widget.Toast.LENGTH_SHORT).show()
+}
+
+private fun Context.trySetDefaultRingtone(ringtoneUri: Uri): Boolean {
+    return runCatching {
+        RingtoneManager.setActualDefaultRingtoneUri(
+            this,
+            RingtoneManager.TYPE_RINGTONE,
+            ringtoneUri,
+        )
+    }.isSuccess
 }
 
 private fun formatPlaybackTime(positionMs: Long): String {

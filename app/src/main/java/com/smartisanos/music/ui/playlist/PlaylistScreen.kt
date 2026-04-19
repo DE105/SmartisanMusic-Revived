@@ -43,7 +43,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -87,6 +86,7 @@ import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.await
 import com.smartisanos.music.ui.components.SecondaryPageTransition
 import com.smartisanos.music.ui.components.SmartisanBlankState
+import com.smartisanos.music.ui.components.SmartisanConfirmDialog
 import com.smartisanos.music.ui.components.SmartisanTopBar
 import com.smartisanos.music.ui.components.SmartisanTopBarDangerButton
 import com.smartisanos.music.ui.components.SmartisanTopBarIconButton
@@ -1524,19 +1524,12 @@ private fun ConfirmDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = title) },
-        confirmButton = {
-            Button(onClick = onConfirm) {
-                Text(text = stringResource(R.string.done))
-            }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text(text = stringResource(R.string.cancel))
-            }
-        },
+    SmartisanConfirmDialog(
+        title = title,
+        confirmText = stringResource(R.string.done),
+        dismissText = stringResource(R.string.cancel),
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
     )
 }
 
