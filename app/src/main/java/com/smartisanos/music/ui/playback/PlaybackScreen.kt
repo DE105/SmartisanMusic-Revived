@@ -77,9 +77,9 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.keepScreenOn
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -213,7 +213,6 @@ fun PlaybackScreen(
     }
     val favoriteIds by favoriteRepository.observeFavoriteIds().collectAsState(initial = emptySet())
     val scope = rememberCoroutineScope()
-    val view = LocalView.current
     val scratchSoundController = remember(context) {
         ScratchSoundController(context)
     }
@@ -303,14 +302,6 @@ fun PlaybackScreen(
     DisposableEffect(popcornSoundController) {
         onDispose {
             popcornSoundController.release()
-        }
-    }
-
-    DisposableEffect(view, keepScreenAwake) {
-        val previousValue = view.keepScreenOn
-        view.keepScreenOn = keepScreenAwake
-        onDispose {
-            view.keepScreenOn = previousValue
         }
     }
 
@@ -1014,18 +1005,25 @@ private fun PlaybackTurntableSection(
             onClick = onMoreClick,
         )
         if (showLyrics) {
+            val screenSwitchNormalRes = if (keepScreenAwake) {
+                R.drawable.sun_btn_on
+            } else {
+                R.drawable.sun_btn_off
+            }
+            val screenSwitchPressedRes = if (keepScreenAwake) {
+                R.drawable.sun_btn_on_down
+            } else {
+                R.drawable.sun_btn_off_down
+            }
             PressedDrawableButton(
-                normalRes = R.drawable.sun_btn_off,
-                pressedRes = R.drawable.sun_btn_off_down,
+                normalRes = screenSwitchNormalRes,
+                pressedRes = screenSwitchPressedRes,
                 contentDescription = stringResource(R.string.always_on),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .zIndex(2f)
                     .padding(end = moreButtonMargin, top = moreButtonTopMargin)
-                    .size(actionButtonSize)
-                    .graphicsLayer {
-                        alpha = if (keepScreenAwake) 1f else 0.72f
-                    },
+                    .size(actionButtonSize),
                 onClick = onKeepScreenToggle,
             )
         }
@@ -1034,13 +1032,22 @@ private fun PlaybackTurntableSection(
                 .align(Alignment.TopCenter)
                 .width(turntableWidth)
                 .height(turntableHeight),
+            contentAlignment = Alignment.Center,
         ) {
             if (showLyrics) {
                 PlaybackLyricsOverlay(
                     lyrics = embeddedLyrics,
                     fallbackLines = fallbackLyricsLines,
                     currentPositionMs = currentPositionMs,
-                    modifier = Modifier.matchParentSize(),
+                    modifier = Modifier
+                        .matchParentSize()
+                        .then(
+                            if (keepScreenAwake) {
+                                Modifier.keepScreenOn()
+                            } else {
+                                Modifier
+                            },
+                        ),
                 )
             } else {
                 PlaybackTurntableDisc(
