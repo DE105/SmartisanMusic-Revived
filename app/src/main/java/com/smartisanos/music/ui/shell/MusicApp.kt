@@ -55,10 +55,13 @@ import com.smartisanos.music.ui.components.GlobalPlaybackBar
 import com.smartisanos.music.ui.components.SecondaryPageTransition
 import com.smartisanos.music.ui.components.SmartisanBottomBar
 import com.smartisanos.music.ui.components.SmartisanTopBar
+import com.smartisanos.music.ui.components.SmartisanTopBarDangerButton
+import com.smartisanos.music.ui.components.SmartisanTopBarDangerButtonStyle
 import com.smartisanos.music.ui.components.SmartisanTopBarIconButton
+import com.smartisanos.music.ui.components.SmartisanTopBarIconButtonStyle
 import com.smartisanos.music.ui.components.SmartisanTopBarShadow
 import com.smartisanos.music.ui.components.SmartisanTopBarTextButton
-import com.smartisanos.music.ui.components.SmartisanTopBarDangerButton
+import com.smartisanos.music.ui.components.SmartisanTopBarTextButtonStyle
 import com.smartisanos.music.ui.more.MoreSecondaryPage
 import com.smartisanos.music.ui.navigation.MusicDestination
 import com.smartisanos.music.ui.navigation.MusicNavHost
@@ -68,9 +71,9 @@ import com.smartisanos.music.ui.playlist.PlaylistPickerDialog
 import kotlinx.coroutines.launch
 
 private val ShellBackground = Color(0xFFF7F7F7)
-private val SearchIconSize = 34.dp
-private val AlbumViewModeIconSize = 18.dp
-private val SettingsIconSize = 18.dp
+private val SearchIconSize = 24.dp
+private val AlbumViewModeIconSize = 22.dp
+private val SettingsIconSize = 24.dp
 private val PlaybackOverlayEasing = Easing { fraction ->
     1f - (1f - fraction) * (1f - fraction)
 }
@@ -324,14 +327,17 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                                 when {
                                                     showsFolderDetail -> SmartisanTopBarTextButton(
                                                         text = stringResource(R.string.tab_directory),
+                                                        buttonStyle = SmartisanTopBarTextButtonStyle.Back,
                                                         onClick = handleMoreBack,
                                                     )
                                                     showsFolderEditActions -> SmartisanTopBarTextButton(
                                                         text = stringResource(R.string.done),
+                                                        buttonStyle = SmartisanTopBarTextButtonStyle.Toolbar,
                                                         onClick = handleMoreBack,
                                                     )
                                                     else -> SmartisanTopBarTextButton(
                                                         text = currentDestination.label,
+                                                        buttonStyle = SmartisanTopBarTextButtonStyle.Back,
                                                         onClick = handleMoreBack,
                                                     )
                                                 }
@@ -345,6 +351,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                                             SmartisanTopBarDangerButton(
                                                                 text = stringResource(R.string.delete),
                                                                 enabled = selectedDirectoryKeysInEdit.isNotEmpty(),
+                                                                buttonStyle = SmartisanTopBarDangerButtonStyle.Toolbar,
                                                                 onClick = {
                                                                     val targets = selectedDirectoryKeysInEdit
                                                                     if (targets.isEmpty()) {
@@ -363,9 +370,11 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                                                 pressedIconRes = R.drawable.search_icon_down,
                                                                 contentDescription = stringResource(R.string.tab_local_search),
                                                                 iconSize = SearchIconSize,
+                                                                buttonStyle = SmartisanTopBarIconButtonStyle.Toolbar,
                                                             )
                                                             SmartisanTopBarTextButton(
                                                                 text = stringResource(R.string.edit),
+                                                                buttonStyle = SmartisanTopBarTextButtonStyle.Toolbar,
                                                                 onClick = {
                                                                     selectedDirectoryKeysInEdit = emptySet()
                                                                     folderEditMode = true
@@ -383,6 +392,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                             leftContent = {
                                                 SmartisanTopBarTextButton(
                                                     text = stringResource(R.string.back),
+                                                    buttonStyle = SmartisanTopBarTextButtonStyle.Back,
                                                     onClick = handleMoreBack,
                                                 )
                                             },
@@ -394,6 +404,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                             leftContent = {
                                                 SmartisanTopBarTextButton(
                                                     text = currentDestination.label,
+                                                    buttonStyle = SmartisanTopBarTextButtonStyle.Back,
                                                     onClick = handleMoreBack,
                                                 )
                                             },
@@ -410,6 +421,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                                     leftContent = {
                                                         SmartisanTopBarTextButton(
                                                             text = currentDestination.label,
+                                                            buttonStyle = SmartisanTopBarTextButtonStyle.Back,
                                                             onClick = handleMoreBack,
                                                         )
                                                     },
@@ -419,6 +431,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                                             pressedIconRes = R.drawable.search_icon_down,
                                                             contentDescription = stringResource(R.string.tab_local_search),
                                                             iconSize = SearchIconSize,
+                                                            buttonStyle = SmartisanTopBarIconButtonStyle.Toolbar,
                                                         )
                                                     },
                                                 )
@@ -429,6 +442,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                                     leftContent = {
                                                         SmartisanTopBarTextButton(
                                                             text = stringResource(R.string.tab_style),
+                                                            buttonStyle = SmartisanTopBarTextButtonStyle.Back,
                                                             onClick = handleMoreBack,
                                                         )
                                                     },
@@ -445,6 +459,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                             leftContent = {
                                 SmartisanTopBarTextButton(
                                     text = stringResource(R.string.done),
+                                    buttonStyle = SmartisanTopBarTextButtonStyle.Toolbar,
                                     onClick = closeSongsEdit,
                                 )
                             },
@@ -452,6 +467,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                 SmartisanTopBarDangerButton(
                                     text = stringResource(R.string.delete),
                                     enabled = selectedSongIdsInEdit.isNotEmpty(),
+                                    buttonStyle = SmartisanTopBarDangerButtonStyle.Toolbar,
                                     onClick = {
                                         val targets = selectedSongIdsInEdit
                                         if (targets.isEmpty()) {
@@ -698,6 +714,7 @@ private fun MusicShellTopBar(
             {
                 SmartisanTopBarTextButton(
                     text = stringResource(R.string.back),
+                    buttonStyle = SmartisanTopBarTextButtonStyle.Back,
                     onClick = onDetailBack,
                 )
             }
@@ -708,6 +725,7 @@ private fun MusicShellTopBar(
                     pressedIconRes = R.drawable.tabbar_setting_white,
                     contentDescription = stringResource(R.string.setting),
                     iconSize = SettingsIconSize,
+                    buttonStyle = SmartisanTopBarIconButtonStyle.Toolbar,
                     onClick = onMoreSettingsClick,
                 )
             }
@@ -715,6 +733,7 @@ private fun MusicShellTopBar(
             {
                 SmartisanTopBarTextButton(
                     text = stringResource(R.string.edit),
+                    buttonStyle = SmartisanTopBarTextButtonStyle.Toolbar,
                     onClick = onEditClick,
                 )
             }
@@ -744,6 +763,7 @@ private fun MusicShellTopBar(
                                 stringResource(R.string.listview_header_tile)
                             },
                             iconSize = AlbumViewModeIconSize,
+                            buttonStyle = SmartisanTopBarIconButtonStyle.Toolbar,
                             onClick = onAlbumViewModeToggle,
                         )
                     }
@@ -753,6 +773,7 @@ private fun MusicShellTopBar(
                             pressedIconRes = R.drawable.search_icon_down,
                             contentDescription = stringResource(R.string.tab_local_search),
                             iconSize = SearchIconSize,
+                            buttonStyle = SmartisanTopBarIconButtonStyle.Toolbar,
                         )
                     }
                 }

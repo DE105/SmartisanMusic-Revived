@@ -73,6 +73,7 @@ import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.await
 import com.smartisanos.music.ui.components.SmartisanBlankState
 import com.smartisanos.music.ui.components.SmartisanTopBarIconButton
+import com.smartisanos.music.ui.components.SmartisanTopBarIconButtonStyle
 import com.smartisanos.music.ui.components.audioPermission
 import com.smartisanos.music.ui.components.hasAudioPermission
 import com.smartisanos.music.ui.components.loadEmbeddedArtwork
@@ -390,6 +391,7 @@ private fun LovedSongsActionBar(
                 iconSize = LovedSongsShuffleIconSize,
                 contentDescription = stringResource(R.string.play_shuffle),
                 width = LovedSongsActionSideButtonWidth,
+                buttonStyle = SmartisanTopBarIconButtonStyle.Filled,
                 onClick = onShuffleClick,
             )
             Spacer(modifier = Modifier.width(LovedSongsActionMiddleSpacing))
@@ -408,6 +410,7 @@ private fun LovedSongsActionBar(
                 iconSize = LovedSongsPlayIconSize,
                 contentDescription = stringResource(R.string.play),
                 width = LovedSongsActionSideButtonWidth,
+                buttonStyle = SmartisanTopBarIconButtonStyle.Filled,
                 onClick = onPlayClick,
             )
         }

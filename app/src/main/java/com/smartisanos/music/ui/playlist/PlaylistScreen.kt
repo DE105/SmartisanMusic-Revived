@@ -89,9 +89,12 @@ import com.smartisanos.music.ui.components.SmartisanBlankState
 import com.smartisanos.music.ui.components.SmartisanConfirmDialog
 import com.smartisanos.music.ui.components.SmartisanTopBar
 import com.smartisanos.music.ui.components.SmartisanTopBarDangerButton
+import com.smartisanos.music.ui.components.SmartisanTopBarDangerButtonStyle
 import com.smartisanos.music.ui.components.SmartisanTopBarIconButton
+import com.smartisanos.music.ui.components.SmartisanTopBarIconButtonStyle
 import com.smartisanos.music.ui.components.SmartisanTopBarShadow
 import com.smartisanos.music.ui.components.SmartisanTopBarTextButton
+import com.smartisanos.music.ui.components.SmartisanTopBarTextButtonStyle
 import com.smartisanos.music.ui.components.audioPermission
 import com.smartisanos.music.ui.components.hasAudioPermission
 import kotlinx.coroutines.flow.flowOf
@@ -657,6 +660,7 @@ private fun PlaylistPrimaryTopBar(
         leftContent = {
             SmartisanTopBarTextButton(
                 text = if (editMode) stringResource(R.string.done) else stringResource(R.string.edit),
+                buttonStyle = SmartisanTopBarTextButtonStyle.Toolbar,
                 onClick = if (editMode) onDoneClick else onEditClick,
             )
         },
@@ -665,6 +669,7 @@ private fun PlaylistPrimaryTopBar(
                 SmartisanTopBarDangerButton(
                     text = stringResource(R.string.delete),
                     enabled = deleteEnabled,
+                    buttonStyle = SmartisanTopBarDangerButtonStyle.Toolbar,
                     onClick = onDeleteClick,
                 )
             } else {
@@ -672,7 +677,8 @@ private fun PlaylistPrimaryTopBar(
                     iconRes = R.drawable.search_icon,
                     pressedIconRes = R.drawable.search_icon_down,
                     contentDescription = stringResource(R.string.tab_local_search),
-                    iconSize = 34.dp,
+                    iconSize = 24.dp,
+                    buttonStyle = SmartisanTopBarIconButtonStyle.Toolbar,
                 )
             }
         },
@@ -694,6 +700,11 @@ private fun PlaylistDetailTopBar(
             SmartisanTopBarTextButton(
                 text = if (editMode) stringResource(R.string.done) else stringResource(R.string.tab_play_list),
                 width = if (editMode) 42.dp else 72.dp,
+                buttonStyle = if (editMode) {
+                    SmartisanTopBarTextButtonStyle.Toolbar
+                } else {
+                    SmartisanTopBarTextButtonStyle.Back
+                },
                 onClick = if (editMode) onDoneClick else onBackClick,
             )
         },
@@ -702,6 +713,7 @@ private fun PlaylistDetailTopBar(
                 SmartisanTopBarDangerButton(
                     text = stringResource(R.string.delete),
                     enabled = deleteEnabled,
+                    buttonStyle = SmartisanTopBarDangerButtonStyle.Toolbar,
                     onClick = onDeleteTracksClick,
                 )
             }
@@ -720,6 +732,7 @@ private fun PlaylistAddSongsTopBar(
         rightContent = {
             SmartisanTopBarTextButton(
                 text = stringResource(R.string.done),
+                buttonStyle = SmartisanTopBarTextButtonStyle.Toolbar,
                 onClick = onDoneClick,
             )
         },
