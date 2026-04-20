@@ -237,6 +237,7 @@ fun PlaybackScreen(
     var showSleepTimerDialog by rememberSaveable { mutableStateOf(false) }
     var showSetRingtoneDialog by rememberSaveable { mutableStateOf(false) }
     var showWriteSettingsDialog by rememberSaveable { mutableStateOf(false) }
+    var showQueueOverlay by rememberSaveable { mutableStateOf(false) }
     var currentVisualPage by rememberSaveable { mutableStateOf(PlaybackVisualPage.Cover) }
     var keepLyricsScreenAwake by rememberSaveable { mutableStateOf(false) }
     var pendingRingtoneUriString by rememberSaveable { mutableStateOf<String?>(null) }
@@ -275,7 +276,9 @@ fun PlaybackScreen(
     }
 
     BackHandler {
-        if (showMorePanel) {
+        if (showQueueOverlay) {
+            showQueueOverlay = false
+        } else if (showMorePanel) {
             showMorePanel = false
         } else {
             onCollapse()
@@ -502,6 +505,7 @@ fun PlaybackScreen(
                 title = title,
                 artist = artist,
                 topInset = topInset,
+                onQueueClick = { showQueueOverlay = true },
                 onCollapse = onCollapse,
             )
             PlaybackTimeSeekBar(
@@ -785,6 +789,77 @@ fun PlaybackScreen(
                 },
             )
         }
+
+        AnimatedVisibility(
+            visible = showQueueOverlay,
+            modifier = Modifier.fillMaxSize().zIndex(10f),
+            enter = androidx.compose.animation.slideInVertically(
+                animationSpec = tween(
+                    durationMillis = 300,
+                    easing = { fraction -> 1f - (1f - fraction) * (1f - fraction) }
+                ),
+                initialOffsetY = { fullHeight -> fullHeight }
+            ),
+            exit = androidx.compose.animation.slideOutVertically(
+                animationSpec = tween(
+                    durationMillis = 300,
+                    easing = { fraction -> 1f - (1f - fraction) * (1f - fraction) }
+                ),
+                targetOffsetY = { fullHeight -> fullHeight }
+            )
+        ) {
+            val currentTrack = state.mediaItem?.toPlaybackQueueTrack(context)
+            val upcomingItems = controller?.upcomingQueueTracks(context).orEmpty()
+            PlaybackQueueScreen(
+                state = PlaybackQueueUiState(
+                    currentTrack = currentTrack,
+                    upcomingTracks = upcomingItems,
+                    isCurrentFavorite = favoriteEnabled,
+                ),
+                onExitFullScreenClick = {
+                    showQueueOverlay = false
+                    onCollapse()
+                },
+                onReturnToPlaybackClick = {
+                    showQueueOverlay = false
+                },
+                onItemClick = { index ->
+                    val totalIndex = (controller?.currentMediaItemIndex ?: -1) + 1 + index
+                    controller?.seekToDefaultPosition(totalIndex)
+                    showQueueOverlay = false
+                },
+                onFavoriteCurrentClick = {
+                    val mediaId = currentMediaId ?: return@PlaybackQueueScreen
+                    scope.launch {
+                        favoriteRepository.toggle(mediaId)
+                    }
+                },
+                onClearUpcomingClick = {
+                    val playbackController = controller ?: return@PlaybackQueueScreen
+                    val playingIndex = playbackController.currentMediaItemIndex
+                    val itemCount = playbackController.mediaItemCount
+                    if (playingIndex >= 0 && playingIndex + 1 < itemCount) {
+                        playbackController.removeMediaItems(playingIndex + 1, itemCount)
+                    }
+                },
+                onMoveRequest = { from, to ->
+                    if (from == to) {
+                        return@PlaybackQueueScreen
+                    }
+                    val playbackController = controller ?: return@PlaybackQueueScreen
+                    val playingIndex = playbackController.currentMediaItemIndex
+                    val itemCount = playbackController.mediaItemCount
+                    if (playingIndex < 0) {
+                        return@PlaybackQueueScreen
+                    }
+                    val absoluteFrom = playingIndex + 1 + from
+                    val absoluteTo = playingIndex + 1 + to
+                    if (absoluteFrom in 0 until itemCount && absoluteTo in 0 until itemCount) {
+                        playbackController.moveMediaItem(absoluteFrom, absoluteTo)
+                    }
+                },
+            )
+        }
     }
 }
 
@@ -793,6 +868,7 @@ private fun PlaybackTopBar(
     title: String,
     artist: String,
     topInset: Dp,
+    onQueueClick: () -> Unit,
     onCollapse: () -> Unit,
 ) {
     Box(
@@ -851,7 +927,7 @@ private fun PlaybackTopBar(
                 modifier = Modifier
                     .width(40.dp)
                     .height(30.dp),
-                onClick = { },
+                onClick = onQueueClick,
             )
         }
     }
@@ -1741,6 +1817,31 @@ private fun Player?.snapshot(context: Context): PlaybackScreenState {
         durationMs = player.duration.takeIf { it > 0L } ?: 0L,
         volume = context.musicStreamVolumeFraction(),
         positionSnapshotElapsedRealtimeMs = SystemClock.elapsedRealtime(),
+    )
+}
+
+private fun Player.upcomingQueueTracks(context: Context): List<PlaybackQueueTrack> {
+    val startIndex = currentMediaItemIndex + 1
+    if (currentMediaItemIndex < 0 || startIndex >= mediaItemCount) {
+        return emptyList()
+    }
+    return buildList(mediaItemCount - startIndex) {
+        for (index in startIndex until mediaItemCount) {
+            add(getMediaItemAt(index).toPlaybackQueueTrack(context))
+        }
+    }
+}
+
+private fun MediaItem.toPlaybackQueueTrack(context: Context): PlaybackQueueTrack {
+    return PlaybackQueueTrack(
+        id = mediaId,
+        title = mediaMetadata.displayTitle?.toString()
+            ?: mediaMetadata.title?.toString()
+            ?: context.getString(R.string.unknown_song_title),
+        artist = mediaMetadata.subtitle?.toString()
+            ?: mediaMetadata.artist?.toString()
+            ?: context.getString(R.string.unknown_artist),
+        mediaItem = this,
     )
 }
 
