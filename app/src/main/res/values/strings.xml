@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Music</string>
+    <string name="app_name">音乐</string>
     <string name="back">返回</string>
     <string name="done">完成</string>
     <string name="continue_action">继续</string>

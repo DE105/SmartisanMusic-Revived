@@ -8,6 +8,7 @@ import android.provider.MediaStore
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import com.smartisanos.music.R
+import java.util.Locale
 
 class LocalAudioLibrary(
     private val context: Context,
@@ -48,6 +49,8 @@ class LocalAudioLibrary(
             MediaStore.Audio.Media.YEAR,
             MediaStore.Audio.Media.DATE_ADDED,
             MediaStore.MediaColumns.RELATIVE_PATH,
+            MediaStore.MediaColumns.DISPLAY_NAME,
+            MediaStore.MediaColumns.MIME_TYPE,
         )
         val selection = buildString {
             append("${MediaStore.Audio.Media.IS_MUSIC} != 0")
@@ -75,6 +78,8 @@ class LocalAudioLibrary(
                 val yearColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
                 val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
                 val relativePathColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.RELATIVE_PATH)
+                val displayNameColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+                val mimeTypeColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE)
 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idColumn)
@@ -93,6 +98,9 @@ class LocalAudioLibrary(
                     val year = cursor.getInt(yearColumn).takeIf { it > 0 }
                     val dateAddedSeconds = cursor.getLong(dateAddedColumn).takeIf { it > 0L }
                     val relativePath = cursor.getString(relativePathColumn)?.takeIf { it.isNotBlank() }
+                    val displayName = cursor.getString(displayNameColumn)?.takeIf { it.isNotBlank() }
+                    val mimeType = cursor.getString(mimeTypeColumn)?.takeIf { it.isNotBlank() }
+                    val audioQualityBadge = resolveAudioQualityBadge(displayName, mimeType)
                     val mediaUri = ContentUris.withAppendedId(collection, id)
 
                     val extras = Bundle().apply {
@@ -104,6 +112,9 @@ class LocalAudioLibrary(
                         }
                         if (dateAddedSeconds != null) {
                             putLong(DateAddedExtraKey, dateAddedSeconds)
+                        }
+                        if (!audioQualityBadge.isNullOrBlank()) {
+                            putString(AudioQualityBadgeExtraKey, audioQualityBadge)
                         }
                     }
 
@@ -166,12 +177,52 @@ class LocalAudioLibrary(
         const val AlbumIdExtraKey = "com.smartisanos.music.extra.ALBUM_ID"
         const val RelativePathExtraKey = "com.smartisanos.music.extra.RELATIVE_PATH"
         const val DateAddedExtraKey = "com.smartisanos.music.extra.DATE_ADDED"
+        const val AudioQualityBadgeExtraKey = "com.smartisanos.music.extra.AUDIO_QUALITY_BADGE"
+        const val AudioQualityBadgeFlac = "flac"
+        const val AudioQualityBadgeApe = "ape"
+        const val AudioQualityBadgeWav = "wav"
+        const val AudioQualityBadgeAiff = "aiff"
+        const val AudioQualityBadgeAlac = "alac"
+        const val AudioQualityBadgeCue = "cue"
 
         fun albumArtworkUri(albumId: Long): Uri {
             return ContentUris.withAppendedId(
                 Uri.parse("content://media/external/audio/albumart"),
                 albumId,
             )
+        }
+
+        private fun resolveAudioQualityBadge(
+            displayName: String?,
+            mimeType: String?,
+        ): String? {
+            val extension = displayName
+                ?.substringAfterLast('.', missingDelimiterValue = "")
+                ?.lowercase(Locale.ROOT)
+                .orEmpty()
+            val normalizedMimeType = mimeType?.lowercase(Locale.ROOT).orEmpty()
+
+            return when {
+                extension == AudioQualityBadgeFlac || normalizedMimeType.contains(AudioQualityBadgeFlac) -> {
+                    AudioQualityBadgeFlac
+                }
+                extension == AudioQualityBadgeApe || normalizedMimeType.contains(AudioQualityBadgeApe) || normalizedMimeType.contains("monkeys-audio") -> {
+                    AudioQualityBadgeApe
+                }
+                extension == AudioQualityBadgeWav || normalizedMimeType.contains(AudioQualityBadgeWav) || normalizedMimeType.contains("wave") -> {
+                    AudioQualityBadgeWav
+                }
+                extension == AudioQualityBadgeAiff || extension == "aif" || normalizedMimeType.contains(AudioQualityBadgeAiff) -> {
+                    AudioQualityBadgeAiff
+                }
+                extension == AudioQualityBadgeAlac || normalizedMimeType.contains(AudioQualityBadgeAlac) -> {
+                    AudioQualityBadgeAlac
+                }
+                extension == AudioQualityBadgeCue || normalizedMimeType.contains(AudioQualityBadgeCue) -> {
+                    AudioQualityBadgeCue
+                }
+                else -> null
+            }
         }
     }
 }

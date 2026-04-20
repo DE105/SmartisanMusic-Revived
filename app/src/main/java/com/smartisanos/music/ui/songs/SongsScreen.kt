@@ -3,8 +3,10 @@ package com.smartisanos.music.ui.songs
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.annotation.DrawableRes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -35,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -48,6 +51,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
 import com.smartisanos.music.data.library.LibraryExclusionsStore
+import com.smartisanos.music.playback.LocalAudioLibrary
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.await
 import com.smartisanos.music.ui.components.SmartisanBlankState
@@ -262,7 +266,13 @@ private fun SongRow(
 ) {
     val metadata = mediaItem.mediaMetadata
     val title = metadata.displayTitle ?: metadata.title
-    val subtitle = metadata.subtitle ?: metadata.artist
+    val unknownArtistTitle = stringResource(R.string.unknown_artist)
+    val unknownAlbumTitle = stringResource(R.string.unknown_album)
+    val subtitle = mediaItem.songSubtitle(
+        unknownArtistTitle = unknownArtistTitle,
+        unknownAlbumTitle = unknownAlbumTitle,
+    )
+    val qualityBadgeRes = mediaItem.songQualityBadgeRes()
 
     Column(
         modifier = modifier
@@ -275,7 +285,7 @@ private fun SongRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(60.dp)
+                .height(61.dp)
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -297,12 +307,10 @@ private fun SongRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = subtitle?.toString().orEmpty(),
-                    style = SongSubtitleStyle,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp),
+                SongSubtitleRow(
+                    text = subtitle,
+                    qualityBadgeRes = qualityBadgeRes,
+                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
             if (showPlayingIndicator) {
@@ -325,6 +333,33 @@ private fun SongRow(
                 .fillMaxWidth()
                 .height(1.dp)
                 .background(SongRowDivider),
+        )
+    }
+}
+
+@Composable
+private fun SongSubtitleRow(
+    text: String,
+    @DrawableRes qualityBadgeRes: Int?,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (qualityBadgeRes != null) {
+            Image(
+                painter = painterResource(id = qualityBadgeRes),
+                contentDescription = null,
+                modifier = Modifier.padding(end = 6.dp),
+            )
+        }
+        Text(
+            text = text,
+            style = SongSubtitleStyle,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -361,4 +396,27 @@ private fun SongSelectionCircle(
 
 private fun Set<String>.toggle(value: String): Set<String> {
     return if (value in this) this - value else this + value
+}
+
+private fun MediaItem.songSubtitle(
+    unknownArtistTitle: String,
+    unknownAlbumTitle: String,
+): String {
+    val metadata = mediaMetadata
+    val artist = metadata.artist?.toString()?.trim()?.takeIf(String::isNotEmpty) ?: unknownArtistTitle
+    val album = metadata.albumTitle?.toString()?.trim()?.takeIf(String::isNotEmpty) ?: unknownAlbumTitle
+    return "$artist - $album"
+}
+
+@DrawableRes
+private fun MediaItem.songQualityBadgeRes(): Int? {
+    return when (mediaMetadata.extras?.getString(LocalAudioLibrary.AudioQualityBadgeExtraKey)) {
+        LocalAudioLibrary.AudioQualityBadgeFlac -> R.drawable.audio_quality_flac
+        LocalAudioLibrary.AudioQualityBadgeApe -> R.drawable.audio_quality_ape
+        LocalAudioLibrary.AudioQualityBadgeWav -> R.drawable.audio_quality_wav
+        LocalAudioLibrary.AudioQualityBadgeAiff -> R.drawable.audio_quality_aiff
+        LocalAudioLibrary.AudioQualityBadgeAlac -> R.drawable.audio_quality_alac
+        LocalAudioLibrary.AudioQualityBadgeCue -> R.drawable.audio_quality_cue
+        else -> null
+    }
 }
