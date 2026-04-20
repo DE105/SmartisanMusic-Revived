@@ -5,14 +5,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -31,7 +33,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -42,8 +43,9 @@ private val SmartisanRed = Color(0xFFE64040)
 private val SmartisanText = Color(0x70000000)
 private val SmartisanIconTint = Color(0xFF979797)
 private val ShellBackground = Color(0xFFF7F7F7)
-private val BottomBarContentHeight = 54.dp
-private val BottomBarTopPadding = 4.dp
+private val BottomBarBackground = Color(0xFFF0F0F0)
+private val BottomBarVisibleHeight = 54.dp
+private val BottomBarItemSpacing = 1.dp
 private val BottomBarIconSize = 26.dp
 private val BottomBarHorizontalPadding = 12.dp
 private val MoreDotSize = 5.dp
@@ -60,35 +62,41 @@ fun SmartisanBottomBar(
 ) {
     val currentDestination = MusicDestination.entries.firstOrNull { it.route == currentRoute }
         ?: MusicDestination.Playlist
-    val density = LocalDensity.current
-    val bottomInset = with(density) {
-        WindowInsets.navigationBars.getBottom(this).toDp()
-    }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(BottomBarContentHeight + bottomInset)
-            .background(ShellBackground)
+    Column(
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(BottomBarContentHeight)
-                .windowInsetsPadding(
-                    WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
-                )
-                .padding(horizontal = BottomBarHorizontalPadding)
-                .align(Alignment.TopCenter)
+                .height(BottomBarVisibleHeight)
+                .background(BottomBarBackground),
         ) {
-            MusicDestination.entries.forEach { destination ->
-                SmartisanBottomBarItem(
-                    destination = destination,
-                    selected = destination == currentDestination,
-                    onClick = { onDestinationSelected(destination) },
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(BottomBarVisibleHeight)
+                    .windowInsetsPadding(
+                        WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
+                    )
+                    .padding(horizontal = BottomBarHorizontalPadding),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MusicDestination.entries.forEach { destination ->
+                    SmartisanBottomBarItem(
+                        destination = destination,
+                        selected = destination == currentDestination,
+                        onClick = { onDestinationSelected(destination) },
+                    )
+                }
             }
         }
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsBottomHeight(WindowInsets.navigationBars)
+                .background(BottomBarBackground)
+        )
     }
 }
 
@@ -110,13 +118,11 @@ private fun RowScope.SmartisanBottomBarItem(
                 indication = null,
                 onClick = onClick,
             ),
-        contentAlignment = Alignment.TopCenter,
+        contentAlignment = Alignment.Center,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = BottomBarTopPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(BottomBarItemSpacing),
         ) {
             if (destination == MusicDestination.More) {
                 MoreDotsIcon(
