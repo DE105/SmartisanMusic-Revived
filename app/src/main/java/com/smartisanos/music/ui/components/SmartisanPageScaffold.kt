@@ -28,10 +28,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
@@ -46,47 +52,34 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smartisanos.music.R
 
-private val TopBarFillTop = Color(0xFFFBFBFB)
+private val TopBarFillTop = Color(0xFFFDFDFD)
 private val TopBarFillUpper = Color(0xFFF9F9F9)
-private val TopBarFillLower = Color(0xFFF5F5F5)
-private val TopBarFillBottom = Color(0xFFF0F0F0)
-private val TopBarBottomEdge = Color(0xFFE4E4E4)
-private val TopBarTextColor = Color(0x99000000)
+private val TopBarFillLower = Color(0xFFF4F4F4)
+private val TopBarFillBottom = Color(0xFFEFEFEF)
+private val TopBarBottomEdge = Color(0xFFE0E0E0)
+private val TopBarTextColor = Color(0xFF333333)
 
-private val TitleBarActionText = Color(0x73000000)
-private val TitleBarActionPressedText = Color(0x8A000000)
-private val TitleBarToolbarBackground = Color(0xFFFDFDFD)
-private val TitleBarToolbarPressedBackground = Color(0xFFF4F4F4)
-private val TitleBarToolbarBorder = Color(0xFFE7E7E7)
-private val TitleBarToolbarPressedBorder = Color(0xFFDCDCDC)
-private val TitleBarDangerBackground = Color(0xFFEE9B98)
-private val TitleBarDangerPressedBackground = Color(0xFFE48784)
-private val TitleBarDangerBorder = Color(0xFFD77C79)
-private val TitleBarDangerText = Color.White
-private val TitleBarDangerDisabledBackground = Color(0xFFF2F2F2)
-private val TitleBarDangerDisabledBorder = Color(0xFFDCDCDC)
-private val TitleBarDangerDisabledText = Color(0x66000000)
-private val TitleBarDangerToolbarText = Color(0xFFEB7D74)
-private val TitleBarDangerToolbarPressedText = Color(0xFFE06A61)
+private val TitleBarActionText = Color(0xFF595959)
+private val TitleBarActionPressedText = Color(0xFF333333)
 
 private val TopBarHorizontalPadding = 10.dp
-private val TopBarButtonHeight = 29.dp
-private val TopBarToolbarButtonHeight = 29.dp
+private val TopBarButtonHeight = 30.dp
+private val TopBarToolbarButtonHeight = 30.dp
 private val TopBarButtonWidth = 42.dp
-private val TopBarBackButtonWidth = 52.dp
-private val TopBarBackButtonHeight = 29.dp
+private val TopBarBackButtonWidth = 56.dp
+private val TopBarBackButtonHeight = 30.dp
 private val TopBarToolbarButtonWidth = 46.dp
-private val TopBarToolbarTextButtonMinWidth = 44.dp
-private val TopBarButtonCorner = 7.dp
-private val TopBarToolbarButtonCorner = 4.dp
-private val TopBarToolbarTextHorizontalPadding = 4.dp
+private val TopBarToolbarTextButtonMinWidth = 48.dp
+private val TopBarButtonCorner = 5.dp
+private val TopBarToolbarButtonCorner = 5.dp
+private val TopBarToolbarTextHorizontalPadding = 6.dp
 private val TopBarBackContentHorizontalPadding = 8.dp
-private val TopBarBackContentSpacing = 4.dp
+private val TopBarBackContentSpacing = 3.dp
 private val TopBarBackIconSize = 14.dp
-private val TopBarBackIconStroke = 1.8.dp
+private val TopBarBackIconStroke = 2.2.dp
 
 private val TopBarTitleStyle = TextStyle(
-    fontSize = 20.sp,
+    fontSize = 18.sp,
     fontWeight = FontWeight.Medium,
     color = TopBarTextColor,
 )
@@ -114,6 +107,72 @@ enum class SmartisanTopBarIconButtonStyle {
 enum class SmartisanTopBarDangerButtonStyle {
     Filled,
     Toolbar,
+}
+
+private fun Modifier.smartisanButtonBackground(
+    pressed: Boolean,
+    enabled: Boolean = true,
+    isDanger: Boolean = false,
+    cornerRadius: Dp = 5.dp
+): Modifier = drawWithCache {
+    val radiusPx = cornerRadius.toPx()
+    val strokeWidth = 1.dp.toPx()
+    val halfStroke = strokeWidth / 2f
+
+    val normalGradient = Brush.verticalGradient(
+        0.0f to if (isDanger) Color(0xFFED8380) else Color(0xFFFFFFFF),
+        0.05f to if (isDanger) Color(0xFFE87A77) else Color(0xFFFDFDFD),
+        1.0f to if (isDanger) Color(0xFFE2615E) else Color(0xFFF6F6F6)
+    )
+    val pressedGradient = Brush.verticalGradient(
+        0.0f to if (isDanger) Color(0xFFC04B48) else Color(0xFFE0E0E0),
+        0.1f to if (isDanger) Color(0xFFD05C59) else Color(0xFFE8E8E8),
+        1.0f to if (isDanger) Color(0xFFD66A67) else Color(0xFFEBEBEB)
+    )
+    val disabledGradient = Brush.verticalGradient(
+        listOf(if (isDanger) Color(0xFFF2F2F2) else Color(0xFFF9F9F9), if (isDanger) Color(0xFFEBEBEB) else Color(0xFFF2F2F2))
+    )
+
+    val bgBrush = when {
+        !enabled -> disabledGradient
+        pressed -> pressedGradient
+        else -> normalGradient
+    }
+
+    val borderColor = when {
+        !enabled -> Color(0xFFE0E0E0)
+        isDanger -> Color(0xFFD06461)
+        pressed -> Color(0xFFC4C4C4)
+        else -> Color(0xFFD4D4D4)
+    }
+
+    onDrawBehind {
+        // Drop shadow for lifted effect
+        if (!pressed && enabled) {
+            drawRoundRect(
+                color = Color(0x0F000000),
+                topLeft = Offset(0f, 1.5f),
+                size = size,
+                cornerRadius = CornerRadius(radiusPx, radiusPx)
+            )
+        }
+
+        // Background
+        drawRoundRect(
+            brush = bgBrush,
+            size = size,
+            cornerRadius = CornerRadius(radiusPx, radiusPx)
+        )
+
+        // Border
+        drawRoundRect(
+            color = borderColor,
+            topLeft = Offset(halfStroke, halfStroke),
+            size = Size(size.width - strokeWidth, size.height - strokeWidth),
+            cornerRadius = CornerRadius(radiusPx - halfStroke, radiusPx - halfStroke),
+            style = Stroke(strokeWidth)
+        )
+    }
 }
 
 @Composable
@@ -225,8 +284,6 @@ fun SmartisanTopBarTextButton(
     }
     val usesToolbarContainer = buttonStyle == SmartisanTopBarTextButtonStyle.Toolbar ||
         buttonStyle == SmartisanTopBarTextButtonStyle.Back
-    val borderColor = if (pressed) TitleBarToolbarPressedBorder else TitleBarToolbarBorder
-    val backgroundColor = if (pressed) TitleBarToolbarPressedBackground else TitleBarToolbarBackground
 
     Box(
         modifier = modifier
@@ -240,16 +297,10 @@ fun SmartisanTopBarTextButton(
             .height(resolvedHeight)
             .then(
                 if (usesToolbarContainer) {
-                    Modifier
-                        .border(
-                            width = 1.dp,
-                            color = borderColor,
-                            shape = RoundedCornerShape(TopBarToolbarButtonCorner),
-                        )
-                        .background(
-                            color = backgroundColor,
-                            shape = RoundedCornerShape(TopBarToolbarButtonCorner),
-                        )
+                    Modifier.smartisanButtonBackground(
+                        pressed = pressed,
+                        cornerRadius = TopBarToolbarButtonCorner
+                    )
                 } else {
                     Modifier
                 },
@@ -305,25 +356,10 @@ fun SmartisanTopBarDangerButton(
     val pressed by interactionSource.collectIsPressedAsState()
 
     val isToolbar = buttonStyle == SmartisanTopBarDangerButtonStyle.Toolbar
-    val borderColor = when {
-        !enabled -> TitleBarDangerDisabledBorder
-        isToolbar && pressed -> TitleBarToolbarPressedBorder
-        isToolbar -> TitleBarToolbarBorder
-        enabled -> TitleBarDangerBorder
-        else -> TitleBarDangerDisabledBorder
-    }
-    val backgroundColor = when {
-        !enabled -> TitleBarDangerDisabledBackground
-        isToolbar && pressed -> TitleBarToolbarPressedBackground
-        isToolbar -> TitleBarToolbarBackground
-        pressed -> TitleBarDangerPressedBackground
-        else -> TitleBarDangerBackground
-    }
+    
     val textColor = when {
-        !enabled -> TitleBarDangerDisabledText
-        isToolbar && pressed -> TitleBarDangerToolbarPressedText
-        isToolbar -> TitleBarDangerToolbarText
-        else -> TitleBarDangerText
+        !enabled -> Color(0x80FFFFFF)
+        else -> Color.White
     }
     val width = if (isToolbar) TopBarToolbarTextButtonMinWidth else TopBarButtonWidth
     val height = if (isToolbar) TopBarToolbarButtonHeight else TopBarButtonHeight
@@ -333,14 +369,11 @@ fun SmartisanTopBarDangerButton(
         modifier = modifier
             .width(width)
             .height(height)
-            .border(
-                width = 1.dp,
-                color = borderColor,
-                shape = RoundedCornerShape(corner),
-            )
-            .background(
-                color = backgroundColor,
-                shape = RoundedCornerShape(corner),
+            .smartisanButtonBackground(
+                pressed = pressed,
+                enabled = enabled,
+                isDanger = true,
+                cornerRadius = corner
             )
             .clickable(
                 enabled = enabled,
@@ -383,8 +416,6 @@ fun SmartisanTopBarIconButton(
     } else {
         TopBarButtonHeight
     }
-    val borderColor = if (pressed) TitleBarToolbarPressedBorder else TitleBarToolbarBorder
-    val backgroundColor = if (pressed) TitleBarToolbarPressedBackground else TitleBarToolbarBackground
 
     Box(
         modifier = modifier
@@ -392,16 +423,11 @@ fun SmartisanTopBarIconButton(
             .height(resolvedHeight)
             .then(
                 if (buttonStyle == SmartisanTopBarIconButtonStyle.Toolbar) {
-                    Modifier
-                        .border(
-                            width = 1.dp,
-                            color = borderColor,
-                            shape = RoundedCornerShape(TopBarToolbarButtonCorner),
-                        )
-                        .background(
-                            color = backgroundColor,
-                            shape = RoundedCornerShape(TopBarToolbarButtonCorner),
-                        )
+                    Modifier.smartisanButtonBackground(
+                        pressed = pressed,
+                        enabled = enabled,
+                        cornerRadius = TopBarToolbarButtonCorner
+                    )
                 } else {
                     Modifier
                 },
