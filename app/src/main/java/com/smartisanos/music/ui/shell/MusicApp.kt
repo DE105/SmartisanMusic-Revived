@@ -3,6 +3,7 @@ package com.smartisanos.music.ui.shell
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -68,6 +69,8 @@ import com.smartisanos.music.ui.navigation.MusicNavHost
 import com.smartisanos.music.ui.playback.PlaybackScreen
 import com.smartisanos.music.ui.playlist.PlaylistNameDialog
 import com.smartisanos.music.ui.playlist.PlaylistPickerDialog
+import com.smartisanos.music.ui.search.GlobalSearchScreen
+import com.smartisanos.music.ui.search.SearchTab
 import kotlinx.coroutines.launch
 
 private val ShellBackground = Color(0xFFF7F7F7)
@@ -91,6 +94,10 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
     ProvidePlaybackController {
         val playbackController = LocalPlaybackController.current
         var playbackVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+        var searchVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+        var searchQuery by rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+        var selectedSearchTab by rememberSaveable { androidx.compose.runtime.mutableStateOf(SearchTab.All) }
+        val searchVisibilityState = remember { MutableTransitionState(false) }
         var albumViewMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(AlbumViewMode.Tile) }
         var selectedAlbumId by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
         var selectedAlbumTitle by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
@@ -127,6 +134,15 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
         var pendingPlaylistPickerMediaItems by remember { androidx.compose.runtime.mutableStateOf<List<MediaItem>?>(null) }
         var showExternalPlaylistCreateDialog by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
         var externalPlaylistCreateInitialValue by rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+        val navigateToDestination = { destination: MusicDestination ->
+            navController.navigate(destination.route) {
+                popUpTo(navController.graph.findStartDestination().id) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
 
         val closeAlbumDetail = {
             selectedAlbumId = null
@@ -154,6 +170,23 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
         val closeGenrePage = {
             closeGenreDetail()
             moreSecondaryPage = null
+        }
+        val openSearchOverlay = {
+            searchQuery = ""
+            selectedSearchTab = SearchTab.All
+            searchVisible = true
+        }
+        val closeSearchOverlay = {
+            searchVisible = false
+        }
+        LaunchedEffect(searchVisible) {
+            searchVisibilityState.targetState = searchVisible
+        }
+        LaunchedEffect(searchVisibilityState.currentState, searchVisibilityState.targetState) {
+            if (!searchVisibilityState.currentState && !searchVisibilityState.targetState) {
+                searchQuery = ""
+                selectedSearchTab = SearchTab.All
+            }
         }
         val showToast = { textRes: Int ->
             Toast.makeText(context, context.getString(textRes), Toast.LENGTH_SHORT).show()
@@ -262,6 +295,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                     detailTitle = null,
                                     onAlbumViewModeToggle = toggleAlbumViewMode,
                                     onDetailBack = closeAlbumDetail,
+                                    onSearchClick = openSearchOverlay,
                                 )
                             },
                             secondaryContent = {
@@ -271,6 +305,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                     detailTitle = selectedAlbumTitle,
                                     onAlbumViewModeToggle = toggleAlbumViewMode,
                                     onDetailBack = closeAlbumDetail,
+                                    onSearchClick = openSearchOverlay,
                                 )
                             },
                         )
@@ -286,6 +321,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                     detailTitle = null,
                                     onAlbumViewModeToggle = toggleAlbumViewMode,
                                     onDetailBack = closeArtistDetail,
+                                    onSearchClick = openSearchOverlay,
                                 )
                             },
                             secondaryContent = {
@@ -295,6 +331,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                     detailTitle = selectedArtistTitle,
                                     onAlbumViewModeToggle = toggleAlbumViewMode,
                                     onDetailBack = closeArtistDetail,
+                                    onSearchClick = openSearchOverlay,
                                 )
                             },
                         )
@@ -310,6 +347,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                     detailTitle = null,
                                     onAlbumViewModeToggle = toggleAlbumViewMode,
                                     onDetailBack = closeAlbumDetail,
+                                    onSearchClick = openSearchOverlay,
                                     onMoreSettingsClick = {
                                         moreSecondaryPage = MoreSecondaryPage.Settings
                                     },
@@ -371,6 +409,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                                                 contentDescription = stringResource(R.string.tab_local_search),
                                                                 iconSize = SearchIconSize,
                                                                 buttonStyle = SmartisanTopBarIconButtonStyle.Toolbar,
+                                                                onClick = openSearchOverlay,
                                                             )
                                                             SmartisanTopBarTextButton(
                                                                 text = stringResource(R.string.edit),
@@ -432,6 +471,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                                             contentDescription = stringResource(R.string.tab_local_search),
                                                             iconSize = SearchIconSize,
                                                             buttonStyle = SmartisanTopBarIconButtonStyle.Toolbar,
+                                                            onClick = openSearchOverlay,
                                                         )
                                                     },
                                                 )
@@ -494,6 +534,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                     selectedSongIdsInEdit = emptySet()
                                 }
                             },
+                            onSearchClick = openSearchOverlay,
                         )
                     }
                     Box(
@@ -560,6 +601,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                             onSongsEditSelectionChanged = { selection ->
                                 selectedSongIdsInEdit = selection
                             },
+                            onPlaylistSearchClick = openSearchOverlay,
                             songsEditMode = songsEditMode,
                             selectedSongIdsInEdit = selectedSongIdsInEdit,
                             onRequestAddToPlaylist = requestAddToPlaylist,
@@ -596,10 +638,56 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                 }
             }
             AnimatedVisibility(
-                visible = playbackVisible,
+                visibleState = searchVisibilityState,
                 modifier = Modifier
                     .fillMaxSize()
                     .zIndex(1f),
+                enter = slideInVertically(
+                    animationSpec = tween(
+                        durationMillis = 300,
+                        easing = PlaybackOverlayEasing,
+                    ),
+                    initialOffsetY = { fullHeight -> fullHeight },
+                ),
+                exit = slideOutVertically(
+                    animationSpec = tween(
+                        durationMillis = 300,
+                        easing = PlaybackOverlayEasing,
+                    ),
+                    targetOffsetY = { fullHeight -> fullHeight },
+                ),
+            ) {
+                GlobalSearchScreen(
+                    query = searchQuery,
+                    selectedTab = selectedSearchTab,
+                    modifier = Modifier.fillMaxSize(),
+                    onQueryChange = { value ->
+                        searchQuery = value
+                    },
+                    onTabChange = { tab ->
+                        selectedSearchTab = tab
+                    },
+                    onDismiss = closeSearchOverlay,
+                    onOpenPlayback = {
+                        playbackVisible = true
+                    },
+                    onAlbumClick = { id, title ->
+                        selectedAlbumId = id
+                        selectedAlbumTitle = title
+                        navigateToDestination(MusicDestination.Album)
+                    },
+                    onArtistClick = { id, title ->
+                        selectedArtistId = id
+                        selectedArtistTitle = title
+                        navigateToDestination(MusicDestination.Artist)
+                    },
+                )
+            }
+            AnimatedVisibility(
+                visible = playbackVisible,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(2f),
                 enter = slideInVertically(
                     animationSpec = tween(
                         durationMillis = 300,
@@ -691,6 +779,7 @@ private fun MusicShellTopBar(
     onAlbumViewModeToggle: () -> Unit,
     onDetailBack: () -> Unit,
     onEditClick: () -> Unit = {},
+    onSearchClick: () -> Unit = {},
     onMoreSettingsClick: () -> Unit = {},
 ) {
     val showsDetail = detailTitle != null
@@ -774,6 +863,7 @@ private fun MusicShellTopBar(
                             contentDescription = stringResource(R.string.tab_local_search),
                             iconSize = SearchIconSize,
                             buttonStyle = SmartisanTopBarIconButtonStyle.Toolbar,
+                            onClick = onSearchClick,
                         )
                     }
                 }

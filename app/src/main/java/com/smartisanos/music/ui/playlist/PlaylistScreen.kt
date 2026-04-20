@@ -162,6 +162,7 @@ private const val PlaylistOverlayFadeMillis = 160
 @Composable
 fun PlaylistScreen(
     modifier: Modifier = Modifier,
+    onSearchClick: () -> Unit = {},
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit = {},
     onRequestAddToQueue: (List<MediaItem>) -> Unit = {},
 ) {
@@ -480,6 +481,7 @@ fun PlaylistScreen(
                 PlaylistPrimaryTopBar(
                     editMode = rootEditMode,
                     deleteEnabled = selectedPlaylistIdsInEdit.isNotEmpty(),
+                    onSearchClick = onSearchClick,
                     onEditClick = {
                         rootEditMode = true
                         selectedPlaylistIdsInEdit = emptySet()
@@ -651,6 +653,7 @@ fun PlaylistScreen(
 private fun PlaylistPrimaryTopBar(
     editMode: Boolean,
     deleteEnabled: Boolean,
+    onSearchClick: () -> Unit,
     onEditClick: () -> Unit,
     onDoneClick: () -> Unit,
     onDeleteClick: () -> Unit,
@@ -679,6 +682,7 @@ private fun PlaylistPrimaryTopBar(
                     contentDescription = stringResource(R.string.tab_local_search),
                     iconSize = 24.dp,
                     buttonStyle = SmartisanTopBarIconButtonStyle.Toolbar,
+                    onClick = onSearchClick,
                 )
             }
         },

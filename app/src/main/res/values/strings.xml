@@ -60,6 +60,15 @@
     <string name="listview_header_list">列表</string>
     <string name="listview_header_tile">平铺</string>
     <string name="tab_local_search">搜索</string>
+    <string name="search_hint">搜索关键字</string>
+    <string name="search_history">搜索历史</string>
+    <string name="clear_history">清空历史</string>
+    <string name="search_tab_all">全部</string>
+    <string name="search_tab_songs">歌曲</string>
+    <string name="search_tab_albums">专辑</string>
+    <string name="search_tab_artists">艺术家</string>
+    <string name="search_no_result">无搜索结果</string>
+    <string name="search_no_result_subtitle">没有找到相关歌曲、专辑或艺术家</string>
     <string name="library_root">本地音乐</string>
     <string name="unknown_song_title">未知歌曲</string>
     <string name="unknown_artist">未知艺术家</string>

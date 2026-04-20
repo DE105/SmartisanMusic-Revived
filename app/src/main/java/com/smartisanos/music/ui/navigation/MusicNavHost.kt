@@ -43,6 +43,7 @@ fun MusicNavHost(
     onGenreSelected: (String, String) -> Unit = { _, _ -> },
     onGenreBack: () -> Unit = {},
     onSongsEditSelectionChanged: (Set<String>) -> Unit = {},
+    onPlaylistSearchClick: () -> Unit = {},
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit = {},
     onRequestAddToQueue: (List<MediaItem>) -> Unit = {},
     onScratchEnabledChange: (Boolean) -> Unit = {},
@@ -68,6 +69,7 @@ fun MusicNavHost(
     ) {
         composable(MusicDestination.Playlist.route) {
             PlaylistScreen(
+                onSearchClick = onPlaylistSearchClick,
                 onRequestAddToPlaylist = onRequestAddToPlaylist,
                 onRequestAddToQueue = onRequestAddToQueue,
             )
