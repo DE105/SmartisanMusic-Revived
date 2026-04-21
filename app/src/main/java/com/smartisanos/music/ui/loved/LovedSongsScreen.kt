@@ -58,6 +58,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -72,8 +73,6 @@ import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.await
 import com.smartisanos.music.ui.components.SmartisanBlankState
-import com.smartisanos.music.ui.components.SmartisanTopBarIconButton
-import com.smartisanos.music.ui.components.SmartisanTopBarIconButtonStyle
 import com.smartisanos.music.ui.components.audioPermission
 import com.smartisanos.music.ui.components.hasAudioPermission
 import com.smartisanos.music.ui.components.loadEmbeddedArtwork
@@ -104,6 +103,7 @@ private val LovedSongsSubtitleStyle = TextStyle(
 private val LovedSongsActionBarHeight = 45.dp
 private val LovedSongsActionBarHorizontalPadding = 5.dp
 private val LovedSongsActionSideButtonWidth = 42.dp
+private val LovedSongsActionButtonVisualHeight = 30.dp
 private val LovedSongsActionMiddleSpacing = 5.dp
 private val LovedSongsShuffleIconSize = 18.dp
 private val LovedSongsPlayIconSize = 14.dp
@@ -365,8 +365,6 @@ private fun LovedSongsActionBar(
     onPlayClick: () -> Unit,
     onShuffleClick: () -> Unit,
 ) {
-    val sortTabsHeight = rememberDrawableMinHeightDp(R.drawable.btn_category_songname)
-
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -384,14 +382,13 @@ private fun LovedSongsActionBar(
                 .padding(horizontal = LovedSongsActionBarHorizontalPadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SmartisanTopBarIconButton(
+            LovedSongsActionIconButton(
                 enabled = hasSongs,
                 iconRes = R.drawable.btn_shuffle3,
                 pressedIconRes = R.drawable.btn_shuffle3_down,
                 iconSize = LovedSongsShuffleIconSize,
                 contentDescription = stringResource(R.string.play_shuffle),
                 width = LovedSongsActionSideButtonWidth,
-                buttonStyle = SmartisanTopBarIconButtonStyle.Filled,
                 onClick = onShuffleClick,
             )
             Spacer(modifier = Modifier.width(LovedSongsActionMiddleSpacing))
@@ -399,19 +396,64 @@ private fun LovedSongsActionBar(
                 sortMode = sortMode,
                 modifier = Modifier
                     .weight(1f)
-                    .height(sortTabsHeight),
+                    .height(LovedSongsActionButtonVisualHeight),
                 onSortModeChange = onSortModeChange,
             )
             Spacer(modifier = Modifier.width(LovedSongsActionMiddleSpacing))
-            SmartisanTopBarIconButton(
+            LovedSongsActionIconButton(
                 enabled = hasSongs,
                 iconRes = R.drawable.album_btn_play,
                 pressedIconRes = R.drawable.album_btn_play_down,
                 iconSize = LovedSongsPlayIconSize,
                 contentDescription = stringResource(R.string.play),
                 width = LovedSongsActionSideButtonWidth,
-                buttonStyle = SmartisanTopBarIconButtonStyle.Filled,
                 onClick = onPlayClick,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LovedSongsActionIconButton(
+    enabled: Boolean,
+    @DrawableRes iconRes: Int,
+    @DrawableRes pressedIconRes: Int,
+    iconSize: Dp,
+    contentDescription: String,
+    width: Dp,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+
+    Box(
+        modifier = modifier
+            .width(width)
+            .height(LovedSongsActionButtonVisualHeight)
+            .clickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .width(width)
+                .height(LovedSongsActionButtonVisualHeight),
+            contentAlignment = Alignment.Center,
+        ) {
+            DrawableBackground(
+                drawableRes = if (pressed) R.drawable.btn_cancel_down else R.drawable.btn_cancel,
+                modifier = Modifier.matchParentSize(),
+            )
+            Image(
+                painter = painterResource(if (pressed) pressedIconRes else iconRes),
+                contentDescription = contentDescription,
+                modifier = Modifier.size(iconSize),
+                alpha = if (enabled) 1f else 0.45f,
             )
         }
     }
