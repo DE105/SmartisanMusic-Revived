@@ -60,6 +60,10 @@
     <string name="listview_header_list">列表</string>
     <string name="listview_header_tile">平铺</string>
     <string name="tab_local_search">搜索</string>
+    <string name="library_refresh">重扫</string>
+    <string name="library_refreshing">扫描中</string>
+    <string name="library_refresh_success">媒体库已刷新</string>
+    <string name="library_refresh_failed">媒体库刷新失败</string>
     <string name="search_hint">搜索关键字</string>
     <string name="search_history">搜索历史</string>
     <string name="clear_history">清空历史</string>

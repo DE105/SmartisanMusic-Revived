@@ -8,10 +8,8 @@ import android.widget.ImageView
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -44,7 +42,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -91,11 +88,9 @@ private val FolderSubtitleStyle = TextStyle(
 
 private val FolderRowHeight = 72.dp
 private val FolderRowHorizontalPadding = 16.dp
-private val FolderEditCheckboxSize = 26.dp
-private val FolderEditCheckboxStroke = 1.5.dp
-private val FolderEditCheckboxPaddingEnd = 14.dp
 private val FolderArrowSize = 20.dp
-private val FolderEyeSize = 28.dp
+private val FolderEyeWidth = 42.dp
+private val FolderEyeHeight = 34.dp
 private val MiniPlayerReservedHeight = 73.dp
 private const val EyeToggleAnimationMillis = 180L
 
@@ -103,20 +98,26 @@ private const val StorageLabel = "Phone Storage"
 
 @Composable
 fun FolderScreen(
+    libraryRefreshVersion: Int,
     editMode: Boolean,
     selectedDirectoryKey: String?,
     onDirectorySelected: (String, String) -> Unit,
     onDirectoryBack: () -> Unit,
-    onEditSelectionChanged: (Set<String>) -> Unit,
+    onAudioPermissionChanged: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    var permissionVersion by remember { mutableIntStateOf(0) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-    ) { }
-    var permissionVersion by remember { mutableIntStateOf(0) }
-    val hasPermission = hasAudioPermission(context)
+    ) {
+        permissionVersion++
+        onAudioPermissionChanged()
+    }
+    val hasPermission = remember(context, permissionVersion) {
+        hasAudioPermission(context)
+    }
 
     val audioLibrary = remember(context.applicationContext) {
         LocalAudioLibrary(context.applicationContext)
@@ -140,7 +141,7 @@ fun FolderScreen(
         }
     }
 
-    LaunchedEffect(audioLibrary, permissionVersion, hasPermission) {
+    LaunchedEffect(audioLibrary, permissionVersion, libraryRefreshVersion, hasPermission) {
         if (hasPermission) {
             mediaItems = audioLibrary.getAudioItems()
         } else {
@@ -191,7 +192,6 @@ fun FolderScreen(
                 exclusionsStore = exclusionsStore,
                 editMode = editMode,
                 onDirectorySelected = onDirectorySelected,
-                onEditSelectionChanged = onEditSelectionChanged,
                 modifier = Modifier.fillMaxSize(),
             )
         },
@@ -243,30 +243,9 @@ private fun FolderOverview(
     exclusionsStore: LibraryExclusionsStore,
     editMode: Boolean,
     onDirectorySelected: (String, String) -> Unit,
-    onEditSelectionChanged: (Set<String>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
-    var selectedKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
-
-    LaunchedEffect(editMode) {
-        if (!editMode && selectedKeys.isNotEmpty()) {
-            selectedKeys = emptySet()
-            onEditSelectionChanged(emptySet())
-        }
-    }
-
-    LaunchedEffect(directories, editMode) {
-        if (!editMode) {
-            return@LaunchedEffect
-        }
-        val available = directories.asSequence().map { it.key }.toSet()
-        val trimmed = selectedKeys.intersect(available)
-        if (trimmed.size != selectedKeys.size) {
-            selectedKeys = trimmed
-            onEditSelectionChanged(trimmed)
-        }
-    }
 
     if (directories.isEmpty()) {
         SmartisanBlankState(
@@ -290,32 +269,13 @@ private fun FolderOverview(
             items = directories,
             key = { _, entry -> entry.key },
         ) { _, entry ->
-            val selected = selectedKeys.contains(entry.key)
             DirectoryRow(
                 entry = entry,
                 editMode = editMode,
-                selected = selected,
                 onClick = {
-                    if (editMode) {
-                        val updated = if (selected) {
-                            selectedKeys - entry.key
-                        } else {
-                            selectedKeys + entry.key
-                        }
-                        selectedKeys = updated
-                        onEditSelectionChanged(updated)
-                    } else {
+                    if (!editMode) {
                         onDirectorySelected(entry.key, entry.name)
                     }
-                },
-                onSelectionToggle = {
-                    val updated = if (selected) {
-                        selectedKeys - entry.key
-                    } else {
-                        selectedKeys + entry.key
-                    }
-                    selectedKeys = updated
-                    onEditSelectionChanged(updated)
                 },
                 onVisibilityToggle = {
                     scope.launch {
@@ -405,9 +365,7 @@ private fun FolderDetail(
 private fun DirectoryRow(
     entry: DirectoryEntry,
     editMode: Boolean,
-    selected: Boolean,
     onClick: () -> Unit,
-    onSelectionToggle: () -> Unit,
     onVisibilityToggle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -417,8 +375,9 @@ private fun DirectoryRow(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(if (pressed) FolderPressedBackground else FolderPageBackground)
+            .background(if (!editMode && pressed) FolderPressedBackground else FolderPageBackground)
             .clickable(
+                enabled = !editMode,
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
@@ -431,19 +390,6 @@ private fun DirectoryRow(
                 .padding(horizontal = FolderRowHorizontalPadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (editMode) {
-                SelectionCircle(
-                    selected = selected,
-                    modifier = Modifier
-                        .size(FolderEditCheckboxSize)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onSelectionToggle,
-                        ),
-                )
-                Spacer(modifier = Modifier.width(FolderEditCheckboxPaddingEnd))
-            }
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center,
@@ -468,17 +414,20 @@ private fun DirectoryRow(
                     modifier = Modifier.padding(top = 3.dp),
                 )
             }
-            Image(
-                painter = painterResource(if (pressed) R.drawable.arrow3_down else R.drawable.arrow3),
-                contentDescription = null,
-                modifier = Modifier.size(FolderArrowSize),
-            )
             if (editMode) {
                 Spacer(modifier = Modifier.width(10.dp))
                 EyeToggle(
                     hidden = entry.hidden,
                     onClick = onVisibilityToggle,
-                    modifier = Modifier.size(FolderEyeSize),
+                    modifier = Modifier
+                        .width(FolderEyeWidth)
+                        .height(FolderEyeHeight),
+                )
+            } else {
+                Image(
+                    painter = painterResource(if (pressed) R.drawable.arrow3_down else R.drawable.arrow3),
+                    contentDescription = null,
+                    modifier = Modifier.size(FolderArrowSize),
                 )
             }
         }
@@ -488,46 +437,6 @@ private fun DirectoryRow(
                 .height(1.dp)
                 .background(FolderListDivider),
         )
-    }
-}
-
-@Composable
-private fun SelectionCircle(
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val borderColor = Color(0xFFD8D8D8)
-    Box(
-        modifier = modifier
-            .border(
-                width = FolderEditCheckboxStroke,
-                color = borderColor,
-                shape = CircleShape,
-            )
-            .background(
-                color = if (selected) FolderSelectedColor else Color.Transparent,
-                shape = CircleShape,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (selected) {
-            Canvas(modifier = Modifier.size(14.dp)) {
-                val path = Path().apply {
-                    moveTo(size.width * 0.12f, size.height * 0.55f)
-                    lineTo(size.width * 0.42f, size.height * 0.82f)
-                    lineTo(size.width * 0.9f, size.height * 0.18f)
-                }
-                drawPath(
-                    path = path,
-                    color = Color.White,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = size.minDimension * 0.14f,
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                        join = androidx.compose.ui.graphics.StrokeJoin.Round,
-                    ),
-                )
-            }
-        }
     }
 }
 
@@ -543,7 +452,7 @@ private fun EyeToggle(
         factory = { context ->
             ImageView(context).apply {
                 setImageResource(staticRes)
-                scaleType = ImageView.ScaleType.CENTER_INSIDE
+                scaleType = ImageView.ScaleType.FIT_CENTER
             }
         },
         update = { view ->

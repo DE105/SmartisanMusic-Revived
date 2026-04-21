@@ -80,6 +80,7 @@ private val SongSubtitleStyle = TextStyle(
 @Composable
 fun SongsScreen(modifier: Modifier = Modifier) {
     SongsScreen(
+        libraryRefreshVersion = 0,
         editMode = false,
         selectedMediaIds = emptySet(),
         onEditSelectionChanged = {},
@@ -89,6 +90,7 @@ fun SongsScreen(modifier: Modifier = Modifier) {
 
 @Composable
 fun SongsScreen(
+    libraryRefreshVersion: Int,
     editMode: Boolean,
     selectedMediaIds: Set<String>,
     onEditSelectionChanged: (Set<String>) -> Unit,
@@ -137,7 +139,7 @@ fun SongsScreen(
         }
     }
 
-    LaunchedEffect(playbackBrowser, permissionVersion, libraryRevision, hasPermission) {
+    LaunchedEffect(playbackBrowser, permissionVersion, libraryRevision, libraryRefreshVersion, hasPermission) {
         val browser = playbackBrowser ?: run {
             songs = emptyList()
             return@LaunchedEffect

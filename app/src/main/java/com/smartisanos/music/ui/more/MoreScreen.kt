@@ -85,6 +85,7 @@ private enum class MorePrimaryEntry(
 
 @Composable
 fun MoreScreen(
+    libraryRefreshVersion: Int,
     secondaryPage: MoreSecondaryPage?,
     folderEditMode: Boolean,
     selectedDirectoryKey: String?,
@@ -95,7 +96,7 @@ fun MoreScreen(
     onSecondaryBack: () -> Unit = {},
     onDirectorySelected: (String, String) -> Unit = { _, _ -> },
     onDirectoryBack: () -> Unit = {},
-    onDirectoryEditSelectionChanged: (Set<String>) -> Unit = {},
+    onAudioPermissionChanged: () -> Unit = {},
     onGenreSelected: (String, String) -> Unit = { _, _ -> },
     onGenreBack: () -> Unit = {},
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit = {},
@@ -124,11 +125,12 @@ fun MoreScreen(
         secondaryContent = { page ->
             when (page) {
                 MoreSecondaryPage.Folder -> FolderScreen(
+                    libraryRefreshVersion = libraryRefreshVersion,
                     editMode = folderEditMode,
                     selectedDirectoryKey = selectedDirectoryKey,
                     onDirectorySelected = onDirectorySelected,
                     onDirectoryBack = onDirectoryBack,
-                    onEditSelectionChanged = onDirectoryEditSelectionChanged,
+                    onAudioPermissionChanged = onAudioPermissionChanged,
                     modifier = Modifier.fillMaxSize(),
                 )
                 MoreSecondaryPage.LovedSongs -> LovedSongsScreen(

@@ -39,6 +39,7 @@ class PlaybackService : MediaLibraryService() {
     private var mediaLibrarySession: MediaLibrarySession? = null
     private lateinit var localAudioLibrary: LocalAudioLibrary
     private lateinit var libraryExecutor: ListeningExecutorService
+    private lateinit var libraryRefreshExecutor: ListeningExecutorService
     private lateinit var libraryExclusionsStore: LibraryExclusionsStore
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     @Volatile private var exclusionsSnapshot: LibraryExclusions = LibraryExclusions()
@@ -49,6 +50,7 @@ class PlaybackService : MediaLibraryService() {
         localAudioLibrary = LocalAudioLibrary(this)
         libraryExclusionsStore = LibraryExclusionsStore(this)
         libraryExecutor = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor())
+        libraryRefreshExecutor = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor())
 
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
@@ -100,6 +102,7 @@ class PlaybackService : MediaLibraryService() {
         player?.release()
         player = null
         libraryExecutor.shutdown()
+        libraryRefreshExecutor.shutdown()
 
         super.onDestroy()
     }
@@ -152,6 +155,7 @@ class PlaybackService : MediaLibraryService() {
                 .add(ScratchSeekModeCommand)
                 .add(StartSleepTimerCommand)
                 .add(CancelSleepTimerCommand)
+                .add(RefreshLibraryCommand)
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(sessionCommands)
@@ -260,6 +264,27 @@ class PlaybackService : MediaLibraryService() {
             if (customCommand.customAction == CancelSleepTimerAction) {
                 PlaybackSleepTimer.cancel()
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            if (customCommand.customAction == RefreshLibraryAction) {
+                return libraryRefreshExecutor.submit<SessionResult> {
+                    if (!hasAudioPermission()) {
+                        return@submit SessionResult(SessionResult.RESULT_ERROR_PERMISSION_DENIED)
+                    }
+
+                    val result = localAudioLibrary.refreshAudioItems()
+                    mediaLibrarySession?.notifyChildrenChanged(
+                        LocalAudioLibrary.ROOT_ID,
+                        result.items.size,
+                        null,
+                    )
+                    SessionResult(
+                        if (result.successful) {
+                            SessionResult.RESULT_SUCCESS
+                        } else {
+                            SessionResult.RESULT_ERROR_UNKNOWN
+                        },
+                    )
+                }
             }
             return super.onCustomCommand(session, controller, customCommand, args)
         }

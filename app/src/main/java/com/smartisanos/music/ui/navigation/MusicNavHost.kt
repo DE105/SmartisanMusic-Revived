@@ -21,6 +21,7 @@ import com.smartisanos.music.ui.songs.SongsScreen
 fun MusicNavHost(
     navController: NavHostController,
     modifier: Modifier = Modifier,
+    libraryRefreshVersion: Int = 0,
     albumViewMode: AlbumViewMode = AlbumViewMode.Tile,
     selectedAlbumId: String? = null,
     selectedArtistId: String? = null,
@@ -39,7 +40,7 @@ fun MusicNavHost(
     onMoreSecondaryBack: () -> Unit = {},
     onDirectorySelected: (String, String) -> Unit = { _, _ -> },
     onDirectoryBack: () -> Unit = {},
-    onDirectoryEditSelectionChanged: (Set<String>) -> Unit = {},
+    onAudioPermissionChanged: () -> Unit = {},
     onGenreSelected: (String, String) -> Unit = { _, _ -> },
     onGenreBack: () -> Unit = {},
     onSongsEditSelectionChanged: (Set<String>) -> Unit = {},
@@ -85,6 +86,7 @@ fun MusicNavHost(
         }
         composable(MusicDestination.Album.route) {
             AlbumScreen(
+                libraryRefreshVersion = libraryRefreshVersion,
                 viewMode = albumViewMode,
                 selectedAlbumId = selectedAlbumId,
                 onAlbumSelected = onAlbumSelected,
@@ -95,6 +97,7 @@ fun MusicNavHost(
         }
         composable(MusicDestination.Songs.route) {
             SongsScreen(
+                libraryRefreshVersion = libraryRefreshVersion,
                 editMode = songsEditMode,
                 selectedMediaIds = selectedSongIdsInEdit,
                 onEditSelectionChanged = onSongsEditSelectionChanged,
@@ -102,6 +105,7 @@ fun MusicNavHost(
         }
         composable(MusicDestination.More.route) {
             MoreScreen(
+                libraryRefreshVersion = libraryRefreshVersion,
                 secondaryPage = moreSecondaryPage,
                 folderEditMode = folderEditMode,
                 selectedDirectoryKey = selectedDirectoryKey,
@@ -111,7 +115,7 @@ fun MusicNavHost(
                 onSecondaryBack = onMoreSecondaryBack,
                 onDirectorySelected = onDirectorySelected,
                 onDirectoryBack = onDirectoryBack,
-                onDirectoryEditSelectionChanged = onDirectoryEditSelectionChanged,
+                onAudioPermissionChanged = onAudioPermissionChanged,
                 onGenreSelected = onGenreSelected,
                 onGenreBack = onGenreBack,
                 onRequestAddToPlaylist = onRequestAddToPlaylist,

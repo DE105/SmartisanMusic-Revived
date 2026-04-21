@@ -149,6 +149,7 @@ private const val AlbumViewSwitchFadeMillis = 220
 
 @Composable
 fun AlbumScreen(
+    libraryRefreshVersion: Int,
     viewMode: AlbumViewMode,
     selectedAlbumId: String?,
     onAlbumSelected: (String, String) -> Unit,
@@ -200,7 +201,7 @@ fun AlbumScreen(
         }
     }
 
-    LaunchedEffect(playbackBrowser, permissionVersion, libraryRevision) {
+    LaunchedEffect(playbackBrowser, permissionVersion, libraryRevision, libraryRefreshVersion, hasPermission) {
         val browser = playbackBrowser ?: run {
             songs = emptyList()
             return@LaunchedEffect
