@@ -3,13 +3,12 @@ package com.smartisanos.music.ui.components
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,14 +28,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
@@ -52,11 +47,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smartisanos.music.R
 
-private val TopBarFillTop = Color(0xFFFDFDFD)
-private val TopBarFillUpper = Color(0xFFF9F9F9)
-private val TopBarFillLower = Color(0xFFF4F4F4)
-private val TopBarFillBottom = Color(0xFFEFEFEF)
-private val TopBarBottomEdge = Color(0xFFE0E0E0)
 private val TopBarTextColor = Color(0xFF333333)
 
 private val TitleBarActionText = Color(0xFF595959)
@@ -107,6 +97,11 @@ enum class SmartisanTopBarIconButtonStyle {
 enum class SmartisanTopBarDangerButtonStyle {
     Filled,
     Toolbar,
+}
+
+enum class SmartisanTitleBarSurfaceStyle {
+    Main,
+    Playback,
 }
 
 private fun Modifier.smartisanButtonBackground(
@@ -176,6 +171,24 @@ private fun Modifier.smartisanButtonBackground(
 }
 
 @Composable
+fun SmartisanTitleBarSurface(
+    style: SmartisanTitleBarSurfaceStyle,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit = {},
+) {
+    Box(modifier = modifier) {
+        SmartisanDrawableBackground(
+            drawableRes = when (style) {
+                SmartisanTitleBarSurfaceStyle.Main -> R.drawable.titlebar_bg
+                SmartisanTitleBarSurfaceStyle.Playback -> R.drawable.titlebar_playing_bg
+            },
+            modifier = Modifier.matchParentSize(),
+        )
+        content()
+    }
+}
+
+@Composable
 fun SmartisanTopBar(
     title: String,
     modifier: Modifier = Modifier,
@@ -187,32 +200,11 @@ fun SmartisanTopBar(
         WindowInsets.safeDrawing.getTop(this).toDp()
     }
 
-    Box(
+    SmartisanTitleBarSurface(
+        style = SmartisanTitleBarSurfaceStyle.Main,
         modifier = modifier
             .fillMaxWidth()
-            .height(SmartisanTopBarHeight + topInset)
-            .drawWithCache {
-                val fillBrush = Brush.verticalGradient(
-                    colors = listOf(
-                        TopBarFillTop,
-                        TopBarFillUpper,
-                        TopBarFillLower,
-                        TopBarFillBottom,
-                    ),
-                )
-                val strokeWidth = 1f
-                val lineY = size.height - (strokeWidth / 2f)
-
-                onDrawBehind {
-                    drawRect(brush = fillBrush)
-                    drawLine(
-                        color = TopBarBottomEdge,
-                        start = Offset(0f, lineY),
-                        end = Offset(size.width, lineY),
-                        strokeWidth = strokeWidth,
-                    )
-                }
-            },
+            .height(SmartisanTopBarHeight + topInset),
     ) {
         Box(
             modifier = Modifier

@@ -39,8 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -59,18 +57,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.media3.common.MediaItem
 import com.smartisanos.music.R
+import com.smartisanos.music.ui.components.SmartisanTitleBarSurface
+import com.smartisanos.music.ui.components.SmartisanTitleBarSurfaceStyle
 import com.smartisanos.music.ui.components.loadEmbeddedArtwork
 import kotlinx.coroutines.launch
 
 private val QueueBackground = Color(0xFFF7F7F7)
-private val QueueTopBarFill = Brush.verticalGradient(
-    colors = listOf(
-        Color(0xFFFBFBFB),
-        Color(0xFFF6F6F6),
-        Color(0xFFF2F2F2),
-    ),
-)
-private val QueueTopBarDivider = Color(0xFFE6E6E6)
 private val QueueTopBarTitleColor = Color(0xFF6B6B6F)
 private val QueueSectionHeaderBackground = Color(0xFFF0F0F0)
 private val QueueSectionHeaderTextColor = Color(0xFF8A8A8A)
@@ -308,21 +300,11 @@ private fun PlaybackQueueTopBar(
         WindowInsets.safeDrawing.getTop(this).toDp()
     }
 
-    Box(
+    SmartisanTitleBarSurface(
+        style = SmartisanTitleBarSurfaceStyle.Playback,
         modifier = Modifier
             .fillMaxWidth()
-            .height(topInset + 48.dp)
-            .drawWithCache {
-                onDrawBehind {
-                    drawRect(brush = QueueTopBarFill)
-                    drawLine(
-                        color = QueueTopBarDivider,
-                        start = androidx.compose.ui.geometry.Offset(0f, size.height - 0.5f),
-                        end = androidx.compose.ui.geometry.Offset(size.width, size.height - 0.5f),
-                        strokeWidth = 1f,
-                    )
-                }
-            },
+            .height(topInset + 48.dp),
     ) {
         Row(
             modifier = Modifier

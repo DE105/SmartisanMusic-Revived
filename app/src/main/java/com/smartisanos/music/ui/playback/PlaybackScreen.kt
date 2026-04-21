@@ -67,8 +67,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -110,6 +108,8 @@ import com.smartisanos.music.playback.loadEmbeddedLyrics
 import com.smartisanos.music.playback.setScratchSeekModeEnabled
 import com.smartisanos.music.playback.startSleepTimer
 import com.smartisanos.music.ui.components.loadEmbeddedArtwork
+import com.smartisanos.music.ui.components.SmartisanTitleBarSurface
+import com.smartisanos.music.ui.components.SmartisanTitleBarSurfaceStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -124,13 +124,6 @@ import kotlin.math.sqrt
 import kotlin.random.Random
 
 private val PlaybackPageBackground = Color(0xFFFDFDFB)
-private val PlaybackTopBarFill = Brush.verticalGradient(
-    colors = listOf(
-        Color(0xFFFBFBFB),
-        Color(0xFFF6F6F6),
-        Color(0xFFF2F2F2),
-    ),
-)
 private val PlaybackTopBarDivider = Color(0xFFE6E6E6)
 private val PlaybackTitleColor = Color(0xFF6B6B6F)
 private val PlaybackSubtitleColor = Color(0x88333333)
@@ -871,21 +864,11 @@ private fun PlaybackTopBar(
     onQueueClick: () -> Unit,
     onCollapse: () -> Unit,
 ) {
-    Box(
+    SmartisanTitleBarSurface(
+        style = SmartisanTitleBarSurfaceStyle.Playback,
         modifier = Modifier
             .fillMaxWidth()
-            .height(topInset + 48.dp)
-            .drawWithCache {
-                onDrawBehind {
-                    drawRect(brush = PlaybackTopBarFill)
-                    drawLine(
-                        color = PlaybackTopBarDivider,
-                        start = androidx.compose.ui.geometry.Offset(0f, size.height - 0.5f),
-                        end = androidx.compose.ui.geometry.Offset(size.width, size.height - 0.5f),
-                        strokeWidth = 1f,
-                    )
-                }
-            },
+            .height(topInset + 48.dp),
     ) {
         Row(
             modifier = Modifier
