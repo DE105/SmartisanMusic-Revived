@@ -65,6 +65,7 @@
     <string name="library_refresh_success">媒体库已刷新</string>
     <string name="library_refresh_failed">媒体库刷新失败</string>
     <string name="search_hint">搜索关键字</string>
+    <string name="clear_search_text">清空搜索内容</string>
     <string name="search_history">搜索历史</string>
     <string name="clear_history">清空历史</string>
     <string name="search_tab_all">全部</string>

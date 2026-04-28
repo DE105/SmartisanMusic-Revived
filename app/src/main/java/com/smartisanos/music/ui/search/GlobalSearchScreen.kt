@@ -127,6 +127,8 @@ private val SearchSecondaryTextStyle = TextStyle(
 private val SearchTopBarHeight = 50.dp
 private val SearchFieldHeight = 39.dp
 private val SearchCancelButtonHeight = 39.dp
+private val SearchClearButtonSize = 39.dp
+private val SearchClearIconSize = 32.dp
 private val SearchHistoryTopPadding = 19.dp
 private val SearchSectionHorizontalPadding = 21.dp
 private val SearchHistoryRowSpacing = 10.dp
@@ -386,13 +388,15 @@ private fun SearchField(
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { onSearch() }),
         modifier = modifier
-            .height(36.dp)
+            .height(SearchFieldHeight)
             .focusRequester(focusRequester),
         decorationBox = { innerTextField ->
+            val clearInteractionSource = remember { MutableInteractionSource() }
+            val clearPressed by clearInteractionSource.collectIsPressedAsState()
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFFF0F0F0), RoundedCornerShape(18.dp))
+                    .background(Color(0xFFF0F0F0), RoundedCornerShape(SearchFieldHeight / 2))
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -417,18 +421,24 @@ private fun SearchField(
                     innerTextField()
                 }
                 if (value.isNotEmpty()) {
-                    Image(
-                        painter = painterResource(R.drawable.clear_text), // Changed to correct resource
-                        contentDescription = stringResource(R.string.clear_history),
+                    Box(
                         modifier = Modifier
-                            .size(24.dp) // Adjusted size
+                            .size(SearchClearButtonSize)
                             .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
+                                interactionSource = clearInteractionSource,
                                 indication = null,
                                 onClick = { onValueChange("") }
-                            )
-                            .padding(4.dp) // Optical padding
-                    )
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Image(
+                            painter = painterResource(
+                                if (clearPressed) R.drawable.clear_text_down else R.drawable.clear_text
+                            ),
+                            contentDescription = stringResource(R.string.clear_search_text),
+                            modifier = Modifier.size(SearchClearIconSize),
+                        )
+                    }
                 }
             }
         },
