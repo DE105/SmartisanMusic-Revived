@@ -1,10 +1,14 @@
 package com.smartisanos.music.ui.playback
 
+import android.app.Activity
+import android.content.ContentResolver
+import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
 import android.media.RingtoneManager
 import android.net.Uri
+import android.provider.MediaStore
 import android.provider.Settings
 import android.view.Gravity
 import android.widget.FrameLayout
@@ -12,6 +16,7 @@ import android.widget.ImageView
 import android.widget.SeekBar
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
@@ -101,9 +106,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
 import com.smartisanos.music.data.favorite.FavoriteSongsRepository
-import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.playback.EmbeddedLyrics
+import com.smartisanos.music.playback.LocalAudioLibrary
 import com.smartisanos.music.playback.LocalPlaybackController
 import com.smartisanos.music.playback.PlaybackSleepTimer
 import com.smartisanos.music.playback.cancelSleepTimer
@@ -211,9 +216,6 @@ fun PlaybackScreen(
 ) {
     val controller = LocalPlaybackController.current
     val context = LocalContext.current
-    val exclusionsStore = remember(context.applicationContext) {
-        LibraryExclusionsStore(context.applicationContext)
-    }
     val favoriteRepository = remember(context.applicationContext) {
         FavoriteSongsRepository.getInstance(context.applicationContext)
     }
@@ -237,11 +239,19 @@ fun PlaybackScreen(
     var currentVisualPage by rememberSaveable { mutableStateOf(PlaybackVisualPage.Cover) }
     var keepLyricsScreenAwake by rememberSaveable { mutableStateOf(false) }
     var pendingRingtoneUriString by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingDeleteMediaId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingDeleteUriString by rememberSaveable { mutableStateOf<String?>(null) }
     var sleepTimerWasActive by remember { mutableStateOf(false) }
     var coverPageState by remember(state.mediaItem?.mediaId) {
         mutableStateOf(PlaybackCoverPageState())
     }
     val sleepTimerState by PlaybackSleepTimer.state.collectAsStateWithLifecycle()
+
+    fun clearPendingDeleteTarget() {
+        pendingDeleteMediaId = null
+        pendingDeleteUriString = null
+    }
+
     val applyPendingRingtone by rememberUpdatedState(
         newValue = {
             val ringtoneUriString = pendingRingtoneUriString
@@ -269,6 +279,42 @@ fun PlaybackScreen(
         } else {
             pendingRingtoneUriString = null
             context.toast(R.string.ringtone_permission_missing)
+        }
+    }
+    val deleteMediaLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult(),
+    ) { result ->
+        val mediaId = pendingDeleteMediaId
+        clearPendingDeleteTarget()
+        if (result.resultCode == Activity.RESULT_OK && !mediaId.isNullOrBlank()) {
+            controller.removeMediaItemsByMediaId(mediaId)
+            scope.launch {
+                favoriteRepository.remove(mediaId)
+            }
+            context.toast(R.string.playback_delete_success)
+        }
+    }
+
+    fun launchDeleteRequest(target: PlaybackDeleteTarget) {
+        pendingDeleteMediaId = target.mediaId
+        pendingDeleteUriString = target.uri.toString()
+        val request = runCatching {
+            val pendingIntent = MediaStore.createDeleteRequest(
+                context.contentResolver,
+                listOf(target.uri),
+            )
+            IntentSenderRequest.Builder(pendingIntent.intentSender).build()
+        }.getOrElse {
+            clearPendingDeleteTarget()
+            context.toast(R.string.playback_delete_failed)
+            return
+        }
+
+        runCatching {
+            deleteMediaLauncher.launch(request)
+        }.onFailure {
+            clearPendingDeleteTarget()
+            context.toast(R.string.playback_delete_failed)
         }
     }
 
@@ -721,14 +767,16 @@ fun PlaybackScreen(
                         showMorePanel = false
                     },
                     onDeleteClick = {
-                        val mediaId = state.mediaItem?.mediaId
-                        if (!mediaId.isNullOrBlank()) {
-                            scope.launch {
-                                exclusionsStore.hideMediaIds(setOf(mediaId))
+                        when (val result = state.mediaItem?.resolveDeleteTarget()
+                            ?: PlaybackDeleteTargetResult.Unavailable) {
+                            is PlaybackDeleteTargetResult.Available -> {
+                                launchDeleteRequest(result.target)
                             }
-                            val index = controller?.currentMediaItemIndex ?: -1
-                            if (index >= 0) {
-                                controller?.removeMediaItem(index)
+                            PlaybackDeleteTargetResult.CueFile -> {
+                                context.toast(R.string.can_not_delete_cue_file)
+                            }
+                            PlaybackDeleteTargetResult.Unavailable -> {
+                                context.toast(R.string.can_not_delete_song)
                             }
                         }
                         showMorePanel = false
@@ -1852,6 +1900,57 @@ private fun Player?.snapshot(context: Context): PlaybackScreenState {
         durationMs = player.duration.takeIf { it > 0L } ?: 0L,
         volume = context.musicStreamVolumeFraction(),
     )
+}
+
+private data class PlaybackDeleteTarget(
+    val mediaId: String,
+    val uri: Uri,
+)
+
+private sealed interface PlaybackDeleteTargetResult {
+    data class Available(val target: PlaybackDeleteTarget) : PlaybackDeleteTargetResult
+    object CueFile : PlaybackDeleteTargetResult
+    object Unavailable : PlaybackDeleteTargetResult
+}
+
+private fun MediaItem.resolveDeleteTarget(): PlaybackDeleteTargetResult {
+    val targetMediaId = mediaId.trim()
+    if (targetMediaId.isEmpty()) {
+        return PlaybackDeleteTargetResult.Unavailable
+    }
+    val audioQualityBadge = mediaMetadata.extras
+        ?.getString(LocalAudioLibrary.AudioQualityBadgeExtraKey)
+    if (audioQualityBadge == LocalAudioLibrary.AudioQualityBadgeCue) {
+        return PlaybackDeleteTargetResult.CueFile
+    }
+    val deleteUri = localConfiguration?.uri
+        ?.takeIf(Uri::isMediaStoreUri)
+        ?: targetMediaId.toLongOrNull()?.let { id ->
+            ContentUris.withAppendedId(
+                MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL),
+                id,
+            )
+        }
+        ?: return PlaybackDeleteTargetResult.Unavailable
+    return PlaybackDeleteTargetResult.Available(
+        PlaybackDeleteTarget(
+            mediaId = targetMediaId,
+            uri = deleteUri,
+        ),
+    )
+}
+
+private fun Uri.isMediaStoreUri(): Boolean {
+    return scheme == ContentResolver.SCHEME_CONTENT && authority == MediaStore.AUTHORITY
+}
+
+private fun Player?.removeMediaItemsByMediaId(mediaId: String) {
+    val player = this ?: return
+    for (index in player.mediaItemCount - 1 downTo 0) {
+        if (player.getMediaItemAt(index).mediaId == mediaId) {
+            player.removeMediaItem(index)
+        }
+    }
 }
 
 private fun Player.upcomingQueueTracks(context: Context): List<PlaybackQueueTrack> {

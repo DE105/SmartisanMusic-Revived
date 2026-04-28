@@ -101,6 +101,10 @@
     <string name="set_ringtone">设置铃声</string>
     <string name="djing">打碟</string>
     <string name="delete">删除</string>
+    <string name="playback_delete_success">歌曲已删除</string>
+    <string name="playback_delete_failed">删除歌曲失败</string>
+    <string name="can_not_delete_song">这首歌曲不能删除</string>
+    <string name="can_not_delete_cue_file">整轨文件不允许删除单一歌曲</string>
     <string name="scratch">划碟</string>
     <string name="share">分享</string>
     <string name="sleep_timer">定时关闭播放</string>
