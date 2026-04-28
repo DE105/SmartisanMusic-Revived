@@ -5,7 +5,6 @@ import android.content.Intent
 import android.media.AudioManager
 import android.media.RingtoneManager
 import android.net.Uri
-import android.os.SystemClock
 import android.provider.Settings
 import android.view.Gravity
 import android.widget.FrameLayout
@@ -16,7 +15,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -50,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -136,13 +136,12 @@ private val PlaybackPanelBorder = Color(0xFFE8E8E8)
 private val PlaybackPanelBottomEdge = Color(0xFFFDFDFD)
 private val PlaybackPanelShadow = Color(0x14000000)
 
-private const val ScratchCycleDurationMs = 1_800f
+private const val ScratchCycleDurationMs = 3_500f
 private const val DiscRotationDegrees = 360f
-private const val ScratchHubDeadZoneRatio = 0.22f
+private const val ScratchHubDeadZoneRatio = 0.06f
 private const val ScratchMaxAngleStepDegrees = 54f
 private const val ScratchPreviewTimeoutMs = 260L
 private const val ScratchPreviewSettleToleranceMs = 24L
-private const val DiscRotationDiscontinuityThresholdMs = 260L
 private const val OriginalNeedlePivotX = 0.82f
 private const val OriginalNeedlePivotY = 0.08f
 private const val NeedleRestRotationDegrees = -12f
@@ -184,7 +183,6 @@ internal data class PlaybackScreenState(
     val currentPositionMs: Long = 0L,
     val durationMs: Long = 0L,
     val volume: Float = 1f,
-    val positionSnapshotElapsedRealtimeMs: Long = 0L,
 )
 
 internal enum class PlaybackVisualPage {
@@ -535,7 +533,6 @@ fun PlaybackScreen(
                     isScratchDragging = coverPageState.isScratchDragging,
                     scratchPreviewPositionMs = coverPageState.scratchPreviewPositionMs,
                     mediaId = state.mediaItem?.mediaId,
-                    positionSnapshotElapsedRealtimeMs = state.positionSnapshotElapsedRealtimeMs,
                     onMoreClick = {
                         showMorePanel = true
                     },
@@ -1067,7 +1064,6 @@ private fun PlaybackVisualStage(
     isScratchDragging: Boolean,
     scratchPreviewPositionMs: Long?,
     mediaId: String?,
-    positionSnapshotElapsedRealtimeMs: Long,
     onMoreClick: () -> Unit,
     onVisualPageToggle: () -> Unit,
     onKeepLyricsScreenAwakeToggle: () -> Unit,
@@ -1142,7 +1138,6 @@ private fun PlaybackVisualStage(
                     isScratchDragging = isScratchDragging,
                     scratchPreviewPositionMs = scratchPreviewPositionMs,
                     mediaId = mediaId,
-                    positionSnapshotElapsedRealtimeMs = positionSnapshotElapsedRealtimeMs,
                     onVisualPageToggle = onVisualPageToggle,
                     onScratchStart = onScratchStart,
                     onScratchMotion = onScratchMotion,
@@ -1180,7 +1175,6 @@ private fun PlaybackCoverPage(
     isScratchDragging: Boolean,
     scratchPreviewPositionMs: Long?,
     mediaId: String?,
-    positionSnapshotElapsedRealtimeMs: Long,
     onVisualPageToggle: () -> Unit,
     onScratchStart: () -> Unit,
     onScratchMotion: (Long, Float) -> Unit,
@@ -1199,11 +1193,22 @@ private fun PlaybackCoverPage(
     } else {
         NeedleRestRotationDegrees
     }
-    val needleRotation by animateFloatAsState(
-        targetValue = targetNeedleRotation,
-        animationSpec = tween(durationMillis = 220),
-        label = "needleRotation",
-    )
+
+    // 切歌时完全冻结唱针角度，不做任何状态改变
+    val needleAnimatable = remember { Animatable(targetNeedleRotation) }
+    var prevMediaId by remember { mutableStateOf(mediaId) }
+
+    LaunchedEffect(mediaId, targetNeedleRotation) {
+        if (prevMediaId != mediaId) {
+            prevMediaId = mediaId
+            // 切歌：保持当前角度不变，不响应 targetNeedleRotation 变化
+            return@LaunchedEffect
+        }
+        // 非切歌：平滑过渡到目标角度
+        needleAnimatable.animateTo(targetNeedleRotation, animationSpec = tween(220))
+    }
+
+    val needleRotation = needleAnimatable.value
     var discSize by remember { mutableStateOf(IntSize.Zero) }
     var scratchActive by remember(mediaId) { mutableStateOf(false) }
     var scratchPositionMs by remember(mediaId) {
@@ -1220,17 +1225,16 @@ private fun PlaybackCoverPage(
     val latestScratchPositionChange by rememberUpdatedState(onScratchPositionChange)
     val latestScratchEnd by rememberUpdatedState(onScratchEnd)
     val latestScratchCancel by rememberUpdatedState(onScratchCancel)
-    val discRotation = rememberSmoothDiscRotation(
-        mediaId = mediaId,
-        positionMs = currentPositionMs,
-        positionSnapshotElapsedRealtimeMs = positionSnapshotElapsedRealtimeMs,
-        running = isPlaying && !isScratchDragging && scratchPreviewPositionMs == null,
-    )
+    val discRunning = isPlaying && !isScratchDragging && scratchPreviewPositionMs == null
+    val followStoppedDiscPosition = isScratchDragging || scratchPreviewPositionMs != null
 
     Box(modifier = modifier) {
         PlaybackTurntableDisc(
             albumArtwork = albumArtwork,
-            discRotation = discRotation,
+            mediaId = mediaId,
+            positionMs = currentPositionMs,
+            running = discRunning,
+            followStoppedPosition = followStoppedDiscPosition,
             hidePlayerAxisEnabled = hidePlayerAxisEnabled,
             turntableWidth = turntableWidth,
             modifier = Modifier.matchParentSize(),
@@ -1355,11 +1359,28 @@ private fun PlaybackLyricsPage(
 @Composable
 private fun PlaybackTurntableDisc(
     albumArtwork: ImageBitmap?,
-    discRotation: Float,
+    mediaId: String?,
+    positionMs: Long,
+    running: Boolean,
+    followStoppedPosition: Boolean,
     hidePlayerAxisEnabled: Boolean,
     turntableWidth: Dp,
     modifier: Modifier = Modifier,
 ) {
+    val discRotation = rememberSmoothDiscRotation(
+        mediaId = mediaId,
+        positionMs = positionMs,
+        running = running,
+        followStoppedPosition = followStoppedPosition,
+    )
+
+    // 保留上一个非 null 封面，避免切歌时旧封面瞬间消失
+    var lastArtwork by remember { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(albumArtwork) {
+        if (albumArtwork != null) lastArtwork = albumArtwork
+    }
+    val artworkToShow = albumArtwork ?: lastArtwork
+
     Box(modifier = modifier) {
         Image(
             painter = painterResource(R.drawable.playing_lp),
@@ -1374,12 +1395,12 @@ private fun PlaybackTurntableDisc(
             modifier = Modifier
                 .matchParentSize()
                 .graphicsLayer {
-                    rotationZ = discRotation
+                    rotationZ = discRotation.value
                 },
         )
-        if (albumArtwork != null) {
+        if (artworkToShow != null) {
             PlaybackTurntableAlbumArt(
-                artwork = albumArtwork,
+                artwork = artworkToShow,
                 turntableWidth = turntableWidth,
                 discRotation = discRotation,
                 modifier = Modifier
@@ -1402,7 +1423,7 @@ private fun PlaybackTurntableDisc(
 private fun PlaybackTurntableAlbumArt(
     artwork: ImageBitmap,
     turntableWidth: Dp,
-    discRotation: Float,
+    discRotation: State<Float>,
     modifier: Modifier = Modifier,
 ) {
     Image(
@@ -1412,7 +1433,7 @@ private fun PlaybackTurntableAlbumArt(
         modifier = modifier
             .size(turntableWidth * PlaybackAlbumArtDiameterRatio)
             .graphicsLayer {
-                rotationZ = discRotation
+                rotationZ = discRotation.value
             }
             .clip(CircleShape),
     )
@@ -1799,7 +1820,6 @@ private fun Player?.snapshot(context: Context): PlaybackScreenState {
         currentPositionMs = player.currentPosition.coerceAtLeast(0L),
         durationMs = player.duration.takeIf { it > 0L } ?: 0L,
         volume = context.musicStreamVolumeFraction(),
-        positionSnapshotElapsedRealtimeMs = SystemClock.elapsedRealtime(),
     )
 }
 
@@ -1832,57 +1852,33 @@ private fun MediaItem.toPlaybackQueueTrack(context: Context): PlaybackQueueTrack
 private fun rememberSmoothDiscRotation(
     mediaId: String?,
     positionMs: Long,
-    positionSnapshotElapsedRealtimeMs: Long,
     running: Boolean,
-): Float {
-    val latestPositionMs by rememberUpdatedState(positionMs)
-    var anchorPositionMs by remember(mediaId) {
-        mutableLongStateOf(positionMs)
-    }
-    var anchorFrameTimeNanos by remember(mediaId) {
-        mutableLongStateOf(Long.MIN_VALUE)
-    }
-    var lastReportedPositionMs by remember(mediaId) {
-        mutableLongStateOf(positionMs)
-    }
-    var rotation by remember(mediaId) {
+    followStoppedPosition: Boolean,
+): State<Float> {
+    val rotation = remember {
         mutableFloatStateOf(discRotationFromPosition(positionMs))
     }
 
-    LaunchedEffect(mediaId, running) {
-        if (running) {
-            anchorPositionMs = latestPositionMs
-            anchorFrameTimeNanos = Long.MIN_VALUE
-            lastReportedPositionMs = latestPositionMs
-            while (isActive) {
-                withFrameNanos { frameTimeNanos ->
-                    if (anchorFrameTimeNanos == Long.MIN_VALUE) {
-                        anchorFrameTimeNanos = frameTimeNanos
-                    }
-                    val elapsedMs = (
-                        frameTimeNanos - anchorFrameTimeNanos
-                    ) / 1_000_000L
-                    rotation = discRotationFromPosition(anchorPositionMs + elapsedMs)
+    LaunchedEffect(running) {
+        if (!running) return@LaunchedEffect
+
+        var anchorFrameTimeNanos = Long.MIN_VALUE
+        val anchorRotation = rotation.floatValue
+        val degreesPerMs = DiscRotationDegrees / ScratchCycleDurationMs
+        while (isActive) {
+            withFrameNanos { frameTimeNanos ->
+                if (anchorFrameTimeNanos == Long.MIN_VALUE) {
+                    anchorFrameTimeNanos = frameTimeNanos
                 }
+                val elapsedMs = (frameTimeNanos - anchorFrameTimeNanos) / 1_000_000f
+                rotation.floatValue = anchorRotation + elapsedMs * degreesPerMs
             }
-        } else {
-            anchorFrameTimeNanos = Long.MIN_VALUE
-            rotation = discRotationFromPosition(latestPositionMs)
         }
     }
 
-    LaunchedEffect(mediaId, positionMs, positionSnapshotElapsedRealtimeMs, running) {
-        if (running) {
-            if (abs(latestPositionMs - lastReportedPositionMs) >= DiscRotationDiscontinuityThresholdMs) {
-                anchorPositionMs = latestPositionMs
-                anchorFrameTimeNanos = Long.MIN_VALUE
-            }
-            lastReportedPositionMs = latestPositionMs
-        } else {
-            anchorPositionMs = positionMs
-            anchorFrameTimeNanos = Long.MIN_VALUE
-            lastReportedPositionMs = positionMs
-            rotation = discRotationFromPosition(positionMs)
+    LaunchedEffect(mediaId, positionMs, followStoppedPosition, running) {
+        if (followStoppedPosition && !running) {
+            rotation.floatValue = discRotationFromPosition(positionMs)
         }
     }
 
