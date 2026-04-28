@@ -107,14 +107,18 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
 import com.smartisanos.music.data.favorite.FavoriteSongsRepository
+import com.smartisanos.music.data.playlist.PlaylistRepository
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.playback.EmbeddedLyrics
 import com.smartisanos.music.playback.LocalAudioLibrary
 import com.smartisanos.music.playback.LocalPlaybackController
 import com.smartisanos.music.playback.PlaybackSleepTimer
+import com.smartisanos.music.playback.await
 import com.smartisanos.music.playback.cancelSleepTimer
 import com.smartisanos.music.playback.extractEmbeddedLyrics
+import com.smartisanos.music.playback.invalidateLibrary
 import com.smartisanos.music.playback.loadEmbeddedLyrics
+import com.smartisanos.music.playback.removeMediaItemsByMediaIds
 import com.smartisanos.music.playback.setScratchSeekModeEnabled
 import com.smartisanos.music.playback.startSleepTimer
 import com.smartisanos.music.ui.components.loadEmbeddedArtwork
@@ -239,6 +243,7 @@ fun PlaybackScreen(
     onCollapse: () -> Unit,
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit = {},
     onRequestAddToQueue: (List<MediaItem>) -> Unit = {},
+    onLibraryChanged: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val controller = LocalPlaybackController.current
@@ -246,9 +251,13 @@ fun PlaybackScreen(
     val favoriteRepository = remember(context.applicationContext) {
         FavoriteSongsRepository.getInstance(context.applicationContext)
     }
+    val playlistRepository = remember(context.applicationContext) {
+        PlaylistRepository.getInstance(context.applicationContext)
+    }
     val favoriteIds by favoriteRepository.observeFavoriteIds().collectAsState(initial = emptySet())
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val currentOnLibraryChanged by rememberUpdatedState(onLibraryChanged)
     val scratchSoundController = remember(context) {
         ScratchSoundController(context)
     }
@@ -314,9 +323,18 @@ fun PlaybackScreen(
         val mediaId = pendingDeleteMediaId
         clearPendingDeleteTarget()
         if (result.resultCode == Activity.RESULT_OK && !mediaId.isNullOrBlank()) {
-            controller.removeMediaItemsByMediaId(mediaId)
+            controller.removeMediaItemsByMediaIds(setOf(mediaId))
             scope.launch {
-                favoriteRepository.remove(mediaId)
+                runCatching {
+                    favoriteRepository.remove(mediaId)
+                }
+                runCatching {
+                    playlistRepository.removeMediaIdsFromAll(setOf(mediaId))
+                }
+                runCatching {
+                    controller?.invalidateLibrary()?.await(context)
+                }
+                currentOnLibraryChanged()
             }
             context.toast(R.string.playback_delete_success)
         }
@@ -2162,15 +2180,6 @@ private fun MediaItem.resolveDeleteTarget(): PlaybackDeleteTargetResult {
 
 private fun Uri.isMediaStoreUri(): Boolean {
     return scheme == ContentResolver.SCHEME_CONTENT && authority == MediaStore.AUTHORITY
-}
-
-private fun Player?.removeMediaItemsByMediaId(mediaId: String) {
-    val player = this ?: return
-    for (index in player.mediaItemCount - 1 downTo 0) {
-        if (player.getMediaItemAt(index).mediaId == mediaId) {
-            player.removeMediaItem(index)
-        }
-    }
 }
 
 private fun Player.upcomingQueueTracks(context: Context): List<PlaybackQueueTrack> {

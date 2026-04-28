@@ -50,6 +50,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.SessionResult
 import com.smartisanos.music.R
+import com.smartisanos.music.data.favorite.FavoriteSongsRepository
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.data.playlist.PlaylistCreateResult
 import com.smartisanos.music.data.playlist.PlaylistRepository
@@ -58,7 +59,9 @@ import com.smartisanos.music.data.settings.PlaybackSettingsStore
 import com.smartisanos.music.playback.LocalPlaybackController
 import com.smartisanos.music.playback.ProvidePlaybackController
 import com.smartisanos.music.playback.await
+import com.smartisanos.music.playback.invalidateLibrary
 import com.smartisanos.music.playback.refreshLibrary
+import com.smartisanos.music.playback.removeMediaItemsByMediaIds
 import com.smartisanos.music.ui.album.AlbumViewMode
 import com.smartisanos.music.ui.components.GlobalPlaybackBar
 import com.smartisanos.music.ui.components.SecondaryPageTransition
@@ -132,6 +135,9 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
         }
         val playlistRepository = remember(context.applicationContext) {
             PlaylistRepository.getInstance(context.applicationContext)
+        }
+        val favoriteRepository = remember(context.applicationContext) {
+            FavoriteSongsRepository.getInstance(context.applicationContext)
         }
         val playbackSettings by playbackSettingsStore.settings.collectAsState(
             initial = PlaybackSettings(),
@@ -236,6 +242,27 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                     showToast(R.string.library_refresh_success)
                 } else {
                     showToast(R.string.library_refresh_failed)
+                }
+            }
+        }
+        val reclaimHiddenMediaIds: (Set<String>) -> Unit = { mediaIds ->
+            val normalizedMediaIds = mediaIds.asSequence()
+                .map(String::trim)
+                .filter(String::isNotEmpty)
+                .toSet()
+            if (normalizedMediaIds.isNotEmpty()) {
+                playbackController.removeMediaItemsByMediaIds(normalizedMediaIds)
+                appScope.launch {
+                    runCatching {
+                        favoriteRepository.removeAll(normalizedMediaIds)
+                    }
+                    runCatching {
+                        playlistRepository.removeMediaIdsFromAll(normalizedMediaIds)
+                    }
+                    runCatching {
+                        playbackController?.invalidateLibrary()?.await(context)
+                    }
+                    libraryRefreshVersion += 1
                 }
             }
         }
@@ -546,7 +573,11 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                                             return@SmartisanTopBarDangerButton
                                         }
                                         appScope.launch {
-                                            exclusionsStore.hideMediaIds(targets)
+                                            runCatching {
+                                                exclusionsStore.hideMediaIds(targets)
+                                            }.onSuccess {
+                                                reclaimHiddenMediaIds(targets)
+                                            }
                                         }
                                         closeSongsEdit()
                                     },
@@ -638,6 +669,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                             selectedSongIdsInEdit = selectedSongIdsInEdit,
                             onRequestAddToPlaylist = requestAddToPlaylist,
                             onRequestAddToQueue = enqueueMediaItems,
+                            onMediaIdsHidden = reclaimHiddenMediaIds,
                             onScratchEnabledChange = { enabled ->
                                 appScope.launch {
                                     playbackSettingsStore.setScratchEnabled(enabled)
@@ -692,6 +724,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                 GlobalSearchScreen(
                     query = searchQuery,
                     selectedTab = selectedSearchTab,
+                    libraryRefreshVersion = libraryRefreshVersion,
                     modifier = Modifier.fillMaxSize(),
                     onQueryChange = { value ->
                         searchQuery = value
@@ -740,6 +773,9 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                     modifier = Modifier.fillMaxSize(),
                     onRequestAddToPlaylist = requestAddToPlaylist,
                     onRequestAddToQueue = enqueueMediaItems,
+                    onLibraryChanged = {
+                        libraryRefreshVersion += 1
+                    },
                     onScratchEnabledChange = { enabled ->
                         appScope.launch {
                             playbackSettingsStore.setScratchEnabled(enabled)

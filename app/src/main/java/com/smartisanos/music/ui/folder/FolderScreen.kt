@@ -104,6 +104,7 @@ fun FolderScreen(
     onDirectorySelected: (String, String) -> Unit,
     onDirectoryBack: () -> Unit,
     onAudioPermissionChanged: () -> Unit,
+    onMediaIdsHidden: (Set<String>) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -189,9 +190,11 @@ fun FolderScreen(
         primaryContent = {
             FolderOverview(
                 directories = directories,
+                mediaItems = mediaItems,
                 exclusionsStore = exclusionsStore,
                 editMode = editMode,
                 onDirectorySelected = onDirectorySelected,
+                onMediaIdsHidden = onMediaIdsHidden,
                 modifier = Modifier.fillMaxSize(),
             )
         },
@@ -240,9 +243,11 @@ private fun FolderPermissionState(
 @Composable
 private fun FolderOverview(
     directories: List<DirectoryEntry>,
+    mediaItems: List<MediaItem>,
     exclusionsStore: LibraryExclusionsStore,
     editMode: Boolean,
     onDirectorySelected: (String, String) -> Unit,
+    onMediaIdsHidden: (Set<String>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
@@ -278,11 +283,20 @@ private fun FolderOverview(
                     }
                 },
                 onVisibilityToggle = {
+                    val shouldHideDirectory = !entry.hidden
+                    val affectedMediaIds = if (shouldHideDirectory) {
+                        mediaIdsInDirectory(mediaItems = mediaItems, directoryKey = entry.key)
+                    } else {
+                        emptySet()
+                    }
                     scope.launch {
                         exclusionsStore.setDirectoryKeysHidden(
                             directoryKeys = setOf(entry.key),
-                            hidden = !entry.hidden,
+                            hidden = shouldHideDirectory,
                         )
+                        if (affectedMediaIds.isNotEmpty()) {
+                            onMediaIdsHidden(affectedMediaIds)
+                        }
                     }
                 },
             )

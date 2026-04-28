@@ -82,9 +82,7 @@ internal fun filterMediaItemsForDirectory(
         .filter { item ->
             val relativePath = item.mediaMetadata.extras
                 ?.getString(LocalAudioLibrary.RelativePathExtraKey)
-                ?.normalizedDirectoryKey()
-                .orEmpty()
-            relativePath == normalizedKey
+            isMediaInDirectory(relativePath = relativePath, directoryKey = normalizedKey)
         }
         .filter { item ->
             val relativePath = item.mediaMetadata.extras
@@ -92,6 +90,38 @@ internal fun filterMediaItemsForDirectory(
             !exclusions.isMediaHidden(item.mediaId, relativePath)
         }
         .toList()
+}
+
+internal fun mediaIdsInDirectory(
+    mediaItems: List<MediaItem>,
+    directoryKey: String,
+): Set<String> {
+    val normalizedKey = directoryKey.normalizedDirectoryKey()
+    if (normalizedKey.isEmpty()) {
+        return emptySet()
+    }
+
+    return mediaItems.asSequence()
+        .filter { item ->
+            val relativePath = item.mediaMetadata.extras
+                ?.getString(LocalAudioLibrary.RelativePathExtraKey)
+            isMediaInDirectory(relativePath = relativePath, directoryKey = normalizedKey)
+        }
+        .map(MediaItem::mediaId)
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .toSet()
+}
+
+internal fun isMediaInDirectory(
+    relativePath: String?,
+    directoryKey: String,
+): Boolean {
+    val normalizedKey = directoryKey.normalizedDirectoryKey()
+    if (normalizedKey.isEmpty()) {
+        return false
+    }
+    return relativePath?.normalizedDirectoryKey() == normalizedKey
 }
 
 private data class MutableDirectoryCount(

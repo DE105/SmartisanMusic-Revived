@@ -10,11 +10,13 @@ internal const val StartSleepTimerAction = "com.smartisanos.music.action.START_S
 internal const val CancelSleepTimerAction = "com.smartisanos.music.action.CANCEL_SLEEP_TIMER"
 internal const val SleepTimerDurationMsKey = "sleep_timer_duration_ms"
 internal const val RefreshLibraryAction = "com.smartisanos.music.action.REFRESH_LIBRARY"
+internal const val InvalidateLibraryAction = "com.smartisanos.music.action.INVALIDATE_LIBRARY"
 
 internal val ScratchSeekModeCommand = SessionCommand(ScratchSeekModeAction, Bundle.EMPTY)
 internal val StartSleepTimerCommand = SessionCommand(StartSleepTimerAction, Bundle.EMPTY)
 internal val CancelSleepTimerCommand = SessionCommand(CancelSleepTimerAction, Bundle.EMPTY)
 internal val RefreshLibraryCommand = SessionCommand(RefreshLibraryAction, Bundle.EMPTY)
+internal val InvalidateLibraryCommand = SessionCommand(InvalidateLibraryAction, Bundle.EMPTY)
 
 internal fun MediaController.setScratchSeekModeEnabled(enabled: Boolean) {
     val args = Bundle().apply {
@@ -36,3 +38,6 @@ internal fun MediaController.cancelSleepTimer() {
 
 internal fun MediaController.refreshLibrary() =
     sendCustomCommand(RefreshLibraryCommand, Bundle.EMPTY)
+
+internal fun MediaController.invalidateLibrary() =
+    sendCustomCommand(InvalidateLibraryCommand, Bundle.EMPTY)

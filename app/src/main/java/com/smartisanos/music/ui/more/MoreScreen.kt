@@ -101,6 +101,7 @@ fun MoreScreen(
     onGenreBack: () -> Unit = {},
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit = {},
     onRequestAddToQueue: (List<MediaItem>) -> Unit = {},
+    onMediaIdsHidden: (Set<String>) -> Unit = {},
     onScratchEnabledChange: (Boolean) -> Unit = {},
     onHidePlayerAxisEnabledChange: (Boolean) -> Unit = {},
     onPopcornSoundEnabledChange: (Boolean) -> Unit = {},
@@ -131,9 +132,11 @@ fun MoreScreen(
                     onDirectorySelected = onDirectorySelected,
                     onDirectoryBack = onDirectoryBack,
                     onAudioPermissionChanged = onAudioPermissionChanged,
+                    onMediaIdsHidden = onMediaIdsHidden,
                     modifier = Modifier.fillMaxSize(),
                 )
                 MoreSecondaryPage.LovedSongs -> LovedSongsScreen(
+                    libraryRefreshVersion = libraryRefreshVersion,
                     modifier = Modifier.fillMaxSize(),
                     onRequestAddToPlaylist = onRequestAddToPlaylist,
                     onRequestAddToQueue = onRequestAddToQueue,
@@ -146,6 +149,7 @@ fun MoreScreen(
                     onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,
                 )
                 MoreSecondaryPage.Style -> GenreScreen(
+                    libraryRefreshVersion = libraryRefreshVersion,
                     selectedGenreId = selectedGenreId,
                     onGenreSelected = onGenreSelected,
                     onGenreBack = onGenreBack,

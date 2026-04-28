@@ -161,6 +161,7 @@ private const val PlaylistOverlayFadeMillis = 160
 
 @Composable
 fun PlaylistScreen(
+    libraryRefreshVersion: Int = 0,
     modifier: Modifier = Modifier,
     onSearchClick: () -> Unit = {},
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit = {},
@@ -256,7 +257,7 @@ fun PlaylistScreen(
         }
     }
 
-    LaunchedEffect(playbackBrowser, permissionVersion, libraryRevision) {
+    LaunchedEffect(playbackBrowser, permissionVersion, libraryRevision, libraryRefreshVersion, hasPermission) {
         val browser = playbackBrowser ?: run {
             songs = emptyList()
             return@LaunchedEffect

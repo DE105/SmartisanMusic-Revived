@@ -55,6 +55,17 @@ class FavoriteSongsRepository private constructor(
         favoriteSongDao.deleteById(normalizedMediaId)
     }
 
+    suspend fun removeAll(mediaIds: Set<String>) {
+        val normalizedMediaIds = mediaIds.asSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toSet()
+        if (normalizedMediaIds.isEmpty()) {
+            return
+        }
+        favoriteSongDao.deleteByIds(normalizedMediaIds)
+    }
+
     suspend fun toggle(mediaId: String, likedAt: Long = System.currentTimeMillis()): Boolean {
         val normalizedMediaId = mediaId.trim()
         if (normalizedMediaId.isEmpty()) {

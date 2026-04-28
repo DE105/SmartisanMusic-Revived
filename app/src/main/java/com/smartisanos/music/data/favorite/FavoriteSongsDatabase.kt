@@ -33,6 +33,9 @@ interface FavoriteSongDao {
     @Query("DELETE FROM favorite_songs WHERE mediaId = :mediaId")
     suspend fun deleteById(mediaId: String)
 
+    @Query("DELETE FROM favorite_songs WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteByIds(mediaIds: Set<String>)
+
     @Query("SELECT EXISTS(SELECT 1 FROM favorite_songs WHERE mediaId = :mediaId)")
     suspend fun exists(mediaId: String): Boolean
 }

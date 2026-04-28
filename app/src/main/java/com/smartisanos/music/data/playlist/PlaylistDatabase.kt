@@ -146,6 +146,14 @@ internal interface PlaylistDao {
     )
     suspend fun getPlaylistEntries(playlistId: String): List<PlaylistEntryEntity>
 
+    @Query(
+        """
+        SELECT DISTINCT playlistId FROM user_playlist_entries
+        WHERE mediaId IN (:mediaIds)
+        """,
+    )
+    suspend fun getPlaylistIdsContainingMediaIds(mediaIds: Set<String>): List<String>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertPlaylistEntries(entries: List<PlaylistEntryEntity>)
 

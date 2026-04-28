@@ -162,38 +162,52 @@ class PlaylistRepository private constructor(
         playlistId: String,
         mediaIds: Set<String>,
     ): Int {
-        if (mediaIds.isEmpty()) {
+        val normalizedMediaIds = normalizeMediaIds(mediaIds.toList()).toSet()
+        if (normalizedMediaIds.isEmpty()) {
             return 0
         }
 
         return database.withTransaction {
-            val playlist = playlistDao.getPlaylist(playlistId)
-                ?: return@withTransaction 0
-            val remainingMediaIds = playlistDao.getPlaylistEntries(playlistId)
-                .sortedBy(PlaylistEntryEntity::sortOrder)
-                .map(PlaylistEntryEntity::mediaId)
-                .filterNot(mediaIds::contains)
-            val removedCount = playlistDao.getPlaylistEntries(playlistId).size - remainingMediaIds.size
-            if (removedCount <= 0) {
-                return@withTransaction 0
-            }
-            playlistDao.clearPlaylistEntries(playlistId)
-            if (remainingMediaIds.isNotEmpty()) {
-                val timestamp = System.currentTimeMillis()
-                playlistDao.insertPlaylistEntries(
-                    remainingMediaIds.mapIndexed { index, mediaId ->
-                        PlaylistEntryEntity(
-                            playlistId = playlist.playlistId,
-                            mediaId = mediaId,
-                            sortOrder = index,
-                            addedAt = timestamp,
-                        )
-                    },
-                )
-            }
-            playlistDao.touchPlaylist(playlist.playlistId, System.currentTimeMillis())
-            removedCount
+            removeMediaIdsFromPlaylistLocked(playlistId, normalizedMediaIds)
         }
+    }
+
+    suspend fun removeMediaIdsFromAll(mediaIds: Set<String>): Int {
+        val normalizedMediaIds = normalizeMediaIds(mediaIds.toList()).toSet()
+        if (normalizedMediaIds.isEmpty()) {
+            return 0
+        }
+
+        return database.withTransaction {
+            playlistDao.getPlaylistIdsContainingMediaIds(normalizedMediaIds)
+                .sumOf { playlistId ->
+                    removeMediaIdsFromPlaylistLocked(playlistId, normalizedMediaIds)
+                }
+        }
+    }
+
+    private suspend fun removeMediaIdsFromPlaylistLocked(
+        playlistId: String,
+        mediaIds: Set<String>,
+    ): Int {
+        val playlist = playlistDao.getPlaylist(playlistId) ?: return 0
+        val entries = playlistDao.getPlaylistEntries(playlistId)
+        val remainingEntries = compactPlaylistEntriesAfterRemoval(
+            playlistId = playlist.playlistId,
+            entries = entries,
+            mediaIds = mediaIds,
+        )
+        val removedCount = entries.size - remainingEntries.size
+        if (removedCount <= 0) {
+            return 0
+        }
+
+        playlistDao.clearPlaylistEntries(playlist.playlistId)
+        if (remainingEntries.isNotEmpty()) {
+            playlistDao.insertPlaylistEntries(remainingEntries)
+        }
+        playlistDao.touchPlaylist(playlist.playlistId, System.currentTimeMillis())
+        return removedCount
     }
 
     companion object {
@@ -215,5 +229,22 @@ private fun normalizeMediaIds(mediaIds: List<String>): List<String> {
         .map(String::trim)
         .filter(String::isNotEmpty)
         .distinct()
+        .toList()
+}
+
+internal fun compactPlaylistEntriesAfterRemoval(
+    playlistId: String,
+    entries: List<PlaylistEntryEntity>,
+    mediaIds: Set<String>,
+): List<PlaylistEntryEntity> {
+    return entries.asSequence()
+        .sortedBy(PlaylistEntryEntity::sortOrder)
+        .filterNot { it.mediaId in mediaIds }
+        .mapIndexed { index, entry ->
+            entry.copy(
+                playlistId = playlistId,
+                sortOrder = index,
+            )
+        }
         .toList()
 }

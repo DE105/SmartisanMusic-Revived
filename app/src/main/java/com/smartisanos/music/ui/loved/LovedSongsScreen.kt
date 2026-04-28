@@ -117,6 +117,7 @@ private val LovedSongsMiniPlayerReservedHeight = 73.dp
 
 @Composable
 fun LovedSongsScreen(
+    libraryRefreshVersion: Int = 0,
     modifier: Modifier = Modifier,
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit = {},
     onRequestAddToQueue: (List<MediaItem>) -> Unit = {},
@@ -190,7 +191,7 @@ fun LovedSongsScreen(
         }
     }
 
-    LaunchedEffect(playbackBrowser, permissionVersion, libraryRevision, hasPermission) {
+    LaunchedEffect(playbackBrowser, permissionVersion, libraryRevision, libraryRefreshVersion, hasPermission) {
         val browser = playbackBrowser ?: run {
             songs = emptyList()
             return@LaunchedEffect

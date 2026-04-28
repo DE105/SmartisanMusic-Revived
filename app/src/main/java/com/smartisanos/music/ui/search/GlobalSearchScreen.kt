@@ -143,6 +143,7 @@ private val SearchTopVerticalPadding = 6.dp
 fun GlobalSearchScreen(
     query: String,
     selectedTab: SearchTab,
+    libraryRefreshVersion: Int = 0,
     onQueryChange: (String) -> Unit,
     onTabChange: (SearchTab) -> Unit,
     onDismiss: () -> Unit,
@@ -206,7 +207,7 @@ fun GlobalSearchScreen(
         }
     }
 
-    LaunchedEffect(playbackBrowser, permissionVersion, libraryRevision, hasPermission) {
+    LaunchedEffect(playbackBrowser, permissionVersion, libraryRevision, libraryRefreshVersion, hasPermission) {
         val browser = playbackBrowser ?: run {
             songs = emptyList()
             return@LaunchedEffect

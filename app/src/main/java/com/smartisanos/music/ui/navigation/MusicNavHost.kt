@@ -47,6 +47,7 @@ fun MusicNavHost(
     onPlaylistSearchClick: () -> Unit = {},
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit = {},
     onRequestAddToQueue: (List<MediaItem>) -> Unit = {},
+    onMediaIdsHidden: (Set<String>) -> Unit = {},
     onScratchEnabledChange: (Boolean) -> Unit = {},
     onHidePlayerAxisEnabledChange: (Boolean) -> Unit = {},
     onPopcornSoundEnabledChange: (Boolean) -> Unit = {},
@@ -70,6 +71,7 @@ fun MusicNavHost(
     ) {
         composable(MusicDestination.Playlist.route) {
             PlaylistScreen(
+                libraryRefreshVersion = libraryRefreshVersion,
                 onSearchClick = onPlaylistSearchClick,
                 onRequestAddToPlaylist = onRequestAddToPlaylist,
                 onRequestAddToQueue = onRequestAddToQueue,
@@ -77,6 +79,7 @@ fun MusicNavHost(
         }
         composable(MusicDestination.Artist.route) {
             ArtistScreen(
+                libraryRefreshVersion = libraryRefreshVersion,
                 selectedArtistId = selectedArtistId,
                 onArtistSelected = onArtistSelected,
                 onArtistBack = onArtistBack,
@@ -120,6 +123,7 @@ fun MusicNavHost(
                 onGenreBack = onGenreBack,
                 onRequestAddToPlaylist = onRequestAddToPlaylist,
                 onRequestAddToQueue = onRequestAddToQueue,
+                onMediaIdsHidden = onMediaIdsHidden,
                 onScratchEnabledChange = onScratchEnabledChange,
                 onHidePlayerAxisEnabledChange = onHidePlayerAxisEnabledChange,
                 onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,

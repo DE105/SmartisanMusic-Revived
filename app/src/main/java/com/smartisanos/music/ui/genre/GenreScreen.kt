@@ -100,6 +100,7 @@ private val MiniPlayerReservedHeight = 73.dp
 
 @Composable
 fun GenreScreen(
+    libraryRefreshVersion: Int = 0,
     selectedGenreId: String?,
     onGenreSelected: (String, String) -> Unit,
     onGenreBack: () -> Unit,
@@ -152,7 +153,7 @@ fun GenreScreen(
         }
     }
 
-    LaunchedEffect(playbackBrowser, permissionVersion, libraryRevision, hasPermission) {
+    LaunchedEffect(playbackBrowser, permissionVersion, libraryRevision, libraryRefreshVersion, hasPermission) {
         val browser = playbackBrowser ?: run {
             songs = emptyList()
             return@LaunchedEffect

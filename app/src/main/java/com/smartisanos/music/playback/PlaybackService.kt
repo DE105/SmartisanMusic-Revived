@@ -116,7 +116,7 @@ class PlaybackService : MediaLibraryService() {
         return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun getAudioItems(): List<MediaItem> {
+    private fun getAudioItems(forceRefresh: Boolean = false): List<MediaItem> {
         if (!hasAudioPermission()) {
             return emptyList()
         }
@@ -125,7 +125,7 @@ class PlaybackService : MediaLibraryService() {
         } else {
             runBlocking { exclusionsReady.await() }
         }
-        return localAudioLibrary.getAudioItems()
+        return localAudioLibrary.getAudioItems(forceRefresh = forceRefresh)
             .asSequence()
             .filter { item ->
                 val relativePath = item.mediaMetadata.extras
@@ -156,6 +156,7 @@ class PlaybackService : MediaLibraryService() {
                 .add(StartSleepTimerCommand)
                 .add(CancelSleepTimerCommand)
                 .add(RefreshLibraryCommand)
+                .add(InvalidateLibraryCommand)
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(sessionCommands)
@@ -284,6 +285,21 @@ class PlaybackService : MediaLibraryService() {
                             SessionResult.RESULT_ERROR_UNKNOWN
                         },
                     )
+                }
+            }
+            if (customCommand.customAction == InvalidateLibraryAction) {
+                return libraryRefreshExecutor.submit<SessionResult> {
+                    if (!hasAudioPermission()) {
+                        return@submit SessionResult(SessionResult.RESULT_ERROR_PERMISSION_DENIED)
+                    }
+
+                    val items = getAudioItems(forceRefresh = true)
+                    mediaLibrarySession?.notifyChildrenChanged(
+                        LocalAudioLibrary.ROOT_ID,
+                        items.size,
+                        null,
+                    )
+                    SessionResult(SessionResult.RESULT_SUCCESS)
                 }
             }
             return super.onCustomCommand(session, controller, customCommand, args)
