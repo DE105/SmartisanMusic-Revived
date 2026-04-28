@@ -28,6 +28,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -59,7 +61,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -126,9 +127,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
+import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -149,13 +153,28 @@ private const val ScratchCycleDurationMs = 3_500f
 private const val DiscRotationDegrees = 360f
 private const val ScratchHubDeadZoneRatio = 0.06f
 private const val ScratchMaxAngleStepDegrees = 54f
-private const val ScratchPreviewTimeoutMs = 260L
-private const val ScratchPreviewSettleToleranceMs = 24L
+private const val CoverPreviewTimeoutMs = 260L
+private const val CoverPreviewSettleToleranceMs = 24L
+private const val NeedleSeekSettleHoldTimeoutMs = 900L
 private const val OriginalNeedlePivotX = 0.82f
 private const val OriginalNeedlePivotY = 0.08f
+private const val OriginalNeedleWidthDp = 73.3f
+private const val OriginalNeedleHeightDp = 310f
+private const val OriginalNeedleTopWidthDp = 41f
+private const val OriginalNeedleTopMarginDp = 25.5f
+private const val OriginalNeedleRightMarginDp = 2.5f
+private const val OriginalNeedleShadowRightMarginDp = 2f
 private const val NeedleRestRotationDegrees = -12f
-private const val NeedlePlaybackStartRotationDegrees = 12f
+private const val NeedlePlaybackStartRotationDegrees = 14f
 private const val NeedlePlaybackSweepDegrees = 10f
+private const val NeedlePlaybackEndRotationDegrees = NeedlePlaybackStartRotationDegrees +
+    NeedlePlaybackSweepDegrees
+private const val NeedleTipOffsetXRatio = -0.55f
+private const val NeedleTipOffsetYRatio = 0.91f
+private const val NeedlePickupCenterOffsetXRatio = -0.41f
+private const val NeedlePickupCenterOffsetYRatio = 0.78f
+private const val NeedleSeekHitToleranceDp = 28f
+private const val NeedlePickupHitRadiusDp = 40f
 private const val PlaybackAlbumArtDiameterRatio = 405f / 1080f
 private const val PlaybackTurntableAxisDiameterRatio = 62f / 1080f
 private const val PlaybackTurntableAxisSourceDiameterPx = 60
@@ -199,10 +218,18 @@ internal enum class PlaybackVisualPage {
     Lyrics,
 }
 
+private enum class CoverDragMode {
+    None,
+    DiscScratch,
+    NeedleSeek,
+}
+
 private data class PlaybackCoverPageState(
-    val isScratchDragging: Boolean = false,
-    val scratchPreviewPositionMs: Long? = null,
-    val resumePlaybackAfterScratch: Boolean = false,
+    val dragMode: CoverDragMode = CoverDragMode.None,
+    val previewPositionMs: Long? = null,
+    val resumePlaybackAfterDrag: Boolean = false,
+    val needlePreviewRotationDegrees: Float? = null,
+    val needleSettlingPositionMs: Long? = null,
 )
 
 @Composable
@@ -367,7 +394,7 @@ fun PlaybackScreen(
     }
 
     fun resetCoverPageInteraction(resumePlayback: Boolean) {
-        val shouldResumePlayback = resumePlayback && coverPageState.resumePlaybackAfterScratch
+        val shouldResumePlayback = resumePlayback && coverPageState.resumePlaybackAfterDrag
         coverPageState = PlaybackCoverPageState()
         if (shouldResumePlayback) {
             controller?.play()
@@ -424,12 +451,12 @@ fun PlaybackScreen(
     LaunchedEffect(
         playbackSettings.popcornSoundEnabled,
         state.isPlaying,
-        coverPageState.isScratchDragging,
+        coverPageState.dragMode,
     ) {
         if (
             !playbackSettings.popcornSoundEnabled ||
             !state.isPlaying ||
-            coverPageState.isScratchDragging
+            coverPageState.dragMode != CoverDragMode.None
         ) {
             popcornSoundController.stop()
             return@LaunchedEffect
@@ -457,7 +484,7 @@ fun PlaybackScreen(
         ?: 0L
     val currentMediaId = state.mediaItem?.mediaId
     val favoriteEnabled = !currentMediaId.isNullOrBlank() && currentMediaId in favoriteIds
-    val coverPreviewPositionMs = coverPageState.scratchPreviewPositionMs
+    val coverPreviewPositionMs = coverPageState.previewPositionMs
     val livePositionMs = state.currentPositionMs.coerceIn(0L, durationMs.coerceAtLeast(0L))
     val displayPositionMs = if (currentVisualPage == PlaybackVisualPage.Cover) {
         coverPreviewPositionMs
@@ -510,40 +537,85 @@ fun PlaybackScreen(
 
     LaunchedEffect(
         currentVisualPage,
-        coverPageState.isScratchDragging,
-        coverPageState.scratchPreviewPositionMs,
+        coverPageState.dragMode,
+        coverPageState.previewPositionMs,
         state.currentPositionMs,
     ) {
         if (currentVisualPage != PlaybackVisualPage.Cover) {
             return@LaunchedEffect
         }
-        val previewPosition = coverPageState.scratchPreviewPositionMs ?: return@LaunchedEffect
+        val previewPosition = coverPageState.previewPositionMs ?: return@LaunchedEffect
         if (
-            !coverPageState.isScratchDragging &&
-            abs(state.currentPositionMs - previewPosition) <= ScratchPreviewSettleToleranceMs
+            coverPageState.dragMode == CoverDragMode.None &&
+            abs(state.currentPositionMs - previewPosition) <= CoverPreviewSettleToleranceMs
         ) {
-            coverPageState = coverPageState.copy(scratchPreviewPositionMs = null)
+            coverPageState = coverPageState.copy(previewPositionMs = null)
         }
     }
 
     LaunchedEffect(
         currentVisualPage,
-        coverPageState.isScratchDragging,
-        coverPageState.scratchPreviewPositionMs,
+        coverPageState.dragMode,
+        coverPageState.previewPositionMs,
     ) {
         if (currentVisualPage != PlaybackVisualPage.Cover) {
             return@LaunchedEffect
         }
-        val previewPosition = coverPageState.scratchPreviewPositionMs ?: return@LaunchedEffect
-        if (coverPageState.isScratchDragging) {
+        val previewPosition = coverPageState.previewPositionMs ?: return@LaunchedEffect
+        if (coverPageState.dragMode != CoverDragMode.None) {
             return@LaunchedEffect
         }
-        delay(ScratchPreviewTimeoutMs)
+        delay(CoverPreviewTimeoutMs)
         if (
-            !coverPageState.isScratchDragging &&
-            coverPageState.scratchPreviewPositionMs == previewPosition
+            coverPageState.dragMode == CoverDragMode.None &&
+            coverPageState.previewPositionMs == previewPosition
         ) {
-            coverPageState = coverPageState.copy(scratchPreviewPositionMs = null)
+            coverPageState = coverPageState.copy(previewPositionMs = null)
+        }
+    }
+
+    LaunchedEffect(
+        currentVisualPage,
+        coverPageState.dragMode,
+        coverPageState.needleSettlingPositionMs,
+        state.currentPositionMs,
+    ) {
+        if (currentVisualPage != PlaybackVisualPage.Cover) {
+            return@LaunchedEffect
+        }
+        val settlingPosition = coverPageState.needleSettlingPositionMs ?: return@LaunchedEffect
+        if (
+            coverPageState.dragMode == CoverDragMode.None &&
+            abs(state.currentPositionMs - settlingPosition) <= CoverPreviewSettleToleranceMs
+        ) {
+            coverPageState = coverPageState.copy(
+                needlePreviewRotationDegrees = null,
+                needleSettlingPositionMs = null,
+            )
+        }
+    }
+
+    LaunchedEffect(
+        currentVisualPage,
+        coverPageState.dragMode,
+        coverPageState.needleSettlingPositionMs,
+    ) {
+        if (currentVisualPage != PlaybackVisualPage.Cover) {
+            return@LaunchedEffect
+        }
+        val settlingPosition = coverPageState.needleSettlingPositionMs ?: return@LaunchedEffect
+        if (coverPageState.dragMode != CoverDragMode.None) {
+            return@LaunchedEffect
+        }
+        delay(NeedleSeekSettleHoldTimeoutMs)
+        if (
+            coverPageState.dragMode == CoverDragMode.None &&
+            coverPageState.needleSettlingPositionMs == settlingPosition
+        ) {
+            coverPageState = coverPageState.copy(
+                needlePreviewRotationDegrees = null,
+                needleSettlingPositionMs = null,
+            )
         }
     }
 
@@ -607,8 +679,9 @@ fun PlaybackScreen(
                     fallbackLyricsLines = fallbackLyricsLines,
                     hasMediaItem = state.mediaItem != null,
                     isPlaying = state.isPlaying,
-                    isScratchDragging = coverPageState.isScratchDragging,
-                    scratchPreviewPositionMs = coverPageState.scratchPreviewPositionMs,
+                    coverDragMode = coverPageState.dragMode,
+                    previewPositionMs = coverPageState.previewPositionMs,
+                    needlePreviewRotationDegrees = coverPageState.needlePreviewRotationDegrees,
                     mediaId = state.mediaItem?.mediaId,
                     onMoreClick = {
                         showMorePanel = true
@@ -625,14 +698,16 @@ fun PlaybackScreen(
                     onKeepLyricsScreenAwakeToggle = {
                         keepLyricsScreenAwake = !keepLyricsScreenAwake
                     },
-                    onScratchStart = {
-                        val resumePlaybackAfterScratch = state.isPlaying
+                    onDiscScratchStart = {
+                        val resumePlaybackAfterDrag = state.isPlaying
                         coverPageState = coverPageState.copy(
-                            isScratchDragging = true,
-                            scratchPreviewPositionMs = livePositionMs,
-                            resumePlaybackAfterScratch = resumePlaybackAfterScratch,
+                            dragMode = CoverDragMode.DiscScratch,
+                            previewPositionMs = livePositionMs,
+                            resumePlaybackAfterDrag = resumePlaybackAfterDrag,
+                            needlePreviewRotationDegrees = null,
+                            needleSettlingPositionMs = null,
                         )
-                        if (resumePlaybackAfterScratch) {
+                        if (resumePlaybackAfterDrag) {
                             controller?.pause()
                         }
                         controller?.setScratchSeekModeEnabled(true)
@@ -641,29 +716,73 @@ fun PlaybackScreen(
                             positionMs = livePositionMs,
                         )
                     },
-                    onScratchMotion = { positionMs, deltaAngle ->
+                    onDiscScratchMotion = { positionMs, deltaAngle ->
                         scratchSoundController.onScratchMotion(positionMs, deltaAngle)
                     },
-                    onScratchPositionChange = { positionMs, _ ->
+                    onDiscScratchPositionChange = { positionMs, _ ->
                         coverPageState = coverPageState.copy(
-                            scratchPreviewPositionMs = positionMs,
+                            previewPositionMs = positionMs,
                         )
                     },
-                    onScratchEnd = { positionMs ->
-                        val resumePlaybackAfterScratch = coverPageState.resumePlaybackAfterScratch
+                    onDiscScratchEnd = { positionMs ->
+                        val resumePlaybackAfterDrag = coverPageState.resumePlaybackAfterDrag
                         coverPageState = coverPageState.copy(
-                            isScratchDragging = false,
-                            scratchPreviewPositionMs = positionMs,
-                            resumePlaybackAfterScratch = false,
+                            dragMode = CoverDragMode.None,
+                            previewPositionMs = positionMs,
+                            resumePlaybackAfterDrag = false,
+                            needlePreviewRotationDegrees = null,
+                            needleSettlingPositionMs = null,
                         )
                         controller?.seekTo(positionMs)
-                        if (resumePlaybackAfterScratch) {
+                        if (resumePlaybackAfterDrag) {
                             controller?.play()
                         }
                         controller?.setScratchSeekModeEnabled(false)
                         scratchSoundController.stop()
                     },
-                    onScratchCancel = {
+                    onDiscScratchCancel = {
+                        resetCoverPageInteraction(resumePlayback = true)
+                    },
+                    onNeedleSeekStart = { rotationDegrees, positionMs ->
+                        val resumePlaybackAfterDrag = state.isPlaying
+                        coverPageState = coverPageState.copy(
+                            dragMode = CoverDragMode.NeedleSeek,
+                            previewPositionMs = positionMs,
+                            resumePlaybackAfterDrag = resumePlaybackAfterDrag,
+                            needlePreviewRotationDegrees = rotationDegrees,
+                            needleSettlingPositionMs = null,
+                        )
+                        if (resumePlaybackAfterDrag) {
+                            controller?.pause()
+                        }
+                        controller?.setScratchSeekModeEnabled(true)
+                    },
+                    onNeedleSeekPositionChange = { rotationDegrees, positionMs ->
+                        coverPageState = coverPageState.copy(
+                            previewPositionMs = positionMs,
+                            needlePreviewRotationDegrees = rotationDegrees,
+                            needleSettlingPositionMs = null,
+                        )
+                    },
+                    onNeedleSeekEnd = { rotationDegrees, positionMs ->
+                        val resumePlaybackAfterDrag = coverPageState.resumePlaybackAfterDrag
+                        coverPageState = coverPageState.copy(
+                            dragMode = CoverDragMode.None,
+                            previewPositionMs = null,
+                            resumePlaybackAfterDrag = false,
+                            needlePreviewRotationDegrees = positionMs?.let { rotationDegrees },
+                            needleSettlingPositionMs = positionMs,
+                        )
+                        if (positionMs != null) {
+                            controller?.seekTo(positionMs)
+                        }
+                        if (resumePlaybackAfterDrag) {
+                            controller?.play()
+                        }
+                        controller?.setScratchSeekModeEnabled(false)
+                        scratchSoundController.stop()
+                    },
+                    onNeedleSeekCancel = {
                         resetCoverPageInteraction(resumePlayback = true)
                     },
                 )
@@ -1140,17 +1259,22 @@ private fun PlaybackVisualStage(
     fallbackLyricsLines: List<String>,
     hasMediaItem: Boolean,
     isPlaying: Boolean,
-    isScratchDragging: Boolean,
-    scratchPreviewPositionMs: Long?,
+    coverDragMode: CoverDragMode,
+    previewPositionMs: Long?,
+    needlePreviewRotationDegrees: Float?,
     mediaId: String?,
     onMoreClick: () -> Unit,
     onVisualPageToggle: () -> Unit,
     onKeepLyricsScreenAwakeToggle: () -> Unit,
-    onScratchStart: () -> Unit,
-    onScratchMotion: (Long, Float) -> Unit,
-    onScratchPositionChange: (Long, Float) -> Unit,
-    onScratchEnd: (Long) -> Unit,
-    onScratchCancel: () -> Unit,
+    onDiscScratchStart: () -> Unit,
+    onDiscScratchMotion: (Long, Float) -> Unit,
+    onDiscScratchPositionChange: (Long, Float) -> Unit,
+    onDiscScratchEnd: (Long) -> Unit,
+    onDiscScratchCancel: () -> Unit,
+    onNeedleSeekStart: (Float, Long?) -> Unit,
+    onNeedleSeekPositionChange: (Float, Long?) -> Unit,
+    onNeedleSeekEnd: (Float, Long?) -> Unit,
+    onNeedleSeekCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val turntableHeight = 356.5938.dp * scale
@@ -1214,15 +1338,20 @@ private fun PlaybackVisualStage(
                     albumArtwork = albumArtwork,
                     hasMediaItem = hasMediaItem,
                     isPlaying = isPlaying,
-                    isScratchDragging = isScratchDragging,
-                    scratchPreviewPositionMs = scratchPreviewPositionMs,
+                    coverDragMode = coverDragMode,
+                    previewPositionMs = previewPositionMs,
+                    needlePreviewRotationDegrees = needlePreviewRotationDegrees,
                     mediaId = mediaId,
                     onVisualPageToggle = onVisualPageToggle,
-                    onScratchStart = onScratchStart,
-                    onScratchMotion = onScratchMotion,
-                    onScratchPositionChange = onScratchPositionChange,
-                    onScratchEnd = onScratchEnd,
-                    onScratchCancel = onScratchCancel,
+                    onDiscScratchStart = onDiscScratchStart,
+                    onDiscScratchMotion = onDiscScratchMotion,
+                    onDiscScratchPositionChange = onDiscScratchPositionChange,
+                    onDiscScratchEnd = onDiscScratchEnd,
+                    onDiscScratchCancel = onDiscScratchCancel,
+                    onNeedleSeekStart = onNeedleSeekStart,
+                    onNeedleSeekPositionChange = onNeedleSeekPositionChange,
+                    onNeedleSeekEnd = onNeedleSeekEnd,
+                    onNeedleSeekCancel = onNeedleSeekCancel,
                     modifier = Modifier.matchParentSize(),
                 )
 
@@ -1251,15 +1380,20 @@ private fun PlaybackCoverPage(
     albumArtwork: ImageBitmap?,
     hasMediaItem: Boolean,
     isPlaying: Boolean,
-    isScratchDragging: Boolean,
-    scratchPreviewPositionMs: Long?,
+    coverDragMode: CoverDragMode,
+    previewPositionMs: Long?,
+    needlePreviewRotationDegrees: Float?,
     mediaId: String?,
     onVisualPageToggle: () -> Unit,
-    onScratchStart: () -> Unit,
-    onScratchMotion: (Long, Float) -> Unit,
-    onScratchPositionChange: (Long, Float) -> Unit,
-    onScratchEnd: (Long) -> Unit,
-    onScratchCancel: () -> Unit,
+    onDiscScratchStart: () -> Unit,
+    onDiscScratchMotion: (Long, Float) -> Unit,
+    onDiscScratchPositionChange: (Long, Float) -> Unit,
+    onDiscScratchEnd: (Long) -> Unit,
+    onDiscScratchCancel: () -> Unit,
+    onNeedleSeekStart: (Float, Long?) -> Unit,
+    onNeedleSeekPositionChange: (Float, Long?) -> Unit,
+    onNeedleSeekEnd: (Float, Long?) -> Unit,
+    onNeedleSeekCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val progress = durationMs
@@ -1267,45 +1401,56 @@ private fun PlaybackCoverPage(
         ?.let { currentPositionMs.toFloat() / it.toFloat() }
         ?.coerceIn(0f, 1f)
         ?: 0f
-    val targetNeedleRotation = if (hasMediaItem && (isPlaying || isScratchDragging)) {
-        NeedlePlaybackStartRotationDegrees + (progress * NeedlePlaybackSweepDegrees)
-    } else {
-        NeedleRestRotationDegrees
+    val targetNeedleRotation = needlePreviewRotationDegrees ?: run {
+        if (hasMediaItem && (isPlaying || coverDragMode != CoverDragMode.None || previewPositionMs != null)) {
+            NeedlePlaybackStartRotationDegrees + (progress * NeedlePlaybackSweepDegrees)
+        } else {
+            NeedleRestRotationDegrees
+        }
     }
 
-    // 切歌时完全冻结唱针角度，不做任何状态改变
     val needleAnimatable = remember { Animatable(targetNeedleRotation) }
     var prevMediaId by remember { mutableStateOf(mediaId) }
+    val needleSeekDragging = coverDragMode == CoverDragMode.NeedleSeek
 
-    LaunchedEffect(mediaId, targetNeedleRotation) {
+    LaunchedEffect(mediaId, targetNeedleRotation, needleSeekDragging) {
         if (prevMediaId != mediaId) {
             prevMediaId = mediaId
-            // 切歌：保持当前角度不变，不响应 targetNeedleRotation 变化
             return@LaunchedEffect
         }
-        // 非切歌：平滑过渡到目标角度
-        needleAnimatable.animateTo(targetNeedleRotation, animationSpec = tween(220))
+        if (needleSeekDragging) {
+            needleAnimatable.snapTo(targetNeedleRotation)
+        } else {
+            needleAnimatable.animateTo(targetNeedleRotation, animationSpec = tween(220))
+        }
     }
 
     val needleRotation = needleAnimatable.value
+    val density = LocalDensity.current
+    val needleLayoutScalePx = density.density * scale
+    val needleHitTolerancePx = NeedleSeekHitToleranceDp * needleLayoutScalePx
     var discSize by remember { mutableStateOf(IntSize.Zero) }
-    var scratchActive by remember(mediaId) { mutableStateOf(false) }
-    var scratchPositionMs by remember(mediaId) {
-        mutableLongStateOf(currentPositionMs.coerceIn(0L, durationMs))
-    }
-    var lastAngleDegrees by remember(mediaId) { mutableFloatStateOf(Float.NaN) }
     val latestDiscSize by rememberUpdatedState(discSize)
     val latestVisualPageToggle by rememberUpdatedState(onVisualPageToggle)
     val scratchAvailable by rememberUpdatedState(scratchEnabled && durationMs > 0L)
+    val needleSeekAvailable by rememberUpdatedState(scratchEnabled && hasMediaItem && durationMs > 0L)
+    val latestNeedleRotation by rememberUpdatedState(needleRotation)
     val latestPositionMs by rememberUpdatedState(currentPositionMs)
     val latestDurationMs by rememberUpdatedState(durationMs)
-    val latestScratchStart by rememberUpdatedState(onScratchStart)
-    val latestScratchMotion by rememberUpdatedState(onScratchMotion)
-    val latestScratchPositionChange by rememberUpdatedState(onScratchPositionChange)
-    val latestScratchEnd by rememberUpdatedState(onScratchEnd)
-    val latestScratchCancel by rememberUpdatedState(onScratchCancel)
-    val discRunning = isPlaying && !isScratchDragging && scratchPreviewPositionMs == null
-    val followStoppedDiscPosition = isScratchDragging || scratchPreviewPositionMs != null
+    val latestDiscScratchStart by rememberUpdatedState(onDiscScratchStart)
+    val latestDiscScratchMotion by rememberUpdatedState(onDiscScratchMotion)
+    val latestDiscScratchPositionChange by rememberUpdatedState(onDiscScratchPositionChange)
+    val latestDiscScratchEnd by rememberUpdatedState(onDiscScratchEnd)
+    val latestDiscScratchCancel by rememberUpdatedState(onDiscScratchCancel)
+    val latestNeedleSeekStart by rememberUpdatedState(onNeedleSeekStart)
+    val latestNeedleSeekPositionChange by rememberUpdatedState(onNeedleSeekPositionChange)
+    val latestNeedleSeekEnd by rememberUpdatedState(onNeedleSeekEnd)
+    val latestNeedleSeekCancel by rememberUpdatedState(onNeedleSeekCancel)
+    val discRunning = isPlaying &&
+        coverDragMode == CoverDragMode.None &&
+        previewPositionMs == null
+    val followStoppedDiscPosition = coverDragMode == CoverDragMode.DiscScratch ||
+        (coverDragMode == CoverDragMode.None && previewPositionMs != null)
 
     Box(modifier = modifier) {
         PlaybackTurntableDisc(
@@ -1323,72 +1468,153 @@ private fun PlaybackCoverPage(
                 .matchParentSize()
                 .onSizeChanged { discSize = it }
                 .zIndex(3f)
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onTap = { offset ->
-                            val center = discCenter(latestDiscSize)
-                            val radius = discRadius(latestDiscSize)
-                            if (isWithinDisc(offset, center, radius)) {
-                                latestVisualPageToggle()
+                .pointerInput(scratchAvailable, needleSeekAvailable, needleLayoutScalePx, needleHitTolerancePx) {
+                    val tapTouchSlop = viewConfiguration.touchSlop
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val size = latestDiscSize
+                        val center = discCenter(size)
+                        val radius = discRadius(size)
+                        val dragMode = when {
+                            needleSeekAvailable && isWithinNeedleSeekRegion(
+                                point = down.position,
+                                containerSize = size,
+                                layoutScalePx = needleLayoutScalePx,
+                                rotationDegrees = latestNeedleRotation,
+                                tolerancePx = needleHitTolerancePx,
+                            ) -> CoverDragMode.NeedleSeek
+                            scratchAvailable && isWithinScratchRegion(down.position, center, radius) -> {
+                                CoverDragMode.DiscScratch
                             }
-                        },
-                    )
-                }
-                .pointerInput(scratchAvailable) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            if (!scratchAvailable) {
-                                return@detectDragGestures
-                            }
-                            val center = discCenter(discSize)
-                            val radius = discRadius(discSize)
-                            if (!isWithinScratchRegion(offset, center, radius)) {
-                                return@detectDragGestures
-                            }
-                            scratchActive = true
-                            scratchPositionMs = latestPositionMs.coerceIn(0L, latestDurationMs)
-                            lastAngleDegrees = angleDegrees(offset, center)
-                            latestScratchStart()
-                            latestScratchPositionChange(scratchPositionMs, 0f)
-                        },
-                        onDrag = { change, _ ->
-                            if (!scratchActive) {
-                                return@detectDragGestures
-                            }
-                            val center = discCenter(discSize)
-                            val currentAngle = angleDegrees(change.position, center)
-                            var deltaAngle = normalizeAngleDelta(currentAngle - lastAngleDegrees)
-                            deltaAngle = deltaAngle.coerceIn(
-                                -ScratchMaxAngleStepDegrees,
-                                ScratchMaxAngleStepDegrees,
-                            )
-                            lastAngleDegrees = currentAngle
+                            else -> CoverDragMode.None
+                        }
 
-                            val targetPosition = (
-                                scratchPositionMs + (deltaAngle / 360f) * ScratchCycleDurationMs
-                            ).roundToLong().coerceIn(0L, latestDurationMs)
-                            latestScratchMotion(targetPosition, deltaAngle)
-                            if (targetPosition != scratchPositionMs) {
-                                scratchPositionMs = targetPosition
-                                latestScratchPositionChange(targetPosition, deltaAngle)
+                        when (dragMode) {
+                            CoverDragMode.None -> {
+                                val initialPosition = down.position
+                                var finalPosition = initialPosition
+                                var maxMoveDistance = 0f
+                                val pointerId = down.id
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == pointerId }
+                                        ?: break
+                                    finalPosition = change.position
+                                    val moveDistance = distanceBetween(initialPosition, finalPosition)
+                                    if (moveDistance > maxMoveDistance) {
+                                        maxMoveDistance = moveDistance
+                                    }
+                                    if (!change.pressed) {
+                                        if (
+                                            maxMoveDistance <= tapTouchSlop &&
+                                            isWithinDisc(initialPosition, center, radius) &&
+                                            isWithinDisc(finalPosition, center, radius)
+                                        ) {
+                                            latestVisualPageToggle()
+                                        }
+                                        break
+                                    }
+                                }
                             }
-                            change.consume()
-                        },
-                        onDragEnd = {
-                            if (scratchActive) {
-                                latestScratchEnd(scratchPositionMs)
+                            CoverDragMode.DiscScratch -> {
+                                down.consume()
+                                var scratchPositionMs = latestPositionMs.coerceIn(0L, latestDurationMs)
+                                var lastAngleDegrees = angleDegrees(down.position, center)
+                                latestDiscScratchStart()
+                                latestDiscScratchPositionChange(scratchPositionMs, 0f)
+                                val pointerId = down.id
+                                var cancelled = true
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == pointerId }
+                                    if (change == null) {
+                                        break
+                                    }
+                                    if (!change.pressed) {
+                                        latestDiscScratchEnd(scratchPositionMs)
+                                        change.consume()
+                                        cancelled = false
+                                        break
+                                    }
+
+                                    val currentAngle = angleDegrees(change.position, center)
+                                    val deltaAngle = normalizeAngleDelta(currentAngle - lastAngleDegrees)
+                                        .coerceIn(
+                                            -ScratchMaxAngleStepDegrees,
+                                            ScratchMaxAngleStepDegrees,
+                                        )
+                                    lastAngleDegrees = currentAngle
+
+                                    val targetPosition = (
+                                        scratchPositionMs + (deltaAngle / 360f) * ScratchCycleDurationMs
+                                    ).roundToLong().coerceIn(0L, latestDurationMs)
+                                    latestDiscScratchMotion(targetPosition, deltaAngle)
+                                    if (targetPosition != scratchPositionMs) {
+                                        scratchPositionMs = targetPosition
+                                        latestDiscScratchPositionChange(targetPosition, deltaAngle)
+                                    }
+                                    change.consume()
+                                }
+                                if (cancelled) {
+                                    latestDiscScratchCancel()
+                                }
                             }
-                            scratchActive = false
-                            lastAngleDegrees = Float.NaN
-                        },
-                        onDragCancel = {
-                            if (scratchActive) {
-                                latestScratchCancel()
+                            CoverDragMode.NeedleSeek -> {
+                                down.consume()
+                                var needleRotationDegrees = latestNeedleRotation
+                                    .coerceIn(NeedleRestRotationDegrees, NeedlePlaybackEndRotationDegrees)
+                                var needlePositionMs = needleSeekPositionFromRotation(
+                                    rotationDegrees = needleRotationDegrees,
+                                    durationMs = latestDurationMs,
+                                )
+                                val needlePivot = playbackNeedleGeometry(
+                                    containerSize = size,
+                                    layoutScalePx = needleLayoutScalePx,
+                                    rotationDegrees = needleRotationDegrees,
+                                ).pivot
+                                var lastNeedleAngleDegrees = angleDegrees(down.position, needlePivot)
+                                latestNeedleSeekStart(needleRotationDegrees, needlePositionMs)
+                                val pointerId = down.id
+                                var cancelled = true
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == pointerId }
+                                    if (change == null) {
+                                        break
+                                    }
+                                    if (!change.pressed) {
+                                        latestNeedleSeekEnd(needleRotationDegrees, needlePositionMs)
+                                        change.consume()
+                                        cancelled = false
+                                        break
+                                    }
+
+                                    val currentNeedleAngleDegrees = angleDegrees(change.position, needlePivot)
+                                    val deltaNeedleAngle = normalizeAngleDelta(
+                                        currentNeedleAngleDegrees - lastNeedleAngleDegrees,
+                                    ).coerceIn(
+                                        -ScratchMaxAngleStepDegrees,
+                                        ScratchMaxAngleStepDegrees,
+                                    )
+                                    lastNeedleAngleDegrees = currentNeedleAngleDegrees
+                                    needleRotationDegrees = (needleRotationDegrees + deltaNeedleAngle)
+                                        .coerceIn(
+                                            NeedleRestRotationDegrees,
+                                            NeedlePlaybackEndRotationDegrees,
+                                        )
+                                    needlePositionMs = needleSeekPositionFromRotation(
+                                        rotationDegrees = needleRotationDegrees,
+                                        durationMs = latestDurationMs,
+                                    )
+                                    latestNeedleSeekPositionChange(needleRotationDegrees, needlePositionMs)
+                                    change.consume()
+                                }
+                                if (cancelled) {
+                                    latestNeedleSeekCancel()
+                                }
                             }
-                            scratchActive = false
-                            lastAngleDegrees = Float.NaN
-                        },
-                    )
+                        }
+                    }
                 },
         )
         OriginalNeedleStack(
@@ -1591,12 +1817,14 @@ private fun OriginalNeedleStack(
         modifier = modifier,
         update = { frame ->
             val views = frame.tag as OriginalNeedleViews
-            val needleWidthPx = with(density) { (73.3.dp * scale).roundToPx() }
-            val needleHeightPx = with(density) { (310.dp * scale).roundToPx() }
-            val needleTopWidthPx = with(density) { (41.dp * scale).roundToPx() }
-            val needleTopMarginPx = with(density) { (25.5.dp * scale).roundToPx() }
-            val needleRightMarginPx = with(density) { (2.5.dp * scale).roundToPx() }
-            val needleShadowRightMarginPx = with(density) { (2.dp * scale).roundToPx() }
+            val needleWidthPx = with(density) { (OriginalNeedleWidthDp.dp * scale).roundToPx() }
+            val needleHeightPx = with(density) { (OriginalNeedleHeightDp.dp * scale).roundToPx() }
+            val needleTopWidthPx = with(density) { (OriginalNeedleTopWidthDp.dp * scale).roundToPx() }
+            val needleTopMarginPx = with(density) { (OriginalNeedleTopMarginDp.dp * scale).roundToPx() }
+            val needleRightMarginPx = with(density) { (OriginalNeedleRightMarginDp.dp * scale).roundToPx() }
+            val needleShadowRightMarginPx = with(density) {
+                (OriginalNeedleShadowRightMarginDp.dp * scale).roundToPx()
+            }
 
             updateOriginalNeedleLayout(
                 view = views.base,
@@ -2096,6 +2324,105 @@ private fun isWithinScratchRegion(
     return distance in (radius * ScratchHubDeadZoneRatio)..radius
 }
 
+internal data class PlaybackNeedleGeometry(
+    val pivot: Offset,
+    val tip: Offset,
+    val pickupCenter: Offset,
+)
+
+internal fun playbackNeedleGeometry(
+    containerSize: IntSize,
+    layoutScalePx: Float,
+    rotationDegrees: Float,
+): PlaybackNeedleGeometry {
+    val needleWidthPx = OriginalNeedleWidthDp * layoutScalePx
+    val needleHeightPx = OriginalNeedleHeightDp * layoutScalePx
+    val needleLeftPx = containerSize.width -
+        (OriginalNeedleRightMarginDp * layoutScalePx) -
+        needleWidthPx
+    val needleTopPx = OriginalNeedleTopMarginDp * layoutScalePx
+    val pivot = Offset(
+        x = needleLeftPx + (needleWidthPx * OriginalNeedlePivotX),
+        y = needleTopPx + (needleHeightPx * OriginalNeedlePivotY),
+    )
+    val neutralTipOffset = Offset(
+        x = needleWidthPx * NeedleTipOffsetXRatio,
+        y = needleHeightPx * NeedleTipOffsetYRatio,
+    )
+    val neutralPickupCenterOffset = Offset(
+        x = needleWidthPx * NeedlePickupCenterOffsetXRatio,
+        y = needleHeightPx * NeedlePickupCenterOffsetYRatio,
+    )
+    val rotatedTipOffset = rotateOffset(neutralTipOffset, rotationDegrees)
+    val rotatedPickupCenterOffset = rotateOffset(neutralPickupCenterOffset, rotationDegrees)
+    return PlaybackNeedleGeometry(
+        pivot = pivot,
+        tip = Offset(
+            x = pivot.x + rotatedTipOffset.x,
+            y = pivot.y + rotatedTipOffset.y,
+        ),
+        pickupCenter = Offset(
+            x = pivot.x + rotatedPickupCenterOffset.x,
+            y = pivot.y + rotatedPickupCenterOffset.y,
+        ),
+    )
+}
+
+internal fun isWithinNeedleSeekRegion(
+    point: Offset,
+    containerSize: IntSize,
+    layoutScalePx: Float,
+    rotationDegrees: Float,
+    tolerancePx: Float,
+): Boolean {
+    if (containerSize.width <= 0 || containerSize.height <= 0 || layoutScalePx <= 0f || tolerancePx <= 0f) {
+        return false
+    }
+    val geometry = playbackNeedleGeometry(
+        containerSize = containerSize,
+        layoutScalePx = layoutScalePx,
+        rotationDegrees = rotationDegrees,
+    )
+    val pickupHitRadiusPx = max(tolerancePx, NeedlePickupHitRadiusDp * layoutScalePx)
+    return distanceToSegment(point, geometry.pivot, geometry.tip) <= tolerancePx ||
+        distanceBetween(point, geometry.pickupCenter) <= pickupHitRadiusPx
+}
+
+internal fun needleSeekRotationFromPoint(
+    point: Offset,
+    containerSize: IntSize,
+    layoutScalePx: Float,
+): Float {
+    if (containerSize.width <= 0 || containerSize.height <= 0 || layoutScalePx <= 0f) {
+        return NeedleRestRotationDegrees
+    }
+    val neutralGeometry = playbackNeedleGeometry(
+        containerSize = containerSize,
+        layoutScalePx = layoutScalePx,
+        rotationDegrees = 0f,
+    )
+    val neutralAngle = angleDegrees(neutralGeometry.tip, neutralGeometry.pivot)
+    val pointAngle = angleDegrees(point, neutralGeometry.pivot)
+    return normalizeAngleDelta(pointAngle - neutralAngle)
+        .coerceIn(NeedleRestRotationDegrees, NeedlePlaybackEndRotationDegrees)
+}
+
+internal fun needleSeekPositionFromRotation(
+    rotationDegrees: Float,
+    durationMs: Long,
+): Long? {
+    if (durationMs <= 0L || rotationDegrees < NeedlePlaybackStartRotationDegrees) {
+        return null
+    }
+    val fraction = (
+        (rotationDegrees - NeedlePlaybackStartRotationDegrees) /
+            NeedlePlaybackSweepDegrees
+    ).coerceIn(0f, 1f)
+    return (durationMs.toFloat() * fraction)
+        .roundToLong()
+        .coerceIn(0L, durationMs)
+}
+
 private fun angleDegrees(
     point: Offset,
     center: Offset,
@@ -2106,7 +2433,7 @@ private fun angleDegrees(
     ),
 ).toFloat()
 
-private fun normalizeAngleDelta(deltaDegrees: Float): Float {
+internal fun normalizeAngleDelta(deltaDegrees: Float): Float {
     var normalized = deltaDegrees
     while (normalized > 180f) {
         normalized -= 360f
@@ -2115,4 +2442,49 @@ private fun normalizeAngleDelta(deltaDegrees: Float): Float {
         normalized += 360f
     }
     return normalized
+}
+
+private fun rotateOffset(
+    offset: Offset,
+    rotationDegrees: Float,
+): Offset {
+    val radians = Math.toRadians(rotationDegrees.toDouble())
+    val cos = cos(radians).toFloat()
+    val sin = sin(radians).toFloat()
+    return Offset(
+        x = (offset.x * cos) - (offset.y * sin),
+        y = (offset.x * sin) + (offset.y * cos),
+    )
+}
+
+private fun distanceToSegment(
+    point: Offset,
+    start: Offset,
+    end: Offset,
+): Float {
+    val segmentX = end.x - start.x
+    val segmentY = end.y - start.y
+    val segmentLengthSquared = (segmentX * segmentX) + (segmentY * segmentY)
+    if (segmentLengthSquared <= 0f) {
+        return distanceBetween(point, start)
+    }
+    val t = (
+        ((point.x - start.x) * segmentX) +
+            ((point.y - start.y) * segmentY)
+    ) / segmentLengthSquared
+    val clampedT = t.coerceIn(0f, 1f)
+    val projection = Offset(
+        x = start.x + (segmentX * clampedT),
+        y = start.y + (segmentY * clampedT),
+    )
+    return distanceBetween(point, projection)
+}
+
+private fun distanceBetween(
+    first: Offset,
+    second: Offset,
+): Float {
+    val dx = first.x - second.x
+    val dy = first.y - second.y
+    return sqrt((dx * dx) + (dy * dy))
 }
