@@ -60,8 +60,7 @@ fun SmartisanBottomBar(
     currentRoute: String,
     onDestinationSelected: (MusicDestination) -> Unit,
 ) {
-    val currentDestination = MusicDestination.entries.firstOrNull { it.route == currentRoute }
-        ?: MusicDestination.Playlist
+    val currentDestination = MusicDestination.fromRouteOrDefault(currentRoute)
 
     Column(
         modifier = Modifier.fillMaxWidth()

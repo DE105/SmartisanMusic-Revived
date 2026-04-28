@@ -54,6 +54,7 @@ import com.smartisanos.music.data.favorite.FavoriteSongsRepository
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.data.playlist.PlaylistCreateResult
 import com.smartisanos.music.data.playlist.PlaylistRepository
+import com.smartisanos.music.data.settings.MusicAppSettingsStore
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.data.settings.PlaybackSettingsStore
 import com.smartisanos.music.playback.LocalPlaybackController
@@ -83,6 +84,7 @@ import com.smartisanos.music.ui.playlist.PlaylistNameDialog
 import com.smartisanos.music.ui.playlist.PlaylistPickerDialog
 import com.smartisanos.music.ui.search.GlobalSearchScreen
 import com.smartisanos.music.ui.search.SearchTab
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private val ShellBackground = Color(0xFFF7F7F7)
@@ -96,12 +98,42 @@ private val PlaybackOverlayEasing = Easing { fraction ->
 @Composable
 fun MusicApp(playbackLaunchRequest: Int = 0) {
     val context = LocalContext.current
+    val appSettingsStore = remember(context.applicationContext) {
+        MusicAppSettingsStore(context.applicationContext)
+    }
+    var initialMainDestinationRoute by rememberSaveable {
+        androidx.compose.runtime.mutableStateOf<String?>(null)
+    }
+    var initialMainDestinationLoaded by rememberSaveable {
+        androidx.compose.runtime.mutableStateOf(false)
+    }
+
+    LaunchedEffect(appSettingsStore) {
+        if (!initialMainDestinationLoaded) {
+            initialMainDestinationRoute = runCatching {
+                appSettingsStore.lastMainDestinationRoute.first()
+            }.getOrNull()
+            initialMainDestinationLoaded = true
+        }
+    }
+
+    if (!initialMainDestinationLoaded) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(ShellBackground),
+        )
+        return
+    }
+
+    val startDestination = remember(initialMainDestinationRoute) {
+        MusicDestination.fromRouteOrDefault(initialMainDestinationRoute)
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     val navController = rememberNavController()
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = currentBackStackEntry?.destination?.route ?: MusicDestination.Playlist.route
-    val currentDestination = MusicDestination.entries.firstOrNull { it.route == currentRoute }
-        ?: MusicDestination.Playlist
+    val currentRoute = currentBackStackEntry?.destination?.route ?: startDestination.route
+    val currentDestination = MusicDestination.fromRouteOrDefault(currentRoute)
     val crossTextureBrush = rememberCrossTextureBrush()
 
     ProvidePlaybackController {
@@ -162,6 +194,11 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                 }
                 launchSingleTop = true
                 restoreState = true
+            }
+            appScope.launch {
+                runCatching {
+                    appSettingsStore.setLastMainDestinationRoute(destination.route)
+                }
             }
         }
 
@@ -331,13 +368,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                     SmartisanBottomBar(
                         currentRoute = currentRoute,
                         onDestinationSelected = { destination ->
-                            navController.navigate(destination.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
+                            navigateToDestination(destination)
                         },
                     )
                 }
@@ -608,6 +639,7 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
                     ) {
                         MusicNavHost(
                             navController = navController,
+                            startDestination = startDestination.route,
                             libraryRefreshVersion = libraryRefreshVersion,
                             albumViewMode = albumViewMode,
                             selectedAlbumId = selectedAlbumId,
