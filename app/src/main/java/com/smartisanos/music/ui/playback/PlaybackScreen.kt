@@ -93,6 +93,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
@@ -215,6 +219,7 @@ fun PlaybackScreen(
     }
     val favoriteIds by favoriteRepository.observeFavoriteIds().collectAsState(initial = emptySet())
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
     val scratchSoundController = remember(context) {
         ScratchSoundController(context)
     }
@@ -232,10 +237,11 @@ fun PlaybackScreen(
     var currentVisualPage by rememberSaveable { mutableStateOf(PlaybackVisualPage.Cover) }
     var keepLyricsScreenAwake by rememberSaveable { mutableStateOf(false) }
     var pendingRingtoneUriString by rememberSaveable { mutableStateOf<String?>(null) }
+    var sleepTimerWasActive by remember { mutableStateOf(false) }
     var coverPageState by remember(state.mediaItem?.mediaId) {
         mutableStateOf(PlaybackCoverPageState())
     }
-    val sleepTimerState by PlaybackSleepTimer.state.collectAsState()
+    val sleepTimerState by PlaybackSleepTimer.state.collectAsStateWithLifecycle()
     val applyPendingRingtone by rememberUpdatedState(
         newValue = {
             val ringtoneUriString = pendingRingtoneUriString
@@ -287,6 +293,31 @@ fun PlaybackScreen(
         onDispose {
             playbackController.removeListener(listener)
         }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START || event == Lifecycle.Event.ON_RESUME) {
+                PlaybackSleepTimer.refresh()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    LaunchedEffect(showSleepTimerDialog) {
+        if (showSleepTimerDialog) {
+            PlaybackSleepTimer.refresh()
+        }
+    }
+
+    LaunchedEffect(sleepTimerState.isActive) {
+        if (sleepTimerWasActive && !sleepTimerState.isActive) {
+            showSleepTimerDialog = false
+        }
+        sleepTimerWasActive = sleepTimerState.isActive
     }
 
     fun resetCoverPageInteraction(resumePlayback: Boolean) {
