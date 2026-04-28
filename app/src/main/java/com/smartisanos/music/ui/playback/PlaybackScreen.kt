@@ -793,12 +793,9 @@ fun PlaybackScreen(
                 bottomInset = bottomInset,
                 state = state,
                 onRepeatClick = {
-                    controller?.repeatMode =
-                        if (state.repeatMode == Player.REPEAT_MODE_OFF) {
-                            Player.REPEAT_MODE_ALL
-                        } else {
-                            Player.REPEAT_MODE_OFF
-                        }
+                    val nextRepeatMode = nextPlaybackRepeatMode(state.repeatMode)
+                    controller?.repeatMode = nextRepeatMode
+                    context.toast(repeatToastRes(nextRepeatMode))
                 },
                 onPreviousClick = {
                     controller?.seekToPrevious()
@@ -814,7 +811,9 @@ fun PlaybackScreen(
                     controller?.seekToNext()
                 },
                 onShuffleClick = {
-                    controller?.shuffleModeEnabled = !state.shuffleEnabled
+                    val shuffleEnabled = !state.shuffleEnabled
+                    controller?.shuffleModeEnabled = shuffleEnabled
+                    context.toast(shuffleToastRes(shuffleEnabled))
                 },
                 onVolumeChange = { volume ->
                     context.setMusicStreamVolumeFraction(volume)
@@ -1903,18 +1902,11 @@ internal fun PlaybackControlButtons(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val repeatIconRes = playbackRepeatButtonRes(repeatMode)
         PressedDrawableButton(
-            normalRes = if (repeatMode == Player.REPEAT_MODE_OFF) {
-                R.drawable.btn_playing_cycle_off
-            } else {
-                R.drawable.btn_playing_cycle_on
-            },
-            pressedRes = if (repeatMode == Player.REPEAT_MODE_OFF) {
-                R.drawable.btn_playing_cycle_off
-            } else {
-                R.drawable.btn_playing_cycle_on
-            },
-            contentDescription = stringResource(R.string.repeat),
+            normalRes = repeatIconRes,
+            pressedRes = repeatIconRes,
+            contentDescription = stringResource(repeatContentDescriptionRes(repeatMode)),
             modifier = Modifier
                 .width(67.3.dp * scale)
                 .height(87.dp * scale),
@@ -2247,6 +2239,41 @@ private fun discRotationFromPosition(positionMs: Long): Float {
     val cycleMs = ScratchCycleDurationMs.toLong()
     val cyclePositionMs = positionMs.floorMod(cycleMs)
     return (cyclePositionMs.toFloat() / ScratchCycleDurationMs) * DiscRotationDegrees
+}
+
+internal fun nextPlaybackRepeatMode(repeatMode: Int): Int {
+    return when (repeatMode) {
+        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+        else -> Player.REPEAT_MODE_OFF
+    }
+}
+
+@DrawableRes
+internal fun playbackRepeatButtonRes(repeatMode: Int): Int {
+    return when (repeatMode) {
+        Player.REPEAT_MODE_ONE -> R.drawable.btn_playing_repeat_on
+        Player.REPEAT_MODE_ALL -> R.drawable.btn_playing_cycle_on
+        else -> R.drawable.btn_playing_cycle_off
+    }
+}
+
+internal fun repeatContentDescriptionRes(repeatMode: Int): Int {
+    return when (repeatMode) {
+        Player.REPEAT_MODE_ONE -> R.string.repeat_single
+        Player.REPEAT_MODE_ALL -> R.string.repeat_all
+        else -> R.string.repeat_none
+    }
+}
+
+internal fun repeatToastRes(repeatMode: Int): Int = repeatContentDescriptionRes(repeatMode)
+
+internal fun shuffleToastRes(shuffleEnabled: Boolean): Int {
+    return if (shuffleEnabled) {
+        R.string.shuffle_on
+    } else {
+        R.string.shuffle_off
+    }
 }
 
 private fun Long.floorMod(divisor: Long): Long = ((this % divisor) + divisor) % divisor

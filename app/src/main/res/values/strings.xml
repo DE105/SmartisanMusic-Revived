@@ -86,7 +86,12 @@
     <string name="favorite">收藏</string>
     <string name="volume">音量</string>
     <string name="repeat">循环</string>
+    <string name="repeat_all">循环播放已开启</string>
+    <string name="repeat_single">单曲循环已开启</string>
+    <string name="repeat_none">循环播放已关闭</string>
     <string name="shuffle">随机</string>
+    <string name="shuffle_on">随机播放已开启</string>
+    <string name="shuffle_off">随机播放已关闭</string>
     <string name="collapse_player">收起播放器</string>
     <string name="playback_queue">播放列表</string>
     <string name="player_more_actions">更多操作</string>
