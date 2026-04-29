@@ -64,6 +64,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaBrowser
 import com.smartisanos.music.R
 import com.smartisanos.music.data.library.LibraryExclusionsStore
+import com.smartisanos.music.data.settings.ArtistRecognitionSettings
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.await
 import com.smartisanos.music.ui.components.SecondaryPageTransition
@@ -135,6 +136,7 @@ fun ArtistScreen(
     onArtistBack: () -> Unit,
     onAddToPlaylistRequest: (List<MediaItem>) -> Unit = {},
     onAddToQueueRequest: (List<MediaItem>) -> Unit = {},
+    recognitionSettings: ArtistRecognitionSettings = ArtistRecognitionSettings(),
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -214,11 +216,12 @@ fun ArtistScreen(
 
     val unknownArtistTitle = stringResource(R.string.unknown_artist)
     val unknownAlbumTitle = stringResource(R.string.unknown_album)
-    val artists = remember(songs, unknownArtistTitle, unknownAlbumTitle) {
+    val artists = remember(songs, unknownArtistTitle, unknownAlbumTitle, recognitionSettings) {
         buildArtistSummaries(
             mediaItems = songs,
             unknownArtistTitle = unknownArtistTitle,
             unknownAlbumTitle = unknownAlbumTitle,
+            recognitionSettings = recognitionSettings,
         )
     }
 

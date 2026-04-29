@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smartisanos.music.R
 import com.smartisanos.music.data.settings.PlaybackSettings
+import com.smartisanos.music.data.settings.ArtistRecognitionSettings
 import com.smartisanos.music.ui.components.SecondaryPageTransition
 import com.smartisanos.music.ui.folder.FolderScreen
 import com.smartisanos.music.ui.genre.GenreScreen
@@ -91,6 +92,7 @@ fun MoreScreen(
     selectedDirectoryKey: String?,
     selectedGenreId: String?,
     playbackSettings: PlaybackSettings,
+    artistRecognitionSettings: ArtistRecognitionSettings,
     modifier: Modifier = Modifier,
     onEntryClick: (String) -> Unit = {},
     onSecondaryBack: () -> Unit = {},
@@ -105,6 +107,8 @@ fun MoreScreen(
     onScratchEnabledChange: (Boolean) -> Unit = {},
     onHidePlayerAxisEnabledChange: (Boolean) -> Unit = {},
     onPopcornSoundEnabledChange: (Boolean) -> Unit = {},
+    onArtistSeparatorsChange: (Set<String>) -> Unit = {},
+    onExcludedArtistNamesChange: (Set<String>) -> Unit = {},
 ) {
     BackHandler(enabled = secondaryPage != null, onBack = onSecondaryBack)
     SecondaryPageTransition(
@@ -147,6 +151,9 @@ fun MoreScreen(
                     onScratchEnabledChange = onScratchEnabledChange,
                     onHidePlayerAxisEnabledChange = onHidePlayerAxisEnabledChange,
                     onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,
+                    artistRecognitionSettings = artistRecognitionSettings,
+                    onArtistSeparatorsChange = onArtistSeparatorsChange,
+                    onExcludedArtistNamesChange = onExcludedArtistNamesChange,
                 )
                 MoreSecondaryPage.Style -> GenreScreen(
                     libraryRefreshVersion = libraryRefreshVersion,

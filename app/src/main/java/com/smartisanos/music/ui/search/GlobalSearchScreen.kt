@@ -85,6 +85,7 @@ import com.smartisanos.music.data.search.SearchHistoryStore
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.await
 import com.smartisanos.music.ui.album.AlbumSummary
+import com.smartisanos.music.data.settings.ArtistRecognitionSettings
 import com.smartisanos.music.ui.artist.ArtistSummary
 import com.smartisanos.music.ui.components.GlobalPlaybackBar
 import com.smartisanos.music.ui.components.SmartisanBlankState
@@ -150,6 +151,7 @@ fun GlobalSearchScreen(
     onOpenPlayback: () -> Unit,
     onAlbumClick: (String, String) -> Unit,
     onArtistClick: (String, String) -> Unit,
+    recognitionSettings: ArtistRecognitionSettings = ArtistRecognitionSettings(),
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -233,13 +235,14 @@ fun GlobalSearchScreen(
     val unknownAlbumTitle = stringResource(R.string.unknown_album)
     val unknownArtistTitle = stringResource(R.string.unknown_artist)
     val multipleArtistsTitle = stringResource(R.string.many_artist)
-    val results = remember(query, songs, unknownAlbumTitle, unknownArtistTitle, multipleArtistsTitle) {
+    val results = remember(query, songs, unknownAlbumTitle, unknownArtistTitle, multipleArtistsTitle, recognitionSettings) {
         buildSearchResults(
             query = query,
             songs = songs,
             unknownAlbumTitle = unknownAlbumTitle,
             unknownArtistTitle = unknownArtistTitle,
             multipleArtistsTitle = multipleArtistsTitle,
+            recognitionSettings = recognitionSettings,
         )
     }
     val showPlaybackBar = currentMediaId != null

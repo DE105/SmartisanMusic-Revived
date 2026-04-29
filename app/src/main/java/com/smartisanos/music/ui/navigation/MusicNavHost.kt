@@ -8,6 +8,7 @@ import androidx.media3.common.MediaItem
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.smartisanos.music.data.settings.ArtistRecognitionSettings
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.ui.album.AlbumScreen
 import com.smartisanos.music.ui.album.AlbumViewMode
@@ -33,6 +34,7 @@ fun MusicNavHost(
     selectedDirectoryKey: String? = null,
     selectedGenreId: String? = null,
     playbackSettings: PlaybackSettings = PlaybackSettings(),
+    artistRecognitionSettings: ArtistRecognitionSettings = ArtistRecognitionSettings(),
     onAlbumSelected: (String, String) -> Unit = { _, _ -> },
     onAlbumBack: () -> Unit = {},
     onArtistSelected: (String, String) -> Unit = { _, _ -> },
@@ -52,6 +54,8 @@ fun MusicNavHost(
     onScratchEnabledChange: (Boolean) -> Unit = {},
     onHidePlayerAxisEnabledChange: (Boolean) -> Unit = {},
     onPopcornSoundEnabledChange: (Boolean) -> Unit = {},
+    onArtistSeparatorsChange: (Set<String>) -> Unit = {},
+    onExcludedArtistNamesChange: (Set<String>) -> Unit = {},
 ) {
     NavHost(
         navController = navController,
@@ -86,6 +90,7 @@ fun MusicNavHost(
                 onArtistBack = onArtistBack,
                 onAddToPlaylistRequest = onRequestAddToPlaylist,
                 onAddToQueueRequest = onRequestAddToQueue,
+                recognitionSettings = artistRecognitionSettings,
             )
         }
         composable(MusicDestination.Album.route) {
@@ -128,6 +133,9 @@ fun MusicNavHost(
                 onScratchEnabledChange = onScratchEnabledChange,
                 onHidePlayerAxisEnabledChange = onHidePlayerAxisEnabledChange,
                 onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,
+                artistRecognitionSettings = artistRecognitionSettings,
+                onArtistSeparatorsChange = onArtistSeparatorsChange,
+                onExcludedArtistNamesChange = onExcludedArtistNamesChange,
             )
         }
     }

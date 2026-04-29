@@ -2,7 +2,9 @@ package com.smartisanos.music.ui.artist
 
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import com.smartisanos.music.data.settings.ArtistRecognitionSettings
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ArtistModelsTest {
@@ -90,6 +92,125 @@ class ArtistModelsTest {
 
         assertEquals("未知艺术家", summaries.single().name)
         assertEquals(1, summaries.single().albumCount)
+    }
+
+    @Test
+    fun buildArtistSummariesSplitsArtistsByCustomSeparator() {
+        val summaries = buildArtistSummaries(
+            mediaItems = listOf(
+                mediaItem(
+                    id = "duet",
+                    title = "Track",
+                    artist = "Singer A/Singer B",
+                    album = "Single",
+                ),
+            ),
+            unknownArtistTitle = "Unknown Artist",
+            unknownAlbumTitle = "Unknown Album",
+            recognitionSettings = ArtistRecognitionSettings(
+                separators = setOf("/"),
+            ),
+        )
+
+        assertEquals(listOf("Singer A", "Singer B"), summaries.map { it.name })
+        assertEquals(listOf("duet"), summaries.first().songs.map { it.mediaId })
+        assertEquals(listOf("duet"), summaries.last().songs.map { it.mediaId })
+    }
+
+    @Test
+    fun buildArtistSummariesKeepsExcludedArtistNameWhole() {
+        val summaries = buildArtistSummaries(
+            mediaItems = listOf(
+                mediaItem(
+                    id = "leo-need",
+                    title = "Track",
+                    artist = "Band/name",
+                    album = "Single",
+                ),
+            ),
+            unknownArtistTitle = "Unknown Artist",
+            unknownAlbumTitle = "Unknown Album",
+            recognitionSettings = ArtistRecognitionSettings(
+                separators = setOf("/"),
+                excludedArtistNames = setOf("Band/name"),
+            ),
+        )
+
+        assertEquals(listOf("Band/name"), summaries.map { it.name })
+        assertEquals(listOf("leo-need"), summaries.single().songs.map { it.mediaId })
+    }
+
+    @Test
+    fun buildArtistSummariesProtectsExcludedNameInsideCompoundArtist() {
+        val summaries = buildArtistSummaries(
+            mediaItems = listOf(
+                mediaItem(
+                    id = "compound",
+                    title = "Track",
+                    artist = "Band/name; Artist A; Artist-B; Artist_C",
+                    album = "Single",
+                ),
+            ),
+            unknownArtistTitle = "Unknown Artist",
+            unknownAlbumTitle = "Unknown Album",
+            recognitionSettings = ArtistRecognitionSettings(
+                separators = setOf("/", ";"),
+                excludedArtistNames = setOf("Band/name"),
+            ),
+        )
+
+        assertEquals(
+            setOf("Band/name", "Artist A", "Artist-B", "Artist_C"),
+            summaries.map { it.name }.toSet(),
+        )
+        summaries.forEach { summary ->
+            assertEquals(listOf("compound"), summary.songs.map { it.mediaId })
+        }
+        assertTrue(summaries.none { it.name == "Band" || it.name == "name" })
+    }
+
+    @Test
+    fun buildArtistSummariesPrefersLongerOverlappingSeparators() {
+        val summaries = buildArtistSummaries(
+            mediaItems = listOf(
+                mediaItem(
+                    id = "featuring",
+                    title = "Track",
+                    artist = "Artist A feat. Artist B",
+                    album = "Single",
+                ),
+            ),
+            unknownArtistTitle = "Unknown Artist",
+            unknownAlbumTitle = "Unknown Album",
+            recognitionSettings = ArtistRecognitionSettings(
+                separators = setOf("feat", "feat."),
+            ),
+        )
+
+        assertEquals(setOf("Artist A", "Artist B"), summaries.map { it.name }.toSet())
+    }
+
+    @Test
+    fun buildArtistSummariesProtectsExcludedNameCaseInsensitively() {
+        val summaries = buildArtistSummaries(
+            mediaItems = listOf(
+                mediaItem(
+                    id = "case",
+                    title = "Track",
+                    artist = "band/name; Artist A",
+                    album = "Single",
+                ),
+            ),
+            unknownArtistTitle = "Unknown Artist",
+            unknownAlbumTitle = "Unknown Album",
+            recognitionSettings = ArtistRecognitionSettings(
+                separators = setOf("/", ";"),
+                excludedArtistNames = setOf("Band/name"),
+            ),
+        )
+
+        assertEquals(setOf("band/name", "Artist A"), summaries.map { it.name }.toSet())
+        assertTrue(summaries.none { it.name == "band" || it.name == "name" })
     }
 
     private fun mediaItem(

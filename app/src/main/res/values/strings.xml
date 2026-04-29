@@ -97,6 +97,7 @@
     <string name="player_more_actions">更多操作</string>
     <string name="select_action">选择操作</string>
     <string name="cancel">取消</string>
+    <string name="add">添加</string>
     <string name="add_to_playlist">加到播放列表</string>
     <string name="add_to_queue">加到播放队列</string>
     <string name="add_to_queue_success">已添加至播放队列</string>
@@ -141,4 +142,11 @@
     <string name="audio_permission_action">授予权限</string>
     <string name="audio_permission_settings">打开设置</string>
     <string name="toggle_directory_visibility">隐藏显示</string>
+    <string name="not_set">未设置</string>
+    <string name="artist_separators">艺术家分隔符</string>
+    <string name="artist_separators_hint">可同时使用多个分隔符</string>
+    <string name="artist_custom_separator_hint">自定义</string>
+    <string name="excluded_artist_names">排除分隔名单</string>
+    <string name="excluded_artist_names_hint">例如 Band/name</string>
+    <string name="excluded_artist_names_tips">以下艺名将不被分隔符拆分</string>
 </resources>

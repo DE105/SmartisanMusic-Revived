@@ -59,6 +59,7 @@ import com.smartisanos.music.data.favorite.FavoriteSongsRepository
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.data.playlist.PlaylistCreateResult
 import com.smartisanos.music.data.playlist.PlaylistRepository
+import com.smartisanos.music.data.settings.ArtistRecognitionSettingsStore
 import com.smartisanos.music.data.settings.MusicAppSettingsStore
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.data.settings.PlaybackSettingsStore
@@ -69,6 +70,7 @@ import com.smartisanos.music.playback.invalidateLibrary
 import com.smartisanos.music.playback.refreshLibrary
 import com.smartisanos.music.playback.removeMediaItemsByMediaIds
 import com.smartisanos.music.ui.album.AlbumViewMode
+import com.smartisanos.music.data.settings.ArtistRecognitionSettings
 import com.smartisanos.music.ui.components.GlobalPlaybackBar
 import com.smartisanos.music.ui.components.SecondaryPageTransition
 import com.smartisanos.music.ui.components.SmartisanBottomBar
@@ -182,6 +184,9 @@ fun MusicApp(
         val playbackSettingsStore = remember(context.applicationContext) {
             PlaybackSettingsStore(context.applicationContext)
         }
+        val artistRecognitionSettingsStore = remember(context.applicationContext) {
+            ArtistRecognitionSettingsStore(context.applicationContext)
+        }
         val playlistRepository = remember(context.applicationContext) {
             PlaylistRepository.getInstance(context.applicationContext)
         }
@@ -190,6 +195,9 @@ fun MusicApp(
         }
         val playbackSettings by playbackSettingsStore.settings.collectAsState(
             initial = PlaybackSettings(),
+        )
+        val artistRecognitionSettings by artistRecognitionSettingsStore.settings.collectAsState(
+            initial = ArtistRecognitionSettings(),
         )
         val playlists by playlistRepository.playlists.collectAsState(initial = emptyList())
         val appScope = rememberCoroutineScope()
@@ -685,6 +693,7 @@ fun MusicApp(
                             selectedDirectoryKey = selectedDirectoryKey,
                             selectedGenreId = selectedGenreId,
                             playbackSettings = playbackSettings,
+                            artistRecognitionSettings = artistRecognitionSettings,
                             onAlbumSelected = { id, title ->
                                 selectedAlbumId = id
                                 selectedAlbumTitle = title
@@ -753,6 +762,16 @@ fun MusicApp(
                                     playbackSettingsStore.setPopcornSoundEnabled(enabled)
                                 }
                             },
+                            onArtistSeparatorsChange = { separators ->
+                                appScope.launch {
+                                    artistRecognitionSettingsStore.setSeparators(separators)
+                                }
+                            },
+                            onExcludedArtistNamesChange = { names ->
+                                appScope.launch {
+                                    artistRecognitionSettingsStore.setExcludedArtistNames(names)
+                                }
+                            },
                             modifier = Modifier.fillMaxSize(),
                         )
                         GlobalPlaybackBar(
@@ -809,6 +828,7 @@ fun MusicApp(
                         selectedAlbumTitle = title
                         navigateToDestination(MusicDestination.Album)
                     },
+                    recognitionSettings = artistRecognitionSettings,
                     onArtistClick = { id, title ->
                         selectedArtistId = id
                         selectedArtistTitle = title

@@ -2,6 +2,7 @@ package com.smartisanos.music.ui.search
 
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import com.smartisanos.music.data.settings.ArtistRecognitionSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -68,6 +69,30 @@ class SearchModelsTest {
         )
 
         assertEquals(listOf("Alpha Album", "Beta Album"), results.albums.map { it.title })
+    }
+
+    @Test
+    fun buildSearchResultsMatchesSplitArtistNames() {
+        val results = buildSearchResults(
+            query = "singer b",
+            songs = listOf(
+                mediaItem(
+                    id = "duet",
+                    title = "Duet",
+                    artist = "Singer A/Singer B",
+                    album = "Single",
+                ),
+            ),
+            unknownAlbumTitle = "Unknown Album",
+            unknownArtistTitle = "Unknown Artist",
+            multipleArtistsTitle = "Multiple Artists",
+            recognitionSettings = ArtistRecognitionSettings(
+                separators = setOf("/"),
+            ),
+        )
+
+        assertEquals(listOf("duet"), results.songs.map { it.mediaId })
+        assertEquals(listOf("Singer B"), results.artists.map { it.name })
     }
 
     @Test

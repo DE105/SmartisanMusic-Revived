@@ -3,6 +3,7 @@ package com.smartisanos.music.ui.search
 import androidx.media3.common.MediaItem
 import com.smartisanos.music.ui.album.AlbumSummary
 import com.smartisanos.music.ui.album.buildAlbumSummaries
+import com.smartisanos.music.data.settings.ArtistRecognitionSettings
 import com.smartisanos.music.ui.artist.ArtistSummary
 import com.smartisanos.music.ui.artist.buildArtistSummaries
 import java.util.Locale
@@ -29,6 +30,7 @@ internal fun buildSearchResults(
     unknownAlbumTitle: String,
     unknownArtistTitle: String,
     multipleArtistsTitle: String,
+    recognitionSettings: ArtistRecognitionSettings = ArtistRecognitionSettings(),
 ): SearchResults {
     val normalizedQuery = normalizeSearchQuery(query)
     if (normalizedQuery.isEmpty()) {
@@ -58,6 +60,7 @@ internal fun buildSearchResults(
         mediaItems = songs,
         unknownArtistTitle = unknownArtistTitle,
         unknownAlbumTitle = unknownAlbumTitle,
+        recognitionSettings = recognitionSettings,
     ).filter { artist ->
         artist.searchableArtistFields().any { field ->
             field.contains(normalizedQuery)
