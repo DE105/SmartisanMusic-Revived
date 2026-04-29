@@ -135,4 +135,46 @@ class NeedleSeekMappingTest {
             ),
         )
     }
+
+    @Test
+    fun `disc tap inside touch slop can toggle lyrics`() {
+        val center = Offset(100f, 100f)
+        val initialPosition = Offset(140f, 100f)
+        val finalPosition = Offset(146f, 104f)
+
+        assertTrue(
+            isDiscTapWithinSlop(
+                initialPosition = initialPosition,
+                finalPosition = finalPosition,
+                maxMoveDistance = 8f,
+                center = center,
+                radius = 80f,
+                tapTouchSlop = 12f,
+            ),
+        )
+    }
+
+    @Test
+    fun `disc movement past touch slop is scratch gesture`() {
+        val center = Offset(100f, 100f)
+        val initialPosition = Offset(140f, 100f)
+        val finalPosition = Offset(160f, 120f)
+
+        assertFalse(
+            isDiscTapWithinSlop(
+                initialPosition = initialPosition,
+                finalPosition = finalPosition,
+                maxMoveDistance = 28f,
+                center = center,
+                radius = 80f,
+                tapTouchSlop = 12f,
+            ),
+        )
+    }
+
+    @Test
+    fun `scratch start position uses playback position at drag start`() {
+        assertEquals(42_000L, scratchStartPosition(positionMs = 42_000L, durationMs = 180_000L))
+        assertEquals(180_000L, scratchStartPosition(positionMs = 181_500L, durationMs = 180_000L))
+    }
 }

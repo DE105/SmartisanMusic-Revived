@@ -1534,12 +1534,13 @@ private fun PlaybackCoverPage(
                                 }
                             }
                             CoverDragMode.DiscScratch -> {
-                                down.consume()
-                                var scratchPositionMs = latestPositionMs.coerceIn(0L, latestDurationMs)
-                                var lastAngleDegrees = angleDegrees(down.position, center)
-                                latestDiscScratchStart()
-                                latestDiscScratchPositionChange(scratchPositionMs, 0f)
+                                val initialPosition = down.position
+                                var finalPosition = initialPosition
+                                var maxMoveDistance = 0f
+                                var scratchPositionMs = 0L
+                                var lastAngleDegrees = angleDegrees(initialPosition, center)
                                 val pointerId = down.id
+                                var scratchStarted = false
                                 var cancelled = true
                                 while (true) {
                                     val event = awaitPointerEvent()
@@ -1547,11 +1548,44 @@ private fun PlaybackCoverPage(
                                     if (change == null) {
                                         break
                                     }
+                                    finalPosition = change.position
+                                    maxMoveDistance = max(
+                                        maxMoveDistance,
+                                        distanceBetween(initialPosition, finalPosition),
+                                    )
                                     if (!change.pressed) {
-                                        latestDiscScratchEnd(scratchPositionMs)
-                                        change.consume()
+                                        if (scratchStarted) {
+                                            latestDiscScratchEnd(scratchPositionMs)
+                                            change.consume()
+                                        } else if (
+                                            isDiscTapWithinSlop(
+                                                initialPosition = initialPosition,
+                                                finalPosition = finalPosition,
+                                                maxMoveDistance = maxMoveDistance,
+                                                center = center,
+                                                radius = radius,
+                                                tapTouchSlop = tapTouchSlop,
+                                            )
+                                        ) {
+                                            latestVisualPageToggle()
+                                        }
                                         cancelled = false
                                         break
+                                    }
+                                    if (!scratchStarted) {
+                                        if (maxMoveDistance <= tapTouchSlop) {
+                                            continue
+                                        }
+                                        scratchStarted = true
+                                        scratchPositionMs = scratchStartPosition(
+                                            positionMs = latestPositionMs,
+                                            durationMs = latestDurationMs,
+                                        )
+                                        lastAngleDegrees = angleDegrees(change.position, center)
+                                        latestDiscScratchStart()
+                                        latestDiscScratchPositionChange(scratchPositionMs, 0f)
+                                        change.consume()
+                                        continue
                                     }
 
                                     val currentAngle = angleDegrees(change.position, center)
@@ -1572,7 +1606,7 @@ private fun PlaybackCoverPage(
                                     }
                                     change.consume()
                                 }
-                                if (cancelled) {
+                                if (cancelled && scratchStarted) {
                                     latestDiscScratchCancel()
                                 }
                             }
@@ -2359,6 +2393,24 @@ private fun isWithinScratchRegion(
     val distance = sqrt((dx * dx) + (dy * dy))
     return distance in (radius * ScratchHubDeadZoneRatio)..radius
 }
+
+internal fun isDiscTapWithinSlop(
+    initialPosition: Offset,
+    finalPosition: Offset,
+    maxMoveDistance: Float,
+    center: Offset,
+    radius: Float,
+    tapTouchSlop: Float,
+): Boolean {
+    return maxMoveDistance <= tapTouchSlop &&
+        isWithinDisc(initialPosition, center, radius) &&
+        isWithinDisc(finalPosition, center, radius)
+}
+
+internal fun scratchStartPosition(
+    positionMs: Long,
+    durationMs: Long,
+): Long = positionMs.coerceIn(0L, durationMs)
 
 internal data class PlaybackNeedleGeometry(
     val pivot: Offset,
