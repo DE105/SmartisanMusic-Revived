@@ -12,6 +12,9 @@ import android.os.SystemClock
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -33,7 +36,8 @@ internal class ScratchSoundController(
 ) {
     private val appContext = context.applicationContext
     private val decodeExecutor = Executors.newSingleThreadExecutor()
-    private val playbackLock = java.lang.Object()
+    private val playbackLock = ReentrantLock()
+    private val playbackWakeCondition = playbackLock.newCondition()
     private val playbackThread = Thread(::playbackLoop, "ScratchAudioTrack").apply {
         isDaemon = true
         start()
@@ -87,9 +91,7 @@ internal class ScratchSoundController(
             preparedSourceKey = null
             loadingSourceKey = null
             scratchBuffer = null
-            synchronized(playbackLock) {
-                playbackLock.notifyAll()
-            }
+            wakePlaybackThread()
             return
         }
         if (preparedSourceKey == sourceKey || loadingSourceKey == sourceKey || released) {
@@ -106,9 +108,7 @@ internal class ScratchSoundController(
             scratchBuffer = decodedBuffer
             preparedSourceKey = sourceKey
             loadingSourceKey = null
-            synchronized(playbackLock) {
-                playbackLock.notifyAll()
-            }
+            wakePlaybackThread()
         }
     }
 
@@ -124,9 +124,7 @@ internal class ScratchSoundController(
         lastDirection = 0
         lastMotionRealtimeMs = 0L
         motionGeneration += 1
-        synchronized(playbackLock) {
-            playbackLock.notifyAll()
-        }
+        wakePlaybackThread()
     }
 
     fun onScratchMotion(
@@ -160,9 +158,7 @@ internal class ScratchSoundController(
         scratchPositionMs = positionMs
         scratchActive = true
         motionGeneration += 1
-        synchronized(playbackLock) {
-            playbackLock.notifyAll()
-        }
+        wakePlaybackThread()
     }
 
     fun stop() {
@@ -172,9 +168,7 @@ internal class ScratchSoundController(
         lastDirection = 0
         lastMotionRealtimeMs = 0L
         pauseAndFlushTrack()
-        synchronized(playbackLock) {
-            playbackLock.notifyAll()
-        }
+        wakePlaybackThread()
     }
 
     fun release() {
@@ -182,11 +176,15 @@ internal class ScratchSoundController(
         released = true
         sourceGeneration += 1
         decodeExecutor.shutdownNow()
-        synchronized(playbackLock) {
-            playbackLock.notifyAll()
-        }
+        wakePlaybackThread()
         playbackThread.join(200)
         releaseAudioTrack()
+    }
+
+    private fun wakePlaybackThread() {
+        playbackLock.withLock {
+            playbackWakeCondition.signalAll()
+        }
     }
 
     private fun playbackLoop() {
@@ -202,9 +200,9 @@ internal class ScratchSoundController(
 
             if (!shouldPlay || buffer.monoSamples.isEmpty()) {
                 pauseAndFlushTrack()
-                synchronized(playbackLock) {
+                playbackLock.withLock {
                     if (!released) {
-                        playbackLock.wait(24L)
+                        playbackWakeCondition.await(24L, TimeUnit.MILLISECONDS)
                     }
                 }
                 continue
@@ -380,11 +378,11 @@ private fun decodeScratchBuffer(
                 return null
             }
             val mimeType = sourceFormat.getString(MediaFormat.KEY_MIME) ?: return null
-            codec = MediaCodec.createDecoderByType(mimeType).apply {
+            val decoder = MediaCodec.createDecoderByType(mimeType).apply {
                 configure(sourceFormat, null, null, 0)
                 start()
             }
-            val decoder = codec ?: return null
+            codec = decoder
 
             val initialSampleRate = sourceFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             val initialCapacity = buildInitialSampleCapacity(sourceFormat, initialSampleRate)
