@@ -33,6 +33,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -335,6 +336,7 @@ internal fun PlaybackMoreActionPanel(
     scratchEnabled: Boolean,
     sleepTimerActive: Boolean,
     bottomInset: Dp,
+    addToPlaylistEnabled: Boolean = true,
     onAddToPlaylistClick: () -> Unit,
     onAddToQueueClick: () -> Unit,
     onFavoriteToggle: () -> Unit,
@@ -355,6 +357,7 @@ internal fun PlaybackMoreActionPanel(
             visualPage = visualPage,
             scratchEnabled = scratchEnabled,
             sleepTimerActive = sleepTimerActive,
+            addToPlaylistEnabled = addToPlaylistEnabled,
             onAddToPlaylistClick = onAddToPlaylistClick,
             onAddToQueueClick = onAddToQueueClick,
             onFavoriteToggle = onFavoriteToggle,
@@ -404,6 +407,7 @@ private fun PlaybackMoreActionGrid(
     visualPage: PlaybackVisualPage,
     scratchEnabled: Boolean,
     sleepTimerActive: Boolean,
+    addToPlaylistEnabled: Boolean,
     onAddToPlaylistClick: () -> Unit,
     onAddToQueueClick: () -> Unit,
     onFavoriteToggle: () -> Unit,
@@ -436,6 +440,7 @@ private fun PlaybackMoreActionGrid(
                     label = stringResource(R.string.add_to_playlist),
                     normalRes = R.drawable.more_select_icon_addlist,
                     pressedRes = R.drawable.more_select_icon_addlist_down,
+                    enabled = addToPlaylistEnabled,
                     onClick = onAddToPlaylistClick,
                 )
                 PlaybackMoreActionDivider(vertical = true)
@@ -563,6 +568,7 @@ private fun RowScope.PlaybackMoreActionButton(
     pressedRes: Int,
     selected: Boolean = false,
     selectedTextColor: Color = PlaybackMoreActionButtonStyle.color,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -571,16 +577,18 @@ private fun RowScope.PlaybackMoreActionButton(
         modifier = Modifier
             .weight(1f)
             .fillMaxHeight()
+            .alpha(if (enabled) 1f else 0.38f)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
+                enabled = enabled,
                 onClick = onClick,
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Image(
-            painter = painterResource(if (pressed) pressedRes else normalRes),
+            painter = painterResource(if (enabled && pressed) pressedRes else normalRes),
             contentDescription = label,
             contentScale = ContentScale.Fit,
             modifier = Modifier.size(PlaybackMoreActionIconSize),

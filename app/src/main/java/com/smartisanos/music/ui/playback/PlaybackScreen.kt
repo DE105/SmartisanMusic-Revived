@@ -109,6 +109,7 @@ import com.smartisanos.music.R
 import com.smartisanos.music.data.favorite.FavoriteSongsRepository
 import com.smartisanos.music.data.playlist.PlaylistRepository
 import com.smartisanos.music.data.settings.PlaybackSettings
+import com.smartisanos.music.isExternalAudioLaunchItem
 import com.smartisanos.music.playback.EmbeddedLyrics
 import com.smartisanos.music.playback.LocalAudioLibrary
 import com.smartisanos.music.playback.LocalPlaybackController
@@ -500,8 +501,12 @@ fun PlaybackScreen(
     val durationMs = state.durationMs.takeIf { it > 0L }
         ?: mediaMetadata?.durationMs
         ?: 0L
-    val currentMediaId = state.mediaItem?.mediaId
-    val favoriteEnabled = !currentMediaId.isNullOrBlank() && currentMediaId in favoriteIds
+    val currentMediaItem = state.mediaItem
+    val currentMediaId = currentMediaItem?.mediaId
+    val currentIsExternalAudio = currentMediaItem?.isExternalAudioLaunchItem() == true
+    val favoriteEnabled = !currentIsExternalAudio &&
+        !currentMediaId.isNullOrBlank() &&
+        currentMediaId in favoriteIds
     val coverPreviewPositionMs = coverPageState.previewPositionMs
     val livePositionMs = state.currentPositionMs.coerceIn(0L, durationMs.coerceAtLeast(0L))
     val displayPositionMs = if (currentVisualPage == PlaybackVisualPage.Cover) {
@@ -866,6 +871,7 @@ fun PlaybackScreen(
                     scratchEnabled = playbackSettings.scratchEnabled,
                     sleepTimerActive = sleepTimerState.isActive,
                     bottomInset = bottomInset,
+                    addToPlaylistEnabled = !currentIsExternalAudio,
                     onAddToPlaylistClick = {
                         state.mediaItem?.let { onRequestAddToPlaylist(listOf(it)) }
                         showMorePanel = false
@@ -876,6 +882,9 @@ fun PlaybackScreen(
                     },
                     onFavoriteToggle = {
                         val mediaId = currentMediaId ?: return@PlaybackMoreActionPanel
+                        if (currentIsExternalAudio) {
+                            return@PlaybackMoreActionPanel
+                        }
                         scope.launch {
                             favoriteRepository.toggle(mediaId)
                         }
@@ -1035,6 +1044,9 @@ fun PlaybackScreen(
                 },
                 onFavoriteCurrentClick = {
                     val mediaId = currentMediaId ?: return@PlaybackQueueScreen
+                    if (currentIsExternalAudio) {
+                        return@PlaybackQueueScreen
+                    }
                     scope.launch {
                         favoriteRepository.toggle(mediaId)
                     }

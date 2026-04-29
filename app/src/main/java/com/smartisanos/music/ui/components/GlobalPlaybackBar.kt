@@ -44,6 +44,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
 import com.smartisanos.music.data.favorite.FavoriteSongsRepository
+import com.smartisanos.music.isExternalAudioLaunchItem
 import com.smartisanos.music.playback.LocalPlaybackController
 import kotlinx.coroutines.launch
 
@@ -109,7 +110,8 @@ fun GlobalPlaybackBar(
 
     val mediaItem = snapshot.mediaItem ?: return
     val mediaId = mediaItem.mediaId
-    val isFavorite = mediaId in favoriteIds
+    val isExternalAudio = mediaItem.isExternalAudioLaunchItem()
+    val isFavorite = !isExternalAudio && mediaId in favoriteIds
     val title = mediaItem.mediaMetadata.displayTitle?.toString()
         ?: mediaItem.mediaMetadata.title?.toString()
         ?: context.getString(R.string.unknown_song_title)
@@ -196,6 +198,9 @@ fun GlobalPlaybackBar(
                         },
                         contentDescription = stringResource(R.string.favorite),
                         onClick = {
+                            if (isExternalAudio) {
+                                return@PlaybackBarButton
+                            }
                             scope.launch {
                                 favoriteRepository.toggle(mediaId)
                             }

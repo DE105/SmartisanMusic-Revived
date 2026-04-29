@@ -1,5 +1,6 @@
 package com.smartisanos.music.ui.shell
 
+import android.os.Bundle
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Easing
@@ -47,8 +48,12 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.SessionResult
+import com.smartisanos.music.ExternalAudioExtraKey
+import com.smartisanos.music.ExternalAudioLaunchRequest
+import com.smartisanos.music.ExternalAudioMediaIdPrefix
 import com.smartisanos.music.R
 import com.smartisanos.music.data.favorite.FavoriteSongsRepository
 import com.smartisanos.music.data.library.LibraryExclusionsStore
@@ -84,8 +89,12 @@ import com.smartisanos.music.ui.playlist.PlaylistNameDialog
 import com.smartisanos.music.ui.playlist.PlaylistPickerDialog
 import com.smartisanos.music.ui.search.GlobalSearchScreen
 import com.smartisanos.music.ui.search.SearchTab
+import com.smartisanos.music.isExternalAudioLaunchItem
+import com.smartisanos.music.resolveExternalAudioArtist
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val ShellBackground = Color(0xFFF7F7F7)
 private val SearchIconSize = 24.dp
@@ -96,7 +105,11 @@ private val PlaybackOverlayEasing = Easing { fraction ->
 }
 
 @Composable
-fun MusicApp(playbackLaunchRequest: Int = 0) {
+fun MusicApp(
+    playbackLaunchRequest: Int = 0,
+    externalAudioLaunchRequest: ExternalAudioLaunchRequest? = null,
+    onExternalAudioLaunchConsumed: (Int) -> Unit = {},
+) {
     val context = LocalContext.current
     val appSettingsStore = remember(context.applicationContext) {
         MusicAppSettingsStore(context.applicationContext)
@@ -138,7 +151,11 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
 
     ProvidePlaybackController {
         val playbackController = LocalPlaybackController.current
-        var playbackVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+        var playbackVisible by rememberSaveable {
+            androidx.compose.runtime.mutableStateOf(
+                playbackLaunchRequest > 0 || externalAudioLaunchRequest != null,
+            )
+        }
         var searchVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
         var searchQuery by rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
         var selectedSearchTab by rememberSaveable { androidx.compose.runtime.mutableStateOf(SearchTab.All) }
@@ -315,7 +332,9 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
             }
         }
         val requestAddToPlaylist = { items: List<MediaItem> ->
-            val candidates = items.filter { it.mediaId.isNotBlank() }
+            val candidates = items.filter { item ->
+                item.mediaId.isNotBlank() && !item.isExternalAudioLaunchItem()
+            }
             if (candidates.isNotEmpty()) {
                 pendingPlaylistPickerMediaItems = candidates
             }
@@ -357,6 +376,23 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
             if (playbackLaunchRequest > 0) {
                 playbackVisible = true
             }
+        }
+        LaunchedEffect(externalAudioLaunchRequest, playbackController) {
+            val request = externalAudioLaunchRequest ?: return@LaunchedEffect
+            playbackVisible = true
+            val controller = playbackController ?: return@LaunchedEffect
+            val artist = withContext(Dispatchers.IO) {
+                request.resolveExternalAudioArtist(context.applicationContext)
+            }
+            val mediaItem = request.toExternalAudioMediaItem(
+                fallbackTitle = context.getString(R.string.unknown_song_title),
+                artist = artist,
+            )
+            controller.setMediaItem(mediaItem)
+            controller.prepare()
+            controller.play()
+            playbackVisible = true
+            onExternalAudioLaunchConsumed(request.requestId)
         }
 
         Box(modifier = Modifier.fillMaxSize()) {
@@ -869,6 +905,48 @@ fun MusicApp(playbackLaunchRequest: Int = 0) {
             }
         }
     }
+}
+
+private fun ExternalAudioLaunchRequest.toExternalAudioMediaItem(
+    fallbackTitle: String,
+    artist: String?,
+): MediaItem {
+    val uriTitle = uri.lastPathSegment
+        ?.substringAfterLast('/')
+        ?.substringBeforeLast('.', missingDelimiterValue = uri.lastPathSegment.orEmpty())
+        ?.takeIf(String::isNotBlank)
+    val title = displayName
+        ?.substringBeforeLast('.', missingDelimiterValue = displayName)
+        ?.takeIf(String::isNotBlank)
+        ?: uriTitle
+        ?: fallbackTitle
+    val normalizedMimeType = mimeType
+        ?.lowercase()
+        ?.takeUnless { it.endsWith("/*") }
+
+    val metadataBuilder = MediaMetadata.Builder()
+        .setTitle(title)
+        .setDisplayTitle(title)
+        .setIsPlayable(true)
+        .setIsBrowsable(false)
+        .setExtras(
+            Bundle().apply {
+                putBoolean(ExternalAudioExtraKey, true)
+            },
+        )
+    artist?.takeIf(String::isNotBlank)?.let { externalArtist ->
+        metadataBuilder
+            .setArtist(externalArtist)
+            .setSubtitle(externalArtist)
+    }
+    val metadata = metadataBuilder.build()
+
+    return MediaItem.Builder()
+        .setMediaId("$ExternalAudioMediaIdPrefix$requestId")
+        .setUri(uri)
+        .setMimeType(normalizedMimeType)
+        .setMediaMetadata(metadata)
+        .build()
 }
 
 @Composable
