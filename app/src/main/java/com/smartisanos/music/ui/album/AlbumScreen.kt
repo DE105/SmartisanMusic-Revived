@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+
 package com.smartisanos.music.ui.album
 
 import android.content.Context
@@ -8,7 +10,16 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -41,6 +52,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -145,7 +157,13 @@ private val AlbumDetailActionRowHeight = 45.dp
 private val AlbumDetailIconSize = 43.dp
 private val AlbumTrackIndexWidth = 32.dp
 private val MiniPlayerReservedHeight = 73.dp
-private const val AlbumViewSwitchFadeMillis = 220
+private const val AlbumViewSwitchBoundsMillis = 240
+private const val AlbumViewSwitchContentFadeMillis = 70
+private const val AlbumViewSwitchContentFadeDelayMillis = 20
+
+private val AlbumViewSwitchBoundsTransform = BoundsTransform { _, _ ->
+    tween(durationMillis = AlbumViewSwitchBoundsMillis, easing = FastOutSlowInEasing)
+}
 
 @Composable
 fun AlbumScreen(
@@ -291,25 +309,47 @@ private fun AlbumOverview(
     onAlbumSelected: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Crossfade(
-        targetState = viewMode,
-        modifier = modifier.fillMaxSize(),
-        animationSpec = tween(durationMillis = AlbumViewSwitchFadeMillis),
-        label = "album view mode",
-    ) { targetViewMode ->
-        when (targetViewMode) {
-            AlbumViewMode.List -> AlbumList(
-                albums = albums,
-                currentMediaId = currentMediaId,
-                onAlbumSelected = onAlbumSelected,
-                modifier = Modifier.fillMaxSize(),
-            )
-            AlbumViewMode.Tile -> AlbumGrid(
-                albums = albums,
-                currentMediaId = currentMediaId,
-                onAlbumSelected = onAlbumSelected,
-                modifier = Modifier.fillMaxSize(),
-            )
+    val artworkCache = remember(albums) {
+        mutableStateMapOf<String, ImageBitmap?>()
+    }
+
+    SharedTransitionLayout(modifier = modifier.fillMaxSize()) {
+        AnimatedContent(
+            targetState = viewMode,
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopStart,
+            transitionSpec = {
+                fadeIn(
+                    animationSpec = tween(
+                        durationMillis = AlbumViewSwitchContentFadeMillis,
+                        delayMillis = AlbumViewSwitchContentFadeDelayMillis,
+                    ),
+                ) togetherWith fadeOut(
+                    animationSpec = tween(durationMillis = AlbumViewSwitchContentFadeMillis),
+                ) using SizeTransform(clip = false)
+            },
+            label = "album view mode",
+        ) { targetViewMode ->
+            when (targetViewMode) {
+                AlbumViewMode.List -> AlbumList(
+                    albums = albums,
+                    currentMediaId = currentMediaId,
+                    artworkCache = artworkCache,
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    animatedVisibilityScope = this@AnimatedContent,
+                    onAlbumSelected = onAlbumSelected,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                AlbumViewMode.Tile -> AlbumGrid(
+                    albums = albums,
+                    currentMediaId = currentMediaId,
+                    artworkCache = artworkCache,
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    animatedVisibilityScope = this@AnimatedContent,
+                    onAlbumSelected = onAlbumSelected,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 }
@@ -318,6 +358,9 @@ private fun AlbumOverview(
 private fun AlbumGrid(
     albums: List<AlbumSummary>,
     currentMediaId: String?,
+    artworkCache: MutableMap<String, ImageBitmap?>,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
     onAlbumSelected: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -346,6 +389,9 @@ private fun AlbumGrid(
                 AlbumTile(
                     album = album,
                     selected = album.songs.any { it.mediaId == currentMediaId },
+                    artworkCache = artworkCache,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
                     onClick = {
                         onAlbumSelected(album.id, album.title)
                     },
@@ -359,6 +405,9 @@ private fun AlbumGrid(
 private fun AlbumTile(
     album: AlbumSummary,
     selected: Boolean,
+    artworkCache: MutableMap<String, ImageBitmap?>,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
     onClick: () -> Unit,
 ) {
     Column(
@@ -374,7 +423,15 @@ private fun AlbumTile(
         AlbumArtwork(
             mediaItem = album.representative,
             fallbackRes = R.drawable.noalbumcover_220,
-            modifier = Modifier.size(AlbumGridCoverSize),
+            artworkCache = artworkCache,
+            modifier = Modifier
+                .size(AlbumGridCoverSize)
+                .albumSharedBounds(
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    key = album.artworkSharedKey,
+                    zIndexInOverlay = 2f,
+                ),
             contentPadding = AlbumGridCoverPadding,
         )
         Text(
@@ -394,6 +451,9 @@ private fun AlbumTile(
 private fun AlbumList(
     albums: List<AlbumSummary>,
     currentMediaId: String?,
+    artworkCache: MutableMap<String, ImageBitmap?>,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
     onAlbumSelected: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -410,6 +470,9 @@ private fun AlbumList(
             AlbumListRow(
                 album = album,
                 selected = album.songs.any { it.mediaId == currentMediaId },
+                artworkCache = artworkCache,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
                 onClick = {
                     onAlbumSelected(album.id, album.title)
                 },
@@ -422,6 +485,9 @@ private fun AlbumList(
 private fun AlbumListRow(
     album: AlbumSummary,
     selected: Boolean,
+    artworkCache: MutableMap<String, ImageBitmap?>,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
     onClick: () -> Unit,
 ) {
     val trackCount = stringResource(R.string.album_track_count, album.trackCount)
@@ -447,12 +513,22 @@ private fun AlbumListRow(
                     .height(AlbumListRowHeight),
                 contentAlignment = Alignment.Center,
             ) {
-                AlbumArtwork(
-                    mediaItem = album.representative,
-                    fallbackRes = R.drawable.noalbumcover_120,
-                    modifier = Modifier.size(AlbumListCoverSize),
-                    showListMask = true,
-                )
+                Box(modifier = Modifier.size(AlbumListCoverSize)) {
+                    AlbumArtwork(
+                        mediaItem = album.representative,
+                        fallbackRes = R.drawable.noalbumcover_120,
+                        artworkCache = artworkCache,
+                        modifier = Modifier
+                            .matchParentSize()
+                            .albumSharedBounds(
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                key = album.artworkSharedKey,
+                                zIndexInOverlay = 2f,
+                            ),
+                        showListMask = true,
+                    )
+                }
             }
             Column(
                 modifier = Modifier
@@ -486,16 +562,57 @@ private fun AlbumListRow(
 }
 
 @Composable
+private fun Modifier.albumSharedBounds(
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    key: Any,
+    zIndexInOverlay: Float = 0f,
+): Modifier {
+    return with(sharedTransitionScope) {
+        sharedBounds(
+            sharedContentState = rememberSharedContentState(key = key),
+            animatedVisibilityScope = animatedVisibilityScope,
+            enter = fadeIn(
+                animationSpec = tween(durationMillis = AlbumViewSwitchContentFadeMillis),
+            ),
+            exit = fadeOut(
+                animationSpec = tween(durationMillis = AlbumViewSwitchContentFadeMillis),
+            ),
+            boundsTransform = AlbumViewSwitchBoundsTransform,
+            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.Crop),
+            zIndexInOverlay = zIndexInOverlay,
+        )
+    }
+}
+
+private val AlbumSummary.artworkSharedKey: String
+    get() = "album:${id}:artwork"
+
+@Composable
 private fun AlbumArtwork(
     mediaItem: MediaItem,
     fallbackRes: Int,
+    artworkCache: MutableMap<String, ImageBitmap?>? = null,
     modifier: Modifier = Modifier,
     contentPadding: androidx.compose.ui.unit.Dp = 0.dp,
     showListMask: Boolean = false,
 ) {
     val context = LocalContext.current
-    val artwork by produceState<ImageBitmap?>(initialValue = null, mediaItem.mediaId) {
-        value = loadArtwork(context, mediaItem)
+    val artworkCacheKey = mediaItem.mediaId
+    val hasCachedArtwork = artworkCache?.containsKey(artworkCacheKey) == true
+    val cachedArtwork = artworkCache?.get(artworkCacheKey)
+    val artwork by produceState<ImageBitmap?>(
+        initialValue = cachedArtwork,
+        mediaItem.mediaId,
+        artworkCache,
+    ) {
+        if (hasCachedArtwork) {
+            return@produceState
+        }
+
+        val loadedArtwork = loadArtwork(context, mediaItem)
+        artworkCache?.put(artworkCacheKey, loadedArtwork)
+        value = loadedArtwork
     }
 
     Box(
