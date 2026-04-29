@@ -260,8 +260,10 @@ class LocalAudioLibrary(
         val scanTimedOut: Boolean,
         val mediaStoreRefreshSucceeded: Boolean,
     ) {
+        // ContentResolver.refresh() 是 provider best-effort 提示；MediaStore 不支持时会返回 false。
+        // 手动重扫是否成功应以 MediaScanner 回调和重新查询结果为准，避免误报失败。
         val successful: Boolean
-            get() = !scanTimedOut && failedScanCount == 0 && mediaStoreRefreshSucceeded
+            get() = !scanTimedOut && failedScanCount == 0
     }
 
     private data class AudioCache(
@@ -383,7 +385,15 @@ class LocalAudioLibrary(
                 .onEnter { directory -> shouldEnterDirectory(volumeRoot.root, directory) }
                 .onFail { _, _ -> }
                 .forEach { candidate ->
-                    if (!candidate.isFile || !candidate.canRead() || !candidate.isAudioCandidate()) {
+                    val relativePathFromRoot = candidate.relativeToOrNull(volumeRoot.root)
+                        ?.invariantSeparatorsPath
+                        ?: return@forEach
+                    if (
+                        shouldSkipMediaScannerPath(relativePathFromRoot) ||
+                        !candidate.isFile ||
+                        !candidate.canRead() ||
+                        !candidate.isAudioCandidate()
+                    ) {
                         return@forEach
                     }
                     val relativePath = candidate.relativePathFromVolumeRoot(volumeRoot.root)
@@ -440,10 +450,12 @@ class LocalAudioLibrary(
         val relativePath = directory.relativeToOrNull(scanRoot)
             ?.invariantSeparatorsPath
             .orEmpty()
+        if (shouldSkipMediaScannerPath(relativePath)) {
+            return false
+        }
         return when {
             relativePath == "Android/data" || relativePath.startsWith("Android/data/") -> false
             relativePath == "Android/obb" || relativePath.startsWith("Android/obb/") -> false
-            directory.name.startsWith(".") -> false
             else -> true
         }
     }
@@ -552,4 +564,12 @@ class LocalAudioLibrary(
             else -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
         }
     }
+}
+
+internal fun shouldSkipMediaScannerPath(relativePath: String): Boolean {
+    return relativePath
+        .replace('\\', '/')
+        .split('/')
+        .filter(String::isNotEmpty)
+        .any { segment -> segment.startsWith('.') }
 }
