@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.util.Size
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -65,6 +66,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -87,7 +89,7 @@ import com.smartisanos.music.ui.components.SecondaryPageTransition
 import com.smartisanos.music.ui.components.SmartisanBlankState
 import com.smartisanos.music.ui.components.audioPermission
 import com.smartisanos.music.ui.components.hasAudioPermission
-import com.smartisanos.music.ui.components.loadArtwork
+import com.smartisanos.music.ui.components.loadArtworkThumbnail
 
 private val AlbumPageBackground = Color.White
 private val AlbumHeaderBackground = Color(0xFFF2F2F2)
@@ -260,6 +262,19 @@ fun AlbumScreen(
             multipleArtistsTitle = multipleArtistsTitle,
         )
     }
+    val artworkCache = remember(libraryRefreshVersion) {
+        mutableStateMapOf<String, ImageBitmap?>()
+    }
+    val albumArtworkThumbnailSize = rememberAlbumArtworkThumbnailSize()
+
+    LaunchedEffect(albums) {
+        val validKeys = albums.mapTo(mutableSetOf()) { it.artworkCacheKey }
+        artworkCache.keys.toList().forEach { key ->
+            if (key !in validKeys) {
+                artworkCache.remove(key)
+            }
+        }
+    }
 
     if (albums.isEmpty()) {
         SmartisanBlankState(
@@ -281,6 +296,8 @@ fun AlbumScreen(
                 viewMode = viewMode,
                 albums = albums,
                 currentMediaId = currentMediaId,
+                artworkCache = artworkCache,
+                artworkThumbnailSize = albumArtworkThumbnailSize,
                 onAlbumSelected = onAlbumSelected,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -292,6 +309,8 @@ fun AlbumScreen(
                     album = album,
                     currentMediaId = currentMediaId,
                     playbackBrowser = playbackBrowser,
+                    artworkCache = artworkCache,
+                    artworkThumbnailSize = albumArtworkThumbnailSize,
                     onAddToPlaylistRequest = onAddToPlaylistRequest,
                     onAddToQueueRequest = onAddToQueueRequest,
                     modifier = Modifier.fillMaxSize(),
@@ -306,13 +325,11 @@ private fun AlbumOverview(
     viewMode: AlbumViewMode,
     albums: List<AlbumSummary>,
     currentMediaId: String?,
+    artworkCache: MutableMap<String, ImageBitmap?>,
+    artworkThumbnailSize: Size,
     onAlbumSelected: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val artworkCache = remember(albums) {
-        mutableStateMapOf<String, ImageBitmap?>()
-    }
-
     SharedTransitionLayout(modifier = modifier.fillMaxSize()) {
         AnimatedContent(
             targetState = viewMode,
@@ -335,6 +352,7 @@ private fun AlbumOverview(
                     albums = albums,
                     currentMediaId = currentMediaId,
                     artworkCache = artworkCache,
+                    artworkThumbnailSize = artworkThumbnailSize,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent,
                     onAlbumSelected = onAlbumSelected,
@@ -344,6 +362,7 @@ private fun AlbumOverview(
                     albums = albums,
                     currentMediaId = currentMediaId,
                     artworkCache = artworkCache,
+                    artworkThumbnailSize = artworkThumbnailSize,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent,
                     onAlbumSelected = onAlbumSelected,
@@ -359,6 +378,7 @@ private fun AlbumGrid(
     albums: List<AlbumSummary>,
     currentMediaId: String?,
     artworkCache: MutableMap<String, ImageBitmap?>,
+    artworkThumbnailSize: Size,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     onAlbumSelected: (String, String) -> Unit,
@@ -390,6 +410,7 @@ private fun AlbumGrid(
                     album = album,
                     selected = album.songs.any { it.mediaId == currentMediaId },
                     artworkCache = artworkCache,
+                    artworkThumbnailSize = artworkThumbnailSize,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope,
                     onClick = {
@@ -406,6 +427,7 @@ private fun AlbumTile(
     album: AlbumSummary,
     selected: Boolean,
     artworkCache: MutableMap<String, ImageBitmap?>,
+    artworkThumbnailSize: Size,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     onClick: () -> Unit,
@@ -424,6 +446,8 @@ private fun AlbumTile(
             mediaItem = album.representative,
             fallbackRes = R.drawable.noalbumcover_220,
             artworkCache = artworkCache,
+            artworkCacheKey = album.artworkCacheKey,
+            artworkThumbnailSize = artworkThumbnailSize,
             modifier = Modifier
                 .size(AlbumGridCoverSize)
                 .albumSharedBounds(
@@ -452,6 +476,7 @@ private fun AlbumList(
     albums: List<AlbumSummary>,
     currentMediaId: String?,
     artworkCache: MutableMap<String, ImageBitmap?>,
+    artworkThumbnailSize: Size,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     onAlbumSelected: (String, String) -> Unit,
@@ -471,6 +496,7 @@ private fun AlbumList(
                 album = album,
                 selected = album.songs.any { it.mediaId == currentMediaId },
                 artworkCache = artworkCache,
+                artworkThumbnailSize = artworkThumbnailSize,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 onClick = {
@@ -486,6 +512,7 @@ private fun AlbumListRow(
     album: AlbumSummary,
     selected: Boolean,
     artworkCache: MutableMap<String, ImageBitmap?>,
+    artworkThumbnailSize: Size,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     onClick: () -> Unit,
@@ -518,6 +545,8 @@ private fun AlbumListRow(
                         mediaItem = album.representative,
                         fallbackRes = R.drawable.noalbumcover_120,
                         artworkCache = artworkCache,
+                        artworkCacheKey = album.artworkCacheKey,
+                        artworkThumbnailSize = artworkThumbnailSize,
                         modifier = Modifier
                             .matchParentSize()
                             .albumSharedBounds(
@@ -588,29 +617,49 @@ private fun Modifier.albumSharedBounds(
 private val AlbumSummary.artworkSharedKey: String
     get() = "album:${id}:artwork"
 
+private val AlbumSummary.artworkCacheKey: String
+    get() {
+        val artworkUri = representative.mediaMetadata.artworkUri?.toString().orEmpty()
+        return "$artworkSharedKey:$artworkUri:${representative.mediaId}"
+    }
+
+@Composable
+private fun rememberAlbumArtworkThumbnailSize(): Size {
+    val density = LocalDensity.current
+    return remember(density) {
+        val sizePx = with(density) {
+            AlbumDetailCoverSize.roundToPx()
+        }.coerceAtLeast(1)
+        Size(sizePx, sizePx)
+    }
+}
+
 @Composable
 private fun AlbumArtwork(
     mediaItem: MediaItem,
     fallbackRes: Int,
     artworkCache: MutableMap<String, ImageBitmap?>? = null,
+    artworkCacheKey: String = mediaItem.mediaId,
+    artworkThumbnailSize: Size,
     modifier: Modifier = Modifier,
     contentPadding: androidx.compose.ui.unit.Dp = 0.dp,
     showListMask: Boolean = false,
 ) {
     val context = LocalContext.current
-    val artworkCacheKey = mediaItem.mediaId
     val hasCachedArtwork = artworkCache?.containsKey(artworkCacheKey) == true
     val cachedArtwork = artworkCache?.get(artworkCacheKey)
     val artwork by produceState<ImageBitmap?>(
         initialValue = cachedArtwork,
-        mediaItem.mediaId,
+        artworkCacheKey,
+        artworkThumbnailSize.width,
+        artworkThumbnailSize.height,
         artworkCache,
     ) {
         if (hasCachedArtwork) {
             return@produceState
         }
 
-        val loadedArtwork = loadArtwork(context, mediaItem)
+        val loadedArtwork = loadArtworkThumbnail(context, mediaItem, artworkThumbnailSize)
         artworkCache?.put(artworkCacheKey, loadedArtwork)
         value = loadedArtwork
     }
@@ -653,6 +702,8 @@ private fun AlbumDetail(
     album: AlbumSummary,
     currentMediaId: String?,
     playbackBrowser: MediaBrowser?,
+    artworkCache: MutableMap<String, ImageBitmap?>,
+    artworkThumbnailSize: Size,
     onAddToPlaylistRequest: (List<MediaItem>) -> Unit,
     onAddToQueueRequest: (List<MediaItem>) -> Unit,
     modifier: Modifier = Modifier,
@@ -666,6 +717,8 @@ private fun AlbumDetail(
         item(key = "${album.id}:header") {
             AlbumDetailHeader(
                 album = album,
+                artworkCache = artworkCache,
+                artworkThumbnailSize = artworkThumbnailSize,
                 onAddToPlaylistClick = { onAddToPlaylistRequest(album.songs) },
                 onAddToQueueClick = { onAddToQueueRequest(album.songs) },
             )
@@ -698,6 +751,8 @@ private fun AlbumDetail(
 @Composable
 private fun AlbumDetailHeader(
     album: AlbumSummary,
+    artworkCache: MutableMap<String, ImageBitmap?>,
+    artworkThumbnailSize: Size,
     onAddToPlaylistClick: () -> Unit,
     onAddToQueueClick: () -> Unit,
 ) {
@@ -712,6 +767,9 @@ private fun AlbumDetailHeader(
         AlbumArtwork(
             mediaItem = album.representative,
             fallbackRes = R.drawable.noalbumcover_220,
+            artworkCache = artworkCache,
+            artworkCacheKey = album.artworkCacheKey,
+            artworkThumbnailSize = artworkThumbnailSize,
             modifier = Modifier.size(AlbumDetailCoverSize),
             contentPadding = AlbumGridCoverPadding,
         )
