@@ -16,8 +16,8 @@ android {
         applicationId = "com.smartisanos.music"
         minSdk = 31
         targetSdk = 36
-        versionCode = 104
-        versionName = "1.0.4"
+        versionCode = 110
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
