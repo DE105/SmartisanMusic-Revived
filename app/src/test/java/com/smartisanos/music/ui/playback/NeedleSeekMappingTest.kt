@@ -14,47 +14,53 @@ class NeedleSeekMappingTest {
     fun `needle playback arc maps to current media position`() {
         val durationMs = 200_000L
 
-        assertEquals(0L, needleSeekPositionFromRotation(rotationDegrees = 14f, durationMs))
-        assertEquals(100_000L, needleSeekPositionFromRotation(rotationDegrees = 19f, durationMs))
-        assertEquals(200_000L, needleSeekPositionFromRotation(rotationDegrees = 24f, durationMs))
+        assertEquals(0L, needleSeekPositionFromRotation(rotationDegrees = 12f, durationMs))
+        assertEquals(100_000L, needleSeekPositionFromRotation(rotationDegrees = 23.15f, durationMs))
+        assertEquals(200_000L, needleSeekPositionFromRotation(rotationDegrees = 34.3f, durationMs))
     }
 
     @Test
     fun `needle rest arc does not seek`() {
-        assertNull(needleSeekPositionFromRotation(rotationDegrees = -12f, durationMs = 200_000L))
-        assertNull(needleSeekPositionFromRotation(rotationDegrees = 13.99f, durationMs = 200_000L))
-        assertNull(needleSeekPositionFromRotation(rotationDegrees = 19f, durationMs = 0L))
+        assertNull(needleSeekPositionFromRotation(rotationDegrees = 0f, durationMs = 200_000L))
+        assertNull(needleSeekPositionFromRotation(rotationDegrees = 11.99f, durationMs = 200_000L))
+        assertNull(needleSeekPositionFromRotation(rotationDegrees = 23.15f, durationMs = 0L))
     }
 
     @Test
     fun `needle point mapping clamps to supported arc`() {
         val containerSize = IntSize(width = 360, height = 357)
-        val beyondEndPoint = playbackNeedleGeometry(
+        val geometry = playbackNeedleGeometry(
             containerSize = containerSize,
-            layoutScalePx = 1f,
-            rotationDegrees = 40f,
-        ).tip
-        val beforeRestPoint = playbackNeedleGeometry(
-            containerSize = containerSize,
-            layoutScalePx = 1f,
-            rotationDegrees = -30f,
-        ).tip
+            densityPxPerDp = 1f,
+            turntableScale = 1f,
+            rotationDegrees = 0f,
+        )
+        val beyondEndPoint = Offset(
+            x = geometry.pivot.x - 220f,
+            y = geometry.pivot.y + 180f,
+        )
+        val beforeRestPoint = Offset(
+            x = geometry.pivot.x + 120f,
+            y = geometry.pivot.y,
+        )
 
         assertEquals(
-            24f,
+            34.3f,
             needleSeekRotationFromPoint(
                 point = beyondEndPoint,
                 containerSize = containerSize,
-                layoutScalePx = 1f,
+                densityPxPerDp = 1f,
+                turntableScale = 1f,
             ),
             0.001f,
         )
         assertEquals(
-            -12f,
+            0f,
             needleSeekRotationFromPoint(
                 point = beforeRestPoint,
                 containerSize = containerSize,
-                layoutScalePx = 1f,
+                densityPxPerDp = 1f,
+                turntableScale = 1f,
             ),
             0.001f,
         )
@@ -67,73 +73,114 @@ class NeedleSeekMappingTest {
     }
 
     @Test
-    fun `needle hit region follows visible arm segment`() {
+    fun `needle hit region matches original bottom fifth`() {
         val containerSize = IntSize(width = 360, height = 357)
         val geometry = playbackNeedleGeometry(
             containerSize = containerSize,
-            layoutScalePx = 1f,
-            rotationDegrees = 14f,
+            densityPxPerDp = 1f,
+            turntableScale = 1f,
+            rotationDegrees = 12f,
         )
-        val middleOfArm = Offset(
-            x = (geometry.pivot.x + geometry.tip.x) / 2f,
-            y = (geometry.pivot.y + geometry.tip.y) / 2f,
+        val bottomFifth = Offset(
+            x = geometry.left + (geometry.width / 2f),
+            y = geometry.top + (geometry.height * 0.9f),
         )
-        val farFromArm = Offset(
-            x = middleOfArm.x + 80f,
-            y = middleOfArm.y,
+        val middleOfNeedleView = Offset(
+            x = geometry.left + (geometry.width / 2f),
+            y = geometry.top + (geometry.height * 0.5f),
         )
 
         assertTrue(
             isWithinNeedleSeekRegion(
-                point = middleOfArm,
+                point = bottomFifth,
                 containerSize = containerSize,
-                layoutScalePx = 1f,
-                rotationDegrees = 14f,
-                tolerancePx = 28f,
+                densityPxPerDp = 1f,
+                turntableScale = 1f,
+                rotationDegrees = 0f,
             ),
         )
         assertFalse(
             isWithinNeedleSeekRegion(
-                point = farFromArm,
+                point = middleOfNeedleView,
                 containerSize = containerSize,
-                layoutScalePx = 1f,
-                rotationDegrees = 14f,
-                tolerancePx = 28f,
+                densityPxPerDp = 1f,
+                turntableScale = 1f,
+                rotationDegrees = 0f,
             ),
         )
     }
 
     @Test
-    fun `needle hit region includes pickup head`() {
-        val containerSize = IntSize(width = 360, height = 357)
+    fun `needle hit region follows rotated view coordinates`() {
+        val containerSize = IntSize(width = 432, height = 428)
         val geometry = playbackNeedleGeometry(
             containerSize = containerSize,
-            layoutScalePx = 1f,
-            rotationDegrees = 14f,
+            densityPxPerDp = 1f,
+            turntableScale = 1.2f,
+            rotationDegrees = 34.3f,
         )
-        val justOutsidePickup = Offset(
-            x = geometry.pickupCenter.x + 44f,
-            y = geometry.pickupCenter.y,
+        val localActivePoint = Offset(
+            x = geometry.width / 2f,
+            y = geometry.height * 0.9f,
+        )
+        val rotatedActivePoint = Offset(
+            x = geometry.pivot.x,
+            y = geometry.pivot.y,
+        ) + rotateForTest(
+            offset = Offset(
+                x = localActivePoint.x - geometry.pivotLocal.x,
+                y = localActivePoint.y - geometry.pivotLocal.y,
+            ),
+            rotationDegrees = 34.3f,
+        )
+        val localMiddlePoint = Offset(
+            x = geometry.width / 2f,
+            y = geometry.height * 0.5f,
+        )
+        val rotatedMiddlePoint = Offset(
+            x = geometry.pivot.x,
+            y = geometry.pivot.y,
+        ) + rotateForTest(
+            offset = Offset(
+                x = localMiddlePoint.x - geometry.pivotLocal.x,
+                y = localMiddlePoint.y - geometry.pivotLocal.y,
+            ),
+            rotationDegrees = 34.3f,
         )
 
         assertTrue(
             isWithinNeedleSeekRegion(
-                point = geometry.pickupCenter,
+                point = rotatedActivePoint,
                 containerSize = containerSize,
-                layoutScalePx = 1f,
-                rotationDegrees = 14f,
-                tolerancePx = 28f,
+                densityPxPerDp = 1f,
+                turntableScale = 1.2f,
+                rotationDegrees = 34.3f,
             ),
         )
         assertFalse(
             isWithinNeedleSeekRegion(
-                point = justOutsidePickup,
+                point = rotatedMiddlePoint,
                 containerSize = containerSize,
-                layoutScalePx = 1f,
-                rotationDegrees = 14f,
-                tolerancePx = 28f,
+                densityPxPerDp = 1f,
+                turntableScale = 1.2f,
+                rotationDegrees = 34.3f,
             ),
         )
+    }
+
+    @Test
+    fun `large phone turntable uses original full width needle metrics`() {
+        val geometry = playbackNeedleGeometry(
+            containerSize = IntSize(width = 432, height = 428),
+            densityPxPerDp = 1f,
+            turntableScale = 1.2f,
+            rotationDegrees = 12f,
+        )
+
+        assertEquals(73.3f, geometry.width, 0.001f)
+        assertEquals(354.6953f, geometry.height, 0.001f)
+        assertEquals(29.199982f, geometry.top, 0.001f)
+        assertEquals(355.90002f, geometry.left, 0.001f)
     }
 
     @Test
@@ -176,5 +223,18 @@ class NeedleSeekMappingTest {
     fun `scratch start position uses playback position at drag start`() {
         assertEquals(42_000L, scratchStartPosition(positionMs = 42_000L, durationMs = 180_000L))
         assertEquals(180_000L, scratchStartPosition(positionMs = 181_500L, durationMs = 180_000L))
+    }
+
+    private fun rotateForTest(
+        offset: Offset,
+        rotationDegrees: Float,
+    ): Offset {
+        val radians = Math.toRadians(rotationDegrees.toDouble())
+        val cos = kotlin.math.cos(radians).toFloat()
+        val sin = kotlin.math.sin(radians).toFloat()
+        return Offset(
+            x = (offset.x * cos) - (offset.y * sin),
+            y = (offset.x * sin) + (offset.y * cos),
+        )
     }
 }

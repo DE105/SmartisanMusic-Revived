@@ -20,6 +20,7 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -161,25 +162,31 @@ private const val ScratchMaxAngleStepDegrees = 54f
 private const val CoverPreviewTimeoutMs = 260L
 private const val CoverPreviewSettleToleranceMs = 24L
 private const val NeedleSeekSettleHoldTimeoutMs = 900L
-private const val OriginalNeedlePivotX = 0.82f
-private const val OriginalNeedlePivotY = 0.08f
-private const val OriginalNeedleWidthDp = 73.3f
-private const val OriginalNeedleHeightDp = 310f
-private const val OriginalNeedleTopWidthDp = 41f
-private const val OriginalNeedleTopMarginDp = 25.5f
+private const val NeedleLiftHoldAfterReleaseMs = 250L
+private const val OriginalTurntableBaseWidthDp = 360f
+private const val OriginalLargeNeedleBreakpointScale = 411f / OriginalTurntableBaseWidthDp
+private const val OriginalNeedleTouchStartRatio = 0.8f
+private const val OriginalNeedleWidthBaseDp = 73.3f
+private const val OriginalNeedleHeightBaseDp = 310f
+private const val OriginalNeedleTopWidthBaseDp = 41f
+private const val OriginalNeedleTopMarginBaseDp = 25.5f
 private const val OriginalNeedleRightMarginDp = 2.5f
 private const val OriginalNeedleShadowRightMarginDp = 2f
-private const val NeedleRestRotationDegrees = -12f
-private const val NeedlePlaybackStartRotationDegrees = 14f
-private const val NeedlePlaybackSweepDegrees = 10f
+private const val OriginalNeedlePivotXBase = 0.82f
+private const val OriginalNeedlePivotYBase = 0.08f
+private const val OriginalNeedleHeightLargeDp = 354.6953f
+private const val OriginalNeedleTopMarginLargeDp = 29.199982f
+private const val OriginalNeedleRightMarginLargeDp = 2.7999878f
+private const val OriginalNeedleShadowRightMarginLargeDp = 2.2999878f
+private const val OriginalNeedlePivotXLarge = 0.7858f
+private const val OriginalNeedlePivotYLarge = 0.0947f
+private const val NeedleRestRotationDegrees = 0f
+private const val NeedlePlaybackStartRotationDegrees = 12f
+private const val NeedlePlaybackSweepDegrees = 22.3f
 private const val NeedlePlaybackEndRotationDegrees = NeedlePlaybackStartRotationDegrees +
     NeedlePlaybackSweepDegrees
-private const val NeedleTipOffsetXRatio = -0.55f
-private const val NeedleTipOffsetYRatio = 0.91f
-private const val NeedlePickupCenterOffsetXRatio = -0.41f
-private const val NeedlePickupCenterOffsetYRatio = 0.78f
-private const val NeedleSeekHitToleranceDp = 28f
-private const val NeedlePickupHitRadiusDp = 40f
+private const val NeedleLiftScaleY = 0.98f
+private const val NeedleLiftShadowRotationOffsetDegrees = 4f
 private const val PlaybackAlbumArtDiameterRatio = 405f / 1080f
 private const val PlaybackTurntableAxisDiameterRatio = 62f / 1080f
 private const val PlaybackTurntableAxisSourceDiameterPx = 60
@@ -235,6 +242,7 @@ private data class PlaybackCoverPageState(
     val resumePlaybackAfterDrag: Boolean = false,
     val needlePreviewRotationDegrees: Float? = null,
     val needleSettlingPositionMs: Long? = null,
+    val needleParkedOutside: Boolean = false,
 )
 
 @Composable
@@ -659,8 +667,8 @@ fun PlaybackScreen(
         val bottomInset = with(density) {
             WindowInsets.safeDrawing.getBottom(this).toDp()
         }
-        val turntableWidth = minOf(maxWidth - 8.dp, 360.dp)
-        val scale = turntableWidth.value / 360f
+        val turntableWidth = maxWidth
+        val scale = turntableWidth.value / OriginalTurntableBaseWidthDp
 
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -706,6 +714,7 @@ fun PlaybackScreen(
                     coverDragMode = coverPageState.dragMode,
                     previewPositionMs = coverPageState.previewPositionMs,
                     needlePreviewRotationDegrees = coverPageState.needlePreviewRotationDegrees,
+                    needleParkedOutside = coverPageState.needleParkedOutside,
                     mediaId = state.mediaItem?.mediaId,
                     onMoreClick = {
                         showMorePanel = true
@@ -730,6 +739,7 @@ fun PlaybackScreen(
                             resumePlaybackAfterDrag = resumePlaybackAfterDrag,
                             needlePreviewRotationDegrees = null,
                             needleSettlingPositionMs = null,
+                            needleParkedOutside = false,
                         )
                         if (resumePlaybackAfterDrag) {
                             controller?.pause()
@@ -756,6 +766,7 @@ fun PlaybackScreen(
                             resumePlaybackAfterDrag = false,
                             needlePreviewRotationDegrees = null,
                             needleSettlingPositionMs = null,
+                            needleParkedOutside = false,
                         )
                         controller?.seekTo(positionMs)
                         if (resumePlaybackAfterDrag) {
@@ -771,10 +782,11 @@ fun PlaybackScreen(
                         val resumePlaybackAfterDrag = state.isPlaying
                         coverPageState = coverPageState.copy(
                             dragMode = CoverDragMode.NeedleSeek,
-                            previewPositionMs = positionMs,
+                            previewPositionMs = positionMs ?: 0L,
                             resumePlaybackAfterDrag = resumePlaybackAfterDrag,
                             needlePreviewRotationDegrees = rotationDegrees,
                             needleSettlingPositionMs = null,
+                            needleParkedOutside = false,
                         )
                         if (resumePlaybackAfterDrag) {
                             controller?.pause()
@@ -783,24 +795,33 @@ fun PlaybackScreen(
                     },
                     onNeedleSeekPositionChange = { rotationDegrees, positionMs ->
                         coverPageState = coverPageState.copy(
-                            previewPositionMs = positionMs,
+                            previewPositionMs = positionMs ?: 0L,
                             needlePreviewRotationDegrees = rotationDegrees,
                             needleSettlingPositionMs = null,
                         )
                     },
                     onNeedleSeekEnd = { rotationDegrees, positionMs ->
-                        val resumePlaybackAfterDrag = coverPageState.resumePlaybackAfterDrag
-                        coverPageState = coverPageState.copy(
-                            dragMode = CoverDragMode.None,
-                            previewPositionMs = null,
-                            resumePlaybackAfterDrag = false,
-                            needlePreviewRotationDegrees = positionMs?.let { rotationDegrees },
-                            needleSettlingPositionMs = positionMs,
-                        )
-                        if (positionMs != null) {
+                        if (positionMs == null) {
+                            coverPageState = coverPageState.copy(
+                                dragMode = CoverDragMode.None,
+                                previewPositionMs = 0L,
+                                resumePlaybackAfterDrag = false,
+                                needlePreviewRotationDegrees = null,
+                                needleSettlingPositionMs = null,
+                                needleParkedOutside = true,
+                            )
+                            controller?.seekTo(0L)
+                            controller?.pause()
+                        } else {
+                            coverPageState = coverPageState.copy(
+                                dragMode = CoverDragMode.None,
+                                previewPositionMs = positionMs,
+                                resumePlaybackAfterDrag = false,
+                                needlePreviewRotationDegrees = rotationDegrees,
+                                needleSettlingPositionMs = positionMs,
+                                needleParkedOutside = false,
+                            )
                             controller?.seekTo(positionMs)
-                        }
-                        if (resumePlaybackAfterDrag) {
                             controller?.play()
                         }
                         controller?.setScratchSeekModeEnabled(false)
@@ -1292,6 +1313,7 @@ private fun PlaybackVisualStage(
     coverDragMode: CoverDragMode,
     previewPositionMs: Long?,
     needlePreviewRotationDegrees: Float?,
+    needleParkedOutside: Boolean,
     mediaId: String?,
     onMoreClick: () -> Unit,
     onVisualPageToggle: () -> Unit,
@@ -1371,6 +1393,7 @@ private fun PlaybackVisualStage(
                     coverDragMode = coverDragMode,
                     previewPositionMs = previewPositionMs,
                     needlePreviewRotationDegrees = needlePreviewRotationDegrees,
+                    needleParkedOutside = needleParkedOutside,
                     mediaId = mediaId,
                     onVisualPageToggle = onVisualPageToggle,
                     onDiscScratchStart = onDiscScratchStart,
@@ -1413,6 +1436,7 @@ private fun PlaybackCoverPage(
     coverDragMode: CoverDragMode,
     previewPositionMs: Long?,
     needlePreviewRotationDegrees: Float?,
+    needleParkedOutside: Boolean,
     mediaId: String?,
     onVisualPageToggle: () -> Unit,
     onDiscScratchStart: () -> Unit,
@@ -1432,7 +1456,7 @@ private fun PlaybackCoverPage(
         ?.coerceIn(0f, 1f)
         ?: 0f
     val targetNeedleRotation = needlePreviewRotationDegrees ?: run {
-        if (hasMediaItem && (isPlaying || coverDragMode != CoverDragMode.None || previewPositionMs != null)) {
+        if (hasMediaItem && !(needleParkedOutside && !isPlaying)) {
             NeedlePlaybackStartRotationDegrees + (progress * NeedlePlaybackSweepDegrees)
         } else {
             NeedleRestRotationDegrees
@@ -1442,6 +1466,24 @@ private fun PlaybackCoverPage(
     val needleAnimatable = remember { Animatable(targetNeedleRotation) }
     var prevMediaId by remember { mutableStateOf(mediaId) }
     val needleSeekDragging = coverDragMode == CoverDragMode.NeedleSeek
+    var needleLiftHeldAfterSeek by remember { mutableStateOf(false) }
+
+    LaunchedEffect(needleSeekDragging, needleParkedOutside) {
+        if (needleSeekDragging) {
+            needleLiftHeldAfterSeek = true
+            return@LaunchedEffect
+        }
+        if (needleLiftHeldAfterSeek && !needleParkedOutside) {
+            delay(NeedleLiftHoldAfterReleaseMs)
+        }
+        needleLiftHeldAfterSeek = false
+    }
+
+    val needleLiftFraction by animateFloatAsState(
+        targetValue = if (needleSeekDragging || needleLiftHeldAfterSeek) 1f else 0f,
+        animationSpec = tween(if (needleSeekDragging || needleLiftHeldAfterSeek) 125 else 250),
+        label = "needleLiftFraction",
+    )
 
     LaunchedEffect(mediaId, targetNeedleRotation, needleSeekDragging) {
         if (prevMediaId != mediaId) {
@@ -1457,8 +1499,7 @@ private fun PlaybackCoverPage(
 
     val needleRotation = needleAnimatable.value
     val density = LocalDensity.current
-    val needleLayoutScalePx = density.density * scale
-    val needleHitTolerancePx = NeedleSeekHitToleranceDp * needleLayoutScalePx
+    val densityPxPerDp = density.density
     var discSize by remember { mutableStateOf(IntSize.Zero) }
     val latestDiscSize by rememberUpdatedState(discSize)
     val latestVisualPageToggle by rememberUpdatedState(onVisualPageToggle)
@@ -1498,7 +1539,7 @@ private fun PlaybackCoverPage(
                 .matchParentSize()
                 .onSizeChanged { discSize = it }
                 .zIndex(3f)
-                .pointerInput(scratchAvailable, needleSeekAvailable, needleLayoutScalePx, needleHitTolerancePx) {
+                .pointerInput(scratchAvailable, needleSeekAvailable, densityPxPerDp, scale) {
                     val tapTouchSlop = viewConfiguration.touchSlop
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
@@ -1509,9 +1550,9 @@ private fun PlaybackCoverPage(
                             needleSeekAvailable && isWithinNeedleSeekRegion(
                                 point = down.position,
                                 containerSize = size,
-                                layoutScalePx = needleLayoutScalePx,
+                                densityPxPerDp = densityPxPerDp,
+                                turntableScale = scale,
                                 rotationDegrees = latestNeedleRotation,
-                                tolerancePx = needleHitTolerancePx,
                             ) -> CoverDragMode.NeedleSeek
                             scratchAvailable && isWithinScratchRegion(down.position, center, radius) -> {
                                 CoverDragMode.DiscScratch
@@ -1633,7 +1674,8 @@ private fun PlaybackCoverPage(
                                 )
                                 val needlePivot = playbackNeedleGeometry(
                                     containerSize = size,
-                                    layoutScalePx = needleLayoutScalePx,
+                                    densityPxPerDp = densityPxPerDp,
+                                    turntableScale = scale,
                                     rotationDegrees = needleRotationDegrees,
                                 ).pivot
                                 var lastNeedleAngleDegrees = angleDegrees(down.position, needlePivot)
@@ -1683,6 +1725,7 @@ private fun PlaybackCoverPage(
         )
         OriginalNeedleStack(
             needleRotation = needleRotation,
+            needleLiftFraction = needleLiftFraction,
             scale = scale,
             modifier = Modifier
                 .matchParentSize()
@@ -1834,6 +1877,46 @@ private fun PlaybackTurntableAxisOverlay(
     }
 }
 
+private data class OriginalNeedleMetrics(
+    val widthDp: Float,
+    val heightDp: Float,
+    val topWidthDp: Float,
+    val topMarginDp: Float,
+    val rightMarginDp: Float,
+    val shadowRightMarginDp: Float,
+    val pivotXRatio: Float,
+    val pivotYRatio: Float,
+)
+
+private val OriginalNeedleBaseMetrics = OriginalNeedleMetrics(
+    widthDp = OriginalNeedleWidthBaseDp,
+    heightDp = OriginalNeedleHeightBaseDp,
+    topWidthDp = OriginalNeedleTopWidthBaseDp,
+    topMarginDp = OriginalNeedleTopMarginBaseDp,
+    rightMarginDp = OriginalNeedleRightMarginDp,
+    shadowRightMarginDp = OriginalNeedleShadowRightMarginDp,
+    pivotXRatio = OriginalNeedlePivotXBase,
+    pivotYRatio = OriginalNeedlePivotYBase,
+)
+
+private val OriginalNeedleLargeMetrics = OriginalNeedleMetrics(
+    widthDp = OriginalNeedleWidthBaseDp,
+    heightDp = OriginalNeedleHeightLargeDp,
+    topWidthDp = OriginalNeedleTopWidthBaseDp,
+    topMarginDp = OriginalNeedleTopMarginLargeDp,
+    rightMarginDp = OriginalNeedleRightMarginLargeDp,
+    shadowRightMarginDp = OriginalNeedleShadowRightMarginLargeDp,
+    pivotXRatio = OriginalNeedlePivotXLarge,
+    pivotYRatio = OriginalNeedlePivotYLarge,
+)
+
+private fun originalNeedleMetrics(turntableScale: Float): OriginalNeedleMetrics =
+    if (turntableScale >= OriginalLargeNeedleBreakpointScale) {
+        OriginalNeedleLargeMetrics
+    } else {
+        OriginalNeedleBaseMetrics
+    }
+
 private data class OriginalNeedleViews(
     val base: ImageView,
     val shadow: ImageView,
@@ -1844,6 +1927,7 @@ private data class OriginalNeedleViews(
 @Composable
 private fun OriginalNeedleStack(
     needleRotation: Float,
+    needleLiftFraction: Float,
     scale: Float,
     modifier: Modifier = Modifier,
 ) {
@@ -1881,13 +1965,14 @@ private fun OriginalNeedleStack(
         modifier = modifier,
         update = { frame ->
             val views = frame.tag as OriginalNeedleViews
-            val needleWidthPx = with(density) { (OriginalNeedleWidthDp.dp * scale).roundToPx() }
-            val needleHeightPx = with(density) { (OriginalNeedleHeightDp.dp * scale).roundToPx() }
-            val needleTopWidthPx = with(density) { (OriginalNeedleTopWidthDp.dp * scale).roundToPx() }
-            val needleTopMarginPx = with(density) { (OriginalNeedleTopMarginDp.dp * scale).roundToPx() }
-            val needleRightMarginPx = with(density) { (OriginalNeedleRightMarginDp.dp * scale).roundToPx() }
+            val metrics = originalNeedleMetrics(scale)
+            val needleWidthPx = with(density) { metrics.widthDp.dp.roundToPx() }
+            val needleHeightPx = with(density) { metrics.heightDp.dp.roundToPx() }
+            val needleTopWidthPx = with(density) { metrics.topWidthDp.dp.roundToPx() }
+            val needleTopMarginPx = with(density) { metrics.topMarginDp.dp.roundToPx() }
+            val needleRightMarginPx = with(density) { metrics.rightMarginDp.dp.roundToPx() }
             val needleShadowRightMarginPx = with(density) {
-                (OriginalNeedleShadowRightMarginDp.dp * scale).roundToPx()
+                metrics.shadowRightMarginDp.dp.roundToPx()
             }
 
             updateOriginalNeedleLayout(
@@ -1919,13 +2004,20 @@ private fun OriginalNeedleStack(
                 endMarginPx = needleRightMarginPx,
             )
 
+            val liftedScaleY = 1f - ((1f - NeedleLiftScaleY) * needleLiftFraction)
+            val shadowRotation = needleRotation -
+                (NeedleLiftShadowRotationOffsetDegrees * needleLiftFraction)
             listOf(views.shadow, views.needle).forEach { view ->
-                view.pivotX = needleWidthPx * OriginalNeedlePivotX
-                view.pivotY = needleHeightPx * OriginalNeedlePivotY
-                view.rotation = needleRotation
+                view.pivotX = needleWidthPx * metrics.pivotXRatio
+                view.pivotY = needleHeightPx * metrics.pivotYRatio
+                view.scaleY = liftedScaleY
             }
+            views.shadow.rotation = shadowRotation
+            views.needle.rotation = needleRotation
             views.base.rotation = 0f
+            views.base.scaleY = 1f
             views.top.rotation = 0f
+            views.top.scaleY = 1f
         },
     )
 }
@@ -2426,86 +2518,116 @@ internal fun scratchStartPosition(
 ): Long = positionMs.coerceIn(0L, durationMs)
 
 internal data class PlaybackNeedleGeometry(
+    val left: Float,
+    val top: Float,
+    val width: Float,
+    val height: Float,
+    val pivotLocal: Offset,
     val pivot: Offset,
-    val tip: Offset,
-    val pickupCenter: Offset,
 )
 
+@Suppress("UNUSED_PARAMETER")
 internal fun playbackNeedleGeometry(
     containerSize: IntSize,
-    layoutScalePx: Float,
+    densityPxPerDp: Float,
+    turntableScale: Float,
     rotationDegrees: Float,
 ): PlaybackNeedleGeometry {
-    val needleWidthPx = OriginalNeedleWidthDp * layoutScalePx
-    val needleHeightPx = OriginalNeedleHeightDp * layoutScalePx
+    val metrics = originalNeedleMetrics(turntableScale)
+    val needleWidthPx = metrics.widthDp * densityPxPerDp
+    val needleHeightPx = metrics.heightDp * densityPxPerDp
     val needleLeftPx = containerSize.width -
-        (OriginalNeedleRightMarginDp * layoutScalePx) -
+        (metrics.rightMarginDp * densityPxPerDp) -
         needleWidthPx
-    val needleTopPx = OriginalNeedleTopMarginDp * layoutScalePx
+    val needleTopPx = metrics.topMarginDp * densityPxPerDp
+    val pivotLocal = Offset(
+        x = needleWidthPx * metrics.pivotXRatio,
+        y = needleHeightPx * metrics.pivotYRatio,
+    )
     val pivot = Offset(
-        x = needleLeftPx + (needleWidthPx * OriginalNeedlePivotX),
-        y = needleTopPx + (needleHeightPx * OriginalNeedlePivotY),
+        x = needleLeftPx + pivotLocal.x,
+        y = needleTopPx + pivotLocal.y,
     )
-    val neutralTipOffset = Offset(
-        x = needleWidthPx * NeedleTipOffsetXRatio,
-        y = needleHeightPx * NeedleTipOffsetYRatio,
-    )
-    val neutralPickupCenterOffset = Offset(
-        x = needleWidthPx * NeedlePickupCenterOffsetXRatio,
-        y = needleHeightPx * NeedlePickupCenterOffsetYRatio,
-    )
-    val rotatedTipOffset = rotateOffset(neutralTipOffset, rotationDegrees)
-    val rotatedPickupCenterOffset = rotateOffset(neutralPickupCenterOffset, rotationDegrees)
     return PlaybackNeedleGeometry(
+        left = needleLeftPx,
+        top = needleTopPx,
+        width = needleWidthPx,
+        height = needleHeightPx,
+        pivotLocal = pivotLocal,
         pivot = pivot,
-        tip = Offset(
-            x = pivot.x + rotatedTipOffset.x,
-            y = pivot.y + rotatedTipOffset.y,
-        ),
-        pickupCenter = Offset(
-            x = pivot.x + rotatedPickupCenterOffset.x,
-            y = pivot.y + rotatedPickupCenterOffset.y,
-        ),
     )
 }
 
 internal fun isWithinNeedleSeekRegion(
     point: Offset,
     containerSize: IntSize,
-    layoutScalePx: Float,
+    densityPxPerDp: Float,
+    turntableScale: Float,
     rotationDegrees: Float,
-    tolerancePx: Float,
 ): Boolean {
-    if (containerSize.width <= 0 || containerSize.height <= 0 || layoutScalePx <= 0f || tolerancePx <= 0f) {
+    if (containerSize.width <= 0 || containerSize.height <= 0 || densityPxPerDp <= 0f) {
         return false
     }
     val geometry = playbackNeedleGeometry(
         containerSize = containerSize,
-        layoutScalePx = layoutScalePx,
+        densityPxPerDp = densityPxPerDp,
+        turntableScale = turntableScale,
         rotationDegrees = rotationDegrees,
     )
-    val pickupHitRadiusPx = max(tolerancePx, NeedlePickupHitRadiusDp * layoutScalePx)
-    return distanceToSegment(point, geometry.pivot, geometry.tip) <= tolerancePx ||
-        distanceBetween(point, geometry.pickupCenter) <= pickupHitRadiusPx
+    val localPoint = needleLocalPoint(
+        point = point,
+        geometry = geometry,
+        rotationDegrees = rotationDegrees,
+    )
+    return localPoint.x >= 0f &&
+        localPoint.x <= geometry.width &&
+        localPoint.y >= geometry.height * OriginalNeedleTouchStartRatio &&
+        localPoint.y <= geometry.height
 }
 
 internal fun needleSeekRotationFromPoint(
     point: Offset,
     containerSize: IntSize,
-    layoutScalePx: Float,
+    densityPxPerDp: Float,
+    turntableScale: Float,
 ): Float {
-    if (containerSize.width <= 0 || containerSize.height <= 0 || layoutScalePx <= 0f) {
+    if (containerSize.width <= 0 || containerSize.height <= 0 || densityPxPerDp <= 0f) {
         return NeedleRestRotationDegrees
     }
     val neutralGeometry = playbackNeedleGeometry(
         containerSize = containerSize,
-        layoutScalePx = layoutScalePx,
+        densityPxPerDp = densityPxPerDp,
+        turntableScale = turntableScale,
         rotationDegrees = 0f,
     )
-    val neutralAngle = angleDegrees(neutralGeometry.tip, neutralGeometry.pivot)
+    val neutralAngle = angleDegrees(
+        point = Offset(
+            x = neutralGeometry.left + (neutralGeometry.width / 2f),
+            y = neutralGeometry.top + (neutralGeometry.height * OriginalNeedleTouchStartRatio),
+        ),
+        center = neutralGeometry.pivot,
+    )
     val pointAngle = angleDegrees(point, neutralGeometry.pivot)
     return normalizeAngleDelta(pointAngle - neutralAngle)
         .coerceIn(NeedleRestRotationDegrees, NeedlePlaybackEndRotationDegrees)
+}
+
+internal fun needleLocalPoint(
+    point: Offset,
+    geometry: PlaybackNeedleGeometry,
+    rotationDegrees: Float,
+): Offset {
+    val unrotatedOffset = rotateOffset(
+        offset = Offset(
+            x = point.x - geometry.pivot.x,
+            y = point.y - geometry.pivot.y,
+        ),
+        rotationDegrees = -rotationDegrees,
+    )
+    return Offset(
+        x = geometry.pivotLocal.x + unrotatedOffset.x,
+        y = geometry.pivotLocal.y + unrotatedOffset.y,
+    )
 }
 
 internal fun needleSeekPositionFromRotation(
@@ -2556,29 +2678,6 @@ private fun rotateOffset(
         x = (offset.x * cos) - (offset.y * sin),
         y = (offset.x * sin) + (offset.y * cos),
     )
-}
-
-private fun distanceToSegment(
-    point: Offset,
-    start: Offset,
-    end: Offset,
-): Float {
-    val segmentX = end.x - start.x
-    val segmentY = end.y - start.y
-    val segmentLengthSquared = (segmentX * segmentX) + (segmentY * segmentY)
-    if (segmentLengthSquared <= 0f) {
-        return distanceBetween(point, start)
-    }
-    val t = (
-        ((point.x - start.x) * segmentX) +
-            ((point.y - start.y) * segmentY)
-    ) / segmentLengthSquared
-    val clampedT = t.coerceIn(0f, 1f)
-    val projection = Offset(
-        x = start.x + (segmentX * clampedT),
-        y = start.y + (segmentY * clampedT),
-    )
-    return distanceBetween(point, projection)
 }
 
 private fun distanceBetween(
