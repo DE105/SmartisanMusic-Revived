@@ -3,6 +3,7 @@ package com.smartisanos.music
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.provider.MediaStore
 import androidx.media3.common.MediaItem
 
 internal const val ExternalAudioMediaIdPrefix = "external-audio-"
@@ -38,6 +39,27 @@ internal fun ExternalAudioLaunchRequest.resolveExternalAudioArtist(context: Cont
             }
         }
     }.getOrNull()?.takeIf(String::isNotBlank)
+}
+
+internal fun ExternalAudioLaunchRequest.resolveExternalAudioAlbumId(context: Context): Long? {
+    if (uri.scheme != ContentScheme) {
+        return null
+    }
+    return runCatching {
+        context.contentResolver.query(
+            uri,
+            arrayOf(MediaStore.Audio.Media.ALBUM_ID),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            val albumIdColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID)
+            if (albumIdColumn == -1 || !cursor.moveToFirst()) {
+                return@use null
+            }
+            cursor.getLong(albumIdColumn).takeIf { it > 0L }
+        }
+    }.getOrNull()
 }
 
 private const val ContentScheme = "content"

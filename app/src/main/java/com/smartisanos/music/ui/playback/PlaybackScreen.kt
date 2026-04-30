@@ -551,7 +551,8 @@ fun PlaybackScreen(
     val albumArtwork by produceState<ImageBitmap?>(
         initialValue = null,
         key1 = state.mediaItem?.mediaId,
-        key2 = state.mediaItem?.mediaMetadata?.artworkUri,
+        key2 = state.mediaItem?.mediaMetadata?.extras
+            ?.getLong(LocalAudioLibrary.AlbumIdExtraKey),
     ) {
         value = state.mediaItem?.let { mediaItem ->
             loadEmbeddedArtwork(context, mediaItem)

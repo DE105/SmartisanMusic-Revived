@@ -62,6 +62,7 @@ import com.smartisanos.music.data.playlist.PlaylistRepository
 import com.smartisanos.music.data.settings.MusicAppSettingsStore
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.data.settings.PlaybackSettingsStore
+import com.smartisanos.music.playback.LocalAudioLibrary
 import com.smartisanos.music.playback.LocalPlaybackController
 import com.smartisanos.music.playback.ProvidePlaybackController
 import com.smartisanos.music.playback.await
@@ -90,6 +91,7 @@ import com.smartisanos.music.ui.playlist.PlaylistPickerDialog
 import com.smartisanos.music.ui.search.GlobalSearchScreen
 import com.smartisanos.music.ui.search.SearchTab
 import com.smartisanos.music.isExternalAudioLaunchItem
+import com.smartisanos.music.resolveExternalAudioAlbumId
 import com.smartisanos.music.resolveExternalAudioArtist
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -381,12 +383,14 @@ fun MusicApp(
             val request = externalAudioLaunchRequest ?: return@LaunchedEffect
             playbackVisible = true
             val controller = playbackController ?: return@LaunchedEffect
-            val artist = withContext(Dispatchers.IO) {
-                request.resolveExternalAudioArtist(context.applicationContext)
+            val (artist, albumId) = withContext(Dispatchers.IO) {
+                request.resolveExternalAudioArtist(context.applicationContext) to
+                    request.resolveExternalAudioAlbumId(context.applicationContext)
             }
             val mediaItem = request.toExternalAudioMediaItem(
                 fallbackTitle = context.getString(R.string.unknown_song_title),
                 artist = artist,
+                albumId = albumId,
             )
             controller.setMediaItem(mediaItem)
             controller.prepare()
@@ -910,6 +914,7 @@ fun MusicApp(
 private fun ExternalAudioLaunchRequest.toExternalAudioMediaItem(
     fallbackTitle: String,
     artist: String?,
+    albumId: Long?,
 ): MediaItem {
     val uriTitle = uri.lastPathSegment
         ?.substringAfterLast('/')
@@ -924,16 +929,22 @@ private fun ExternalAudioLaunchRequest.toExternalAudioMediaItem(
         ?.lowercase()
         ?.takeUnless { it.endsWith("/*") }
 
+    val extras = Bundle().apply {
+        putBoolean(ExternalAudioExtraKey, true)
+        if (albumId != null) {
+            putLong(LocalAudioLibrary.AlbumIdExtraKey, albumId)
+        }
+    }
+
     val metadataBuilder = MediaMetadata.Builder()
         .setTitle(title)
         .setDisplayTitle(title)
         .setIsPlayable(true)
         .setIsBrowsable(false)
-        .setExtras(
-            Bundle().apply {
-                putBoolean(ExternalAudioExtraKey, true)
-            },
-        )
+        .setExtras(extras)
+    if (albumId != null) {
+        metadataBuilder.setArtworkUri(LocalAudioLibrary.albumArtworkUri(albumId))
+    }
     artist?.takeIf(String::isNotBlank)?.let { externalArtist ->
         metadataBuilder
             .setArtist(externalArtist)

@@ -83,6 +83,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaBrowser
 import com.smartisanos.music.R
 import com.smartisanos.music.data.library.LibraryExclusionsStore
+import com.smartisanos.music.playback.LocalAudioLibrary
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.await
 import com.smartisanos.music.ui.components.SecondaryPageTransition
@@ -619,8 +620,12 @@ private val AlbumSummary.artworkSharedKey: String
 
 private val AlbumSummary.artworkCacheKey: String
     get() {
-        val artworkUri = representative.mediaMetadata.artworkUri?.toString().orEmpty()
-        return "$artworkSharedKey:$artworkUri:${representative.mediaId}"
+        val albumId = representative.mediaMetadata.extras
+            ?.getLong(LocalAudioLibrary.AlbumIdExtraKey)
+            ?.takeIf { it > 0L }
+            ?.toString()
+            .orEmpty()
+        return "$artworkSharedKey:$albumId:${representative.mediaId}"
     }
 
 @Composable

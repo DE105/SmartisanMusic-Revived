@@ -4,10 +4,12 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
+import android.net.Uri
 import android.util.Size
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.media3.common.MediaItem
+import com.smartisanos.music.playback.LocalAudioLibrary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -21,6 +23,7 @@ suspend fun loadArtwork(
     mediaItem: MediaItem,
 ): ImageBitmap? = withContext(Dispatchers.IO) {
     loadArtworkData(mediaItem)
+        ?: loadUiArtworkUri(context, mediaItem)
         ?: loadArtworkUri(context, mediaItem)
         ?: loadMediaThumbnail(context, mediaItem)
         ?: loadEmbeddedPicture(context, mediaItem)
@@ -31,7 +34,8 @@ suspend fun loadArtworkThumbnail(
     mediaItem: MediaItem,
     size: Size,
 ): ImageBitmap? = withContext(Dispatchers.IO) {
-    loadArtworkUriThumbnail(context, mediaItem, size)
+    loadUiArtworkUriThumbnail(context, mediaItem, size)
+        ?: loadArtworkUriThumbnail(context, mediaItem, size)
         ?: loadMediaThumbnail(context, mediaItem, size)
         ?: loadArtworkData(mediaItem, size)
         ?: loadEmbeddedPicture(context, mediaItem, size)
@@ -54,11 +58,26 @@ private fun loadArtworkData(
     }.getOrNull()
 }
 
+private fun loadUiArtworkUri(
+    context: Context,
+    mediaItem: MediaItem,
+): ImageBitmap? {
+    val artworkUri = mediaItem.uiArtworkUri() ?: return null
+    return loadArtworkUri(context, artworkUri)
+}
+
 private fun loadArtworkUri(
     context: Context,
     mediaItem: MediaItem,
 ): ImageBitmap? {
     val artworkUri = mediaItem.mediaMetadata.artworkUri ?: return null
+    return loadArtworkUri(context, artworkUri)
+}
+
+private fun loadArtworkUri(
+    context: Context,
+    artworkUri: Uri,
+): ImageBitmap? {
     return runCatching {
         context.contentResolver.openInputStream(artworkUri)?.use { stream ->
             BitmapFactory.decodeStream(stream)?.asImageBitmap()
@@ -68,17 +87,42 @@ private fun loadArtworkUri(
     }.getOrNull()
 }
 
+private fun loadUiArtworkUriThumbnail(
+    context: Context,
+    mediaItem: MediaItem,
+    size: Size,
+): ImageBitmap? {
+    val artworkUri = mediaItem.uiArtworkUri() ?: return null
+    return loadArtworkUriThumbnail(context, artworkUri, size)
+}
+
 private fun loadArtworkUriThumbnail(
     context: Context,
     mediaItem: MediaItem,
     size: Size,
 ): ImageBitmap? {
     val artworkUri = mediaItem.mediaMetadata.artworkUri ?: return null
+    return loadArtworkUriThumbnail(context, artworkUri, size)
+}
+
+private fun loadArtworkUriThumbnail(
+    context: Context,
+    artworkUri: Uri,
+    size: Size,
+): ImageBitmap? {
     return runCatching {
         context.contentResolver.loadThumbnail(artworkUri, size, null).toPreparedImageBitmap()
     }.getOrNull() ?: runCatching {
         decodeStreamSampled(context, artworkUri, size)?.toPreparedImageBitmap()
     }.getOrNull()
+}
+
+private fun MediaItem.uiArtworkUri(): Uri? {
+    val albumId = mediaMetadata.extras
+        ?.getLong(LocalAudioLibrary.AlbumIdExtraKey)
+        ?.takeIf { it > 0L }
+        ?: return null
+    return LocalAudioLibrary.albumArtworkUri(albumId)
 }
 
 private fun loadMediaThumbnail(

@@ -122,11 +122,11 @@ class LocalAudioLibrary(
                         metadataBuilder.setAlbumArtist(albumArtist)
                     }
 
+                    metadataBuilder.setExtras(extras)
+
                     if (albumId != null) {
                         metadataBuilder.setArtworkUri(albumArtworkUri(albumId))
                     }
-
-                    metadataBuilder.setExtras(extras)
 
                     if (trackNumber != null) {
                         metadataBuilder.setTrackNumber(trackNumber)
