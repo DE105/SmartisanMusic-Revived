@@ -1,12 +1,8 @@
 package com.smartisanos.music.ui.search
 
-import android.graphics.drawable.Drawable
 import androidx.activity.compose.BackHandler
-import androidx.annotation.DrawableRes
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -16,21 +12,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -49,17 +42,17 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -72,13 +65,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.core.content.ContextCompat
 import com.smartisanos.music.R
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.data.search.SearchHistoryStore
@@ -87,24 +78,22 @@ import com.smartisanos.music.playback.await
 import com.smartisanos.music.ui.album.AlbumSummary
 import com.smartisanos.music.ui.artist.ArtistSummary
 import com.smartisanos.music.ui.components.GlobalPlaybackBar
-import com.smartisanos.music.ui.components.SmartisanBlankState
-import com.smartisanos.music.ui.components.SmartisanTopBarTextButton
-import com.smartisanos.music.ui.components.SmartisanTopBarTextButtonStyle
+import com.smartisanos.music.ui.components.SmartisanDrawableBackground
 import com.smartisanos.music.ui.components.hasAudioPermission
 import com.smartisanos.music.ui.components.loadArtwork
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 private val SearchPageBackground = Color.White
 private val SearchFieldHintColor = Color(0x66000000)
 private val SearchFieldTextColor = Color(0xCC000000)
 private val SearchSectionTitleColor = Color(0x99000000)
-private val SearchDividerColor = Color(0xFFE8E8E8)
-private val SearchTabTextColor = Color(0x96000000)
-private val SearchTabSelectedTextColor = Color(0xCC000000)
+private val SearchDividerColor = Color(0xFFE9E9E9)
+private val SearchTabTextColor = Color(0x99000000)
+private val SearchTabSelectedTextColor = Color.White
 private val SearchSongTitleColor = Color(0xCC000000)
 private val SearchSongPlayingColor = Color(0xFFE64040)
-private val SearchSubtitleColor = Color(0x73000000)
+private val SearchSubtitleColor = Color(0x66000000)
+private val SearchEmptyTextColor = Color(0xFFDBDBDB)
 
 private val SearchFieldTextStyle = TextStyle(
     fontSize = 13.sp,
@@ -125,19 +114,27 @@ private val SearchSecondaryTextStyle = TextStyle(
 )
 
 private val SearchTopBarHeight = 50.dp
-private val SearchFieldHeight = 39.dp
-private val SearchCancelButtonHeight = 39.dp
-private val SearchClearButtonSize = 39.dp
+private val SearchFieldHeight = 30.dp
+private val SearchCancelButtonWidth = 50.dp
+private val SearchCancelButtonHeight = SearchFieldHeight - 1.dp
+private val SearchCancelButtonCorner = 4.dp
+private val SearchClearButtonSize = 33.dp
 private val SearchClearIconSize = 32.dp
+private val SearchTextStartPadding = 33.dp
 private val SearchHistoryTopPadding = 19.dp
 private val SearchSectionHorizontalPadding = 21.dp
 private val SearchHistoryRowSpacing = 10.dp
+private val SearchHistoryChipHeight = 30.dp
+private val SearchTabBarHeight = 48.dp
+private val SearchTabGroupHeight = 34.dp
+private val SearchTabGroupHorizontalPadding = 6.dp
 private val SearchResultRowHeight = 61.dp
-private val SearchResultArtworkFrameWidth = 64.dp
+private val SearchResultArtworkFrameWidth = 62.dp
 private val SearchResultArtworkSize = 50.dp
 private val SearchPlaybackBarReservedHeight = 67.dp
 private val SearchTopHorizontalPadding = 6.dp
-private val SearchTopVerticalPadding = 6.dp
+private val SearchNoResultTopPadding = 85.dp
+private val SearchNoResultArtworkSize = 140.dp
 
 @Composable
 fun GlobalSearchScreen(
@@ -250,7 +247,6 @@ fun GlobalSearchScreen(
         modifier = modifier
             .fillMaxSize()
             .background(SearchPageBackground)
-            .safeDrawingPadding()
             .imePadding(),
     ) {
         Column(
@@ -343,32 +339,43 @@ private fun SearchTopBar(
     onSearch: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    Row(
+    val density = LocalDensity.current
+    val topInset = with(density) {
+        WindowInsets.safeDrawing.getTop(this).toDp()
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .height(SearchTopBarHeight + topInset),
     ) {
-        SearchField(
-            value = query,
-            focusRequester = focusRequester,
-            modifier = Modifier.weight(1f),
-            onValueChange = onQueryChange,
-            onSearch = onSearch,
+        SmartisanDrawableBackground(
+            drawableRes = R.drawable.list_item,
+            modifier = Modifier.matchParentSize(),
         )
-        Text(
-            text = stringResource(R.string.cancel),
-            color = Color(0xFF666666),
-            fontSize = 15.sp,
+        Row(
             modifier = Modifier
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismiss
-                )
-                .padding(vertical = 8.dp, horizontal = 4.dp)
+                .fillMaxSize()
+                .padding(top = topInset)
+                .padding(horizontal = SearchTopHorizontalPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(SearchTopHorizontalPadding),
+        ) {
+            SearchField(
+                value = query,
+                focusRequester = focusRequester,
+                modifier = Modifier.weight(1f),
+                onValueChange = onQueryChange,
+                onSearch = onSearch,
+            )
+            SearchCancelButton(onDismiss = onDismiss)
+        }
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(SearchDividerColor),
         )
     }
 }
@@ -385,7 +392,7 @@ private fun SearchField(
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
-        textStyle = TextStyle(fontSize = 14.sp, color = Color(0xFF333333)),
+        textStyle = SearchFieldTextStyle,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { onSearch() }),
         modifier = modifier
@@ -394,29 +401,27 @@ private fun SearchField(
         decorationBox = { innerTextField ->
             val clearInteractionSource = remember { MutableInteractionSource() }
             val clearPressed by clearInteractionSource.collectIsPressedAsState()
-            Row(
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFFF0F0F0), RoundedCornerShape(SearchFieldHeight / 2))
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .fillMaxSize(),
             ) {
-                Image(
-                    painter = painterResource(R.drawable.search_icon),
-                    contentDescription = null,
-                    modifier = Modifier.padding(start = 2.dp).size(26.dp),
-                    colorFilter = ColorFilter.tint(Color(0xFF999999)),
+                SmartisanDrawableBackground(
+                    drawableRes = R.drawable.search_bar_field_bg,
+                    modifier = Modifier.matchParentSize(),
                 )
                 Box(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp),
+                        .matchParentSize()
+                        .padding(
+                            start = SearchTextStartPadding,
+                            end = if (value.isNotEmpty()) SearchClearButtonSize else 12.dp,
+                        ),
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     if (value.isEmpty()) {
                         Text(
                             text = stringResource(R.string.search_hint),
-                            style = TextStyle(fontSize = 14.sp, color = Color(0xFF999999)),
+                            style = SearchFieldTextStyle.copy(color = SearchFieldHintColor),
                         )
                     }
                     innerTextField()
@@ -425,6 +430,7 @@ private fun SearchField(
                     Box(
                         modifier = Modifier
                             .size(SearchClearButtonSize)
+                            .align(Alignment.CenterEnd)
                             .clickable(
                                 interactionSource = clearInteractionSource,
                                 indication = null,
@@ -447,17 +453,86 @@ private fun SearchField(
 }
 
 @Composable
+private fun SearchCancelButton(onDismiss: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+
+    Box(
+        modifier = Modifier
+            .width(SearchCancelButtonWidth)
+            .height(SearchCancelButtonHeight)
+            .smartisanSearchCancelBackground(pressed)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onDismiss,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = stringResource(R.string.cancel),
+            style = TextStyle(fontSize = 14.sp, color = if (pressed) Color(0xFF4E4E4E) else Color(0xFF666666)),
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
+        )
+    }
+}
+
+private fun Modifier.smartisanSearchCancelBackground(pressed: Boolean): Modifier = drawWithCache {
+    val radiusPx = SearchCancelButtonCorner.toPx()
+    val strokeWidth = 1.dp.toPx()
+    val halfStroke = strokeWidth / 2f
+    val normalBrush = Brush.verticalGradient(
+        0.0f to Color(0xFFFFFFFF),
+        0.52f to Color(0xFFF9F9F9),
+        1.0f to Color(0xFFF0F0F0),
+    )
+    val pressedBrush = Brush.verticalGradient(
+        0.0f to Color(0xFFE6E6E6),
+        1.0f to Color(0xFFF4F4F4),
+    )
+
+    onDrawBehind {
+        drawRoundRect(
+            brush = if (pressed) pressedBrush else normalBrush,
+            size = size,
+            cornerRadius = CornerRadius(radiusPx, radiusPx),
+        )
+        drawRoundRect(
+            color = if (pressed) Color(0xFFD6D6D6) else Color(0xFFDCDCDC),
+            topLeft = Offset(halfStroke, halfStroke),
+            size = Size(size.width - strokeWidth, size.height - strokeWidth),
+            cornerRadius = CornerRadius(radiusPx - halfStroke, radiusPx - halfStroke),
+            style = Stroke(strokeWidth),
+        )
+    }
+}
+
+@Composable
 private fun SearchHistoryPage(
     history: List<String>,
     onHistoryClick: (String) -> Unit,
     onClearHistory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (history.isEmpty()) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Color.White),
+        )
+        return
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(Color.White)
-            .padding(horizontal = 20.dp, vertical = 20.dp),
+            .padding(
+                start = SearchSectionHorizontalPadding,
+                top = SearchHistoryTopPadding,
+                end = 20.dp,
+            ),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -466,35 +541,31 @@ private fun SearchHistoryPage(
         ) {
             Text(
                 text = stringResource(R.string.search_history),
-                style = TextStyle(fontSize = 15.sp, color = Color(0xFF666666), fontWeight = FontWeight.Medium),
+                style = SearchSectionTitleStyle,
+                modifier = Modifier.padding(start = 7.dp),
             )
-            if (history.isNotEmpty()) {
-                Image(
-                    painter = painterResource(R.drawable.search_clear),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(24.dp) // Make this a bit larger for easier tapping
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onClearHistory
-                        )
-                        .padding(2.dp) // Optical padding for touch target
-                )
-            }
+            Image(
+                painter = painterResource(R.drawable.search_clear),
+                contentDescription = stringResource(R.string.clear_history),
+                modifier = Modifier
+                    .size(20.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onClearHistory,
+                    ),
+            )
         }
-        if (history.isNotEmpty()) {
-            FlowRow(
-                modifier = Modifier.padding(top = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                history.forEach { entry ->
-                    SearchHistoryChip(
-                        text = entry,
-                        onClick = { onHistoryClick(entry) },
-                    )
-                }
+        FlowRow(
+            modifier = Modifier.padding(top = 7.dp),
+            horizontalArrangement = Arrangement.spacedBy(SearchHistoryRowSpacing),
+            verticalArrangement = Arrangement.spacedBy(SearchHistoryRowSpacing),
+        ) {
+            history.forEach { entry ->
+                SearchHistoryChip(
+                    text = entry,
+                    onClick = { onHistoryClick(entry) },
+                )
             }
         }
     }
@@ -522,10 +593,7 @@ private fun SearchResultsPage(
             onTabChange = onTabChange,
         )
         if (!results.hasResults) {
-            SmartisanBlankState(
-                iconRes = R.drawable.blank_song,
-                title = stringResource(R.string.search_no_result),
-                subtitle = stringResource(R.string.search_no_result_subtitle),
+            SearchNoResultState(
                 modifier = Modifier.weight(1f),
             )
             return
@@ -642,32 +710,42 @@ private fun SearchTabRow(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .height(SearchTabBarHeight),
     ) {
+        SmartisanDrawableBackground(
+            drawableRes = R.drawable.list_item,
+            modifier = Modifier.matchParentSize(),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(32.dp)
-                .background(Color.White)
-                .border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(6.dp))
-                .clip(RoundedCornerShape(6.dp)),
+                .height(SearchTabGroupHeight)
+                .padding(horizontal = SearchTabGroupHorizontalPadding)
+                .align(Alignment.Center),
         ) {
             SearchTab.entries.forEachIndexed { index, tab ->
+                val interactionSource = remember { MutableInteractionSource() }
+                val pressed by interactionSource.collectIsPressedAsState()
+                val selected = tab == selectedTab
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxHeight()
-                        .background(
-                            color = if (tab == selectedTab) Color(0xFFF5F5F5) else Color.Transparent,
-                        )
+                        .height(SearchTabGroupHeight)
                         .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
+                            interactionSource = interactionSource,
                             indication = null,
                         ) {
                             onTabChange(tab)
                         },
                     contentAlignment = Alignment.Center,
                 ) {
+                    SmartisanDrawableBackground(
+                        drawableRes = searchTabBackgroundRes(
+                            index = index,
+                            selected = selected || pressed,
+                        ),
+                        modifier = Modifier.matchParentSize(),
+                    )
                     Text(
                         text = when (tab) {
                             SearchTab.All -> stringResource(R.string.search_tab_all)
@@ -677,31 +755,61 @@ private fun SearchTabRow(
                         },
                         style = TextStyle(
                             fontSize = 13.sp,
-                            color = if (tab == selectedTab) Color(0xFF333333) else Color(0xFF999999),
-                            fontWeight = if (tab == selectedTab) FontWeight.Medium else FontWeight.Normal,
+                            color = if (selected || pressed) SearchTabSelectedTextColor else SearchTabTextColor,
                         ),
-                    )
-                }
-                if (index != SearchTab.entries.lastIndex) {
-                    Spacer(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .fillMaxHeight()
-                            .background(Color(0xFFE0E0E0)),
                     )
                 }
             }
         }
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(SearchDividerColor),
+        )
+    }
+}
+
+private fun searchTabBackgroundRes(index: Int, selected: Boolean): Int {
+    return when {
+        index == 0 && selected -> R.drawable.search_tab_left_bg_down
+        index == 0 -> R.drawable.search_tab_left_bg
+        index == SearchTab.entries.lastIndex && selected -> R.drawable.search_tab_right_bg_down
+        index == SearchTab.entries.lastIndex -> R.drawable.search_tab_right_bg
+        selected -> R.drawable.search_tab_middle_bg_down
+        else -> R.drawable.search_tab_middle_bg
     }
 }
 
 @Composable
 private fun SearchSectionHeader(title: Int) {
-    Text(
-        text = stringResource(title),
-        style = TextStyle(fontSize = 14.sp, color = Color(0xFF999999), fontWeight = FontWeight.Medium),
-        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),
-    )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(SearchTabBarHeight),
+    ) {
+        SmartisanDrawableBackground(
+            drawableRes = R.drawable.list_item,
+            modifier = Modifier.matchParentSize(),
+        )
+        Text(
+            text = stringResource(title),
+            style = TextStyle(fontSize = 14.sp, color = SearchSectionTitleColor),
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 16.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(SearchDividerColor),
+        )
+    }
 }
 
 @Composable
@@ -730,58 +838,68 @@ private fun SearchEntityRow(
     onClick: () -> Unit,
     titleColor: Color = SearchSongTitleColor,
 ) {
-    Row(
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(SearchResultRowHeight)
-            .background(Color.White)
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
+                interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
-            )
-            .padding(end = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            ),
     ) {
-        Box(
+        SmartisanDrawableBackground(
+            drawableRes = if (pressed) R.drawable.list_item_shadow else R.drawable.list_item_bg,
+            modifier = Modifier.matchParentSize(),
+        )
+        Row(
             modifier = Modifier
-                .width(SearchResultArtworkFrameWidth)
-                .wrapContentHeight()
-                .padding(start = 16.dp),
-            contentAlignment = Alignment.CenterStart,
+                .fillMaxSize()
+                .padding(end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            SearchArtwork(
-                mediaItem = representative,
-                modifier = Modifier.size(SearchResultArtworkSize),
-            )
-        }
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 4.dp),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                text = title,
-                style = SearchPrimaryTextStyle.copy(color = titleColor),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = subtitle,
-                style = SearchSecondaryTextStyle,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 2.dp),
-            )
+            Box(
+                modifier = Modifier
+                    .width(SearchResultArtworkFrameWidth)
+                    .height(SearchResultRowHeight)
+                    .padding(start = 12.dp, top = 5.dp, bottom = 5.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                SearchArtwork(
+                    mediaItem = representative,
+                    modifier = Modifier.size(SearchResultArtworkSize),
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 12.dp),
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = title,
+                    style = SearchPrimaryTextStyle.copy(color = titleColor),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = subtitle,
+                    style = SearchSecondaryTextStyle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
         }
     }
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp)
-            .height(0.5.dp)
-            .background(Color(0xFFE8E8E8)),
+            .height(1.dp)
+            .background(SearchDividerColor),
     )
 }
 
@@ -790,21 +908,57 @@ private fun SearchHistoryChip(
     text: String,
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+
     Box(
         modifier = Modifier
-            .background(Color(0xFFF5F5F5), CircleShape)
-            .clip(CircleShape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 6.dp)
+            .height(SearchHistoryChipHeight)
+            .defaultMinSize(minWidth = 48.dp)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
     ) {
+        SmartisanDrawableBackground(
+            drawableRes = if (pressed) R.drawable.search_badge_grey_p else R.drawable.search_badge_grey,
+            modifier = Modifier.matchParentSize(),
+        )
         Text(
             text = text,
             style = TextStyle(
-                color = Color(0xFF666666),
-                fontSize = 13.sp,
+                color = Color(0x66000000),
+                fontSize = 13.5.sp,
             ),
+            modifier = Modifier.padding(horizontal = 14.dp),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun SearchNoResultState(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(top = SearchNoResultTopPadding),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Image(
+            painter = painterResource(R.drawable.blank_search),
+            contentDescription = null,
+            modifier = Modifier.size(SearchNoResultArtworkSize),
+        )
+        Text(
+            text = stringResource(R.string.search_no_result),
+            style = TextStyle(fontSize = 23.sp, color = SearchEmptyTextColor),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 25.dp),
         )
     }
 }
@@ -820,23 +974,36 @@ private fun SearchArtwork(
     }
 
     if (artwork != null) {
-        Image(
-            bitmap = artwork!!,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = modifier.clip(RoundedCornerShape(4.dp)),
-        )
+        Box(modifier = modifier) {
+            Image(
+                bitmap = artwork!!,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
+            Image(
+                painter = painterResource(R.drawable.mask_albumcover_list),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
     } else {
         Box(
-            modifier = modifier
-                .clip(RoundedCornerShape(4.dp))
-                .background(Color(0xFFF0F0F0)),
+            modifier = modifier,
             contentAlignment = Alignment.Center,
         ) {
             Image(
-                painter = painterResource(R.drawable.blank_album),
+                painter = painterResource(R.drawable.noalbumcover_120),
                 contentDescription = null,
-                modifier = Modifier.size(28.dp),
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
+            Image(
+                painter = painterResource(R.drawable.mask_albumcover_list),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier.matchParentSize(),
             )
         }
     }

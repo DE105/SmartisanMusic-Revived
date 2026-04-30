@@ -450,7 +450,7 @@ fun SmartisanTopBarIconButton(
 }
 
 @Composable
-private fun SmartisanDrawableBackground(
+fun SmartisanDrawableBackground(
     @DrawableRes drawableRes: Int,
     modifier: Modifier = Modifier,
 ) {
