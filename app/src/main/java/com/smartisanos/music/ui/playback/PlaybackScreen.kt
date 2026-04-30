@@ -790,6 +790,7 @@ fun PlaybackScreen(
             WindowInsets.safeDrawing.getBottom(this).toDp()
         }
         val turntableWidth = maxWidth
+        val bottomControlsWidth = minOf(maxWidth - 8.dp, OriginalTurntableBaseWidthDp.dp)
         val scale = turntableWidth.value / OriginalTurntableBaseWidthDp
 
         Column(
@@ -951,7 +952,7 @@ fun PlaybackScreen(
             }
             Spacer(modifier = Modifier.weight(1f))
             PlaybackBottomControls(
-                width = turntableWidth,
+                width = bottomControlsWidth,
                 bottomInset = bottomInset,
                 state = state,
                 onRepeatClick = {
@@ -1828,22 +1829,24 @@ private fun PlaybackCoverPage(
                                 }
                             }
                             CoverDragMode.NeedleSeek -> {
-                                down.consume()
+                                val initialPosition = down.position
+                                var maxMoveDistance = 0f
                                 var needleRotationDegrees = latestNeedleRotation
                                     .coerceIn(NeedleRestRotationDegrees, NeedlePlaybackEndRotationDegrees)
                                 var needlePositionMs = needleSeekPositionFromRotation(
                                     rotationDegrees = needleRotationDegrees,
                                     durationMs = latestDurationMs,
                                 )
-                                val needlePivot = playbackNeedleGeometry(
+                                var needleSeekHadPlayablePosition = needlePositionMs != null
+                                var needlePivot = playbackNeedleGeometry(
                                     containerSize = size,
                                     densityPxPerDp = densityPxPerDp,
                                     turntableScale = scale,
                                     rotationDegrees = needleRotationDegrees,
                                 ).pivot
-                                var lastNeedleAngleDegrees = angleDegrees(down.position, needlePivot)
-                                latestNeedleSeekStart(needleRotationDegrees, needlePositionMs)
+                                var lastNeedleAngleDegrees = angleDegrees(initialPosition, needlePivot)
                                 val pointerId = down.id
+                                var needleSeekStarted = false
                                 var cancelled = true
                                 while (true) {
                                     val event = awaitPointerEvent()
@@ -1851,11 +1854,37 @@ private fun PlaybackCoverPage(
                                     if (change == null) {
                                         break
                                     }
+                                    maxMoveDistance = max(
+                                        maxMoveDistance,
+                                        distanceBetween(initialPosition, change.position),
+                                    )
                                     if (!change.pressed) {
-                                        latestNeedleSeekEnd(needleRotationDegrees, needlePositionMs)
-                                        change.consume()
+                                        if (needleSeekStarted) {
+                                            if (needleSeekHadPlayablePosition || needlePositionMs != null) {
+                                                latestNeedleSeekEnd(needleRotationDegrees, needlePositionMs)
+                                            } else {
+                                                latestNeedleSeekCancel()
+                                            }
+                                            change.consume()
+                                        }
                                         cancelled = false
                                         break
+                                    }
+                                    if (!needleSeekStarted) {
+                                        if (maxMoveDistance <= tapTouchSlop) {
+                                            continue
+                                        }
+                                        needleSeekStarted = true
+                                        needlePivot = playbackNeedleGeometry(
+                                            containerSize = size,
+                                            densityPxPerDp = densityPxPerDp,
+                                            turntableScale = scale,
+                                            rotationDegrees = needleRotationDegrees,
+                                        ).pivot
+                                        lastNeedleAngleDegrees = angleDegrees(change.position, needlePivot)
+                                        latestNeedleSeekStart(needleRotationDegrees, needlePositionMs)
+                                        change.consume()
+                                        continue
                                     }
 
                                     val currentNeedleAngleDegrees = angleDegrees(change.position, needlePivot)
@@ -1875,10 +1904,13 @@ private fun PlaybackCoverPage(
                                         rotationDegrees = needleRotationDegrees,
                                         durationMs = latestDurationMs,
                                     )
+                                    if (needlePositionMs != null) {
+                                        needleSeekHadPlayablePosition = true
+                                    }
                                     latestNeedleSeekPositionChange(needleRotationDegrees, needlePositionMs)
                                     change.consume()
                                 }
-                                if (cancelled) {
+                                if (cancelled && needleSeekStarted) {
                                     latestNeedleSeekCancel()
                                 }
                             }
