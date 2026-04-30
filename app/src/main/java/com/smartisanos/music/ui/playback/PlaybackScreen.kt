@@ -129,6 +129,7 @@ import com.smartisanos.music.ui.components.SmartisanTitleBarSurfaceStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -155,10 +156,24 @@ private val PlaybackPanelBorder = Color(0xFFE8E8E8)
 private val PlaybackPanelBottomEdge = Color(0xFFFDFDFD)
 private val PlaybackPanelShadow = Color(0x14000000)
 
-private const val ScratchCycleDurationMs = 3_500f
+private const val ScratchCycleDurationMs = 1_800f
 private const val DiscRotationDegrees = 360f
 private const val ScratchHubDeadZoneRatio = 0.06f
+private const val ScratchMinMotionDegrees = 0.18f
+private const val ScratchMaxDeltaTimeMs = 72L
 private const val ScratchMaxAngleStepDegrees = 54f
+private const val ScratchVelocityMaxDegreesPerSecond = 1_000f
+private const val ScratchFlingMinVelocityDegreesPerSecond = 160f
+private const val ScratchFlingReleaseTimeoutMs = 120L
+private const val ScratchFlingVelocitySampleWindowMs = 120L
+private const val ScratchFlingMinVelocitySampleMs = 16L
+private const val ScratchFlingDurationMultiplier = 1.5f
+private const val ScratchFlingPlayingRewindDurationScale = 1.2f
+private const val ScratchFlingFrameDivisor = 1_700f
+private const val ScratchFlingReadyFraction = 0.7f
+private const val ScratchPixelFlingDivisor = 40f
+private const val ScratchPlaybackVelocityDegreesPerSecond =
+    DiscRotationDegrees * 1_000f / ScratchCycleDurationMs
 private const val CoverPreviewTimeoutMs = 260L
 private const val CoverPreviewSettleToleranceMs = 24L
 private const val NeedleSeekSettleHoldTimeoutMs = 900L
@@ -290,6 +305,7 @@ fun PlaybackScreen(
     var coverPageState by remember(state.mediaItem?.mediaId) {
         mutableStateOf(PlaybackCoverPageState())
     }
+    var scratchFlingJob by remember { mutableStateOf<Job?>(null) }
     val sleepTimerState by PlaybackSleepTimer.state.collectAsStateWithLifecycle()
 
     fun clearPendingDeleteTarget() {
@@ -421,6 +437,8 @@ fun PlaybackScreen(
     }
 
     fun resetCoverPageInteraction(resumePlayback: Boolean) {
+        scratchFlingJob?.cancel()
+        scratchFlingJob = null
         val shouldResumePlayback = resumePlayback && coverPageState.resumePlaybackAfterDrag
         coverPageState = PlaybackCoverPageState()
         if (shouldResumePlayback) {
@@ -428,6 +446,106 @@ fun PlaybackScreen(
         }
         controller?.setScratchSeekModeEnabled(false)
         scratchSoundController.stop()
+    }
+
+    fun finishDiscScratch(
+        positionMs: Long,
+        resumePlaybackAfterDrag: Boolean,
+    ) {
+        coverPageState = coverPageState.copy(
+            dragMode = CoverDragMode.None,
+            previewPositionMs = positionMs,
+            resumePlaybackAfterDrag = false,
+            needlePreviewRotationDegrees = null,
+            needleSettlingPositionMs = null,
+            needleParkedOutside = false,
+        )
+        controller?.seekTo(positionMs)
+        if (resumePlaybackAfterDrag) {
+            controller?.play()
+        }
+        controller?.setScratchSeekModeEnabled(false)
+        scratchSoundController.stop()
+    }
+
+    fun launchDiscScratchFling(
+        startPositionMs: Long,
+        initialVelocityDegreesPerSecond: Float,
+        resumePlaybackAfterDrag: Boolean,
+        durationMs: Long,
+    ) {
+        scratchFlingJob?.cancel()
+        scratchFlingJob = null
+        val clampedVelocity = initialVelocityDegreesPerSecond
+            .coerceIn(-ScratchVelocityMaxDegreesPerSecond, ScratchVelocityMaxDegreesPerSecond)
+        if (abs(clampedVelocity) < ScratchFlingMinVelocityDegreesPerSecond || durationMs <= 0L) {
+            finishDiscScratch(startPositionMs, resumePlaybackAfterDrag)
+            return
+        }
+
+        val flingDurationMs = scratchFlingDurationMs(
+            velocityDegreesPerSecond = clampedVelocity,
+            resumePlaybackAfterDrag = resumePlaybackAfterDrag,
+        )
+        val velocityKeyframes = scratchFlingVelocityKeyframes(
+            velocityDegreesPerSecond = clampedVelocity,
+            resumePlaybackAfterDrag = resumePlaybackAfterDrag,
+        )
+        coverPageState = coverPageState.copy(
+            dragMode = CoverDragMode.DiscScratch,
+            previewPositionMs = startPositionMs,
+            resumePlaybackAfterDrag = resumePlaybackAfterDrag,
+            needlePreviewRotationDegrees = null,
+            needleSettlingPositionMs = null,
+            needleParkedOutside = false,
+        )
+        scratchFlingJob = scope.launch {
+            var positionMs = startPositionMs.coerceIn(0L, durationMs)
+            var previousFrameNanos = Long.MIN_VALUE
+            var previousVelocity = velocityKeyframes.first()
+            var elapsedMs = 0f
+            var readyToEndHandled = false
+            while (isActive && elapsedMs < flingDurationMs) {
+                val frameNanos = withFrameNanos { it }
+                if (previousFrameNanos == Long.MIN_VALUE) {
+                    previousFrameNanos = frameNanos
+                    continue
+                }
+                val frameDeltaMs = ((frameNanos - previousFrameNanos) / 1_000_000f)
+                    .coerceIn(1f, ScratchMaxDeltaTimeMs.toFloat())
+                previousFrameNanos = frameNanos
+                elapsedMs = (elapsedMs + frameDeltaMs).coerceAtMost(flingDurationMs.toFloat())
+
+                val currentVelocity = scratchFlingVelocityAt(
+                    keyframes = velocityKeyframes,
+                    elapsedMs = elapsedMs,
+                    durationMs = flingDurationMs,
+                )
+                val deltaAngle = ((previousVelocity + currentVelocity) * frameDeltaMs) /
+                    ScratchFlingFrameDivisor
+                previousVelocity = currentVelocity
+
+                if (abs(deltaAngle) >= ScratchMinMotionDegrees) {
+                    val targetPosition = scratchPositionAfterAngle(
+                        positionMs = positionMs,
+                        deltaAngleDegrees = deltaAngle,
+                        durationMs = durationMs,
+                    )
+                    scratchSoundController.onScratchMotion(targetPosition, deltaAngle)
+                    if (targetPosition != positionMs) {
+                        positionMs = targetPosition
+                        coverPageState = coverPageState.copy(previewPositionMs = positionMs)
+                    }
+                }
+
+                if (!readyToEndHandled && elapsedMs > flingDurationMs * ScratchFlingReadyFraction) {
+                    controller?.seekTo(positionMs)
+                    readyToEndHandled = true
+                }
+            }
+            finishDiscScratch(positionMs, resumePlaybackAfterDrag)
+            scratchFlingJob = null
+        }
     }
 
     fun setVisualPage(targetPage: PlaybackVisualPage) {
@@ -451,6 +569,7 @@ fun PlaybackScreen(
 
     DisposableEffect(scratchSoundController) {
         onDispose {
+            scratchFlingJob?.cancel()
             scratchSoundController.release()
         }
     }
@@ -652,6 +771,9 @@ fun PlaybackScreen(
     }
 
     LaunchedEffect(scratchSourceUri) {
+        scratchFlingJob?.cancel()
+        scratchFlingJob = null
+        scratchSoundController.stop()
         scratchSoundController.prepareSource(scratchSourceUri)
     }
 
@@ -732,7 +854,10 @@ fun PlaybackScreen(
                         keepLyricsScreenAwake = !keepLyricsScreenAwake
                     },
                     onDiscScratchStart = {
-                        val resumePlaybackAfterDrag = state.isPlaying
+                        scratchFlingJob?.cancel()
+                        scratchFlingJob = null
+                        val resumePlaybackAfterDrag = state.isPlaying ||
+                            coverPageState.resumePlaybackAfterDrag
                         coverPageState = coverPageState.copy(
                             dragMode = CoverDragMode.DiscScratch,
                             previewPositionMs = livePositionMs,
@@ -758,22 +883,14 @@ fun PlaybackScreen(
                             previewPositionMs = positionMs,
                         )
                     },
-                    onDiscScratchEnd = { positionMs ->
+                    onDiscScratchEnd = { positionMs, flingVelocityDegreesPerSecond ->
                         val resumePlaybackAfterDrag = coverPageState.resumePlaybackAfterDrag
-                        coverPageState = coverPageState.copy(
-                            dragMode = CoverDragMode.None,
-                            previewPositionMs = positionMs,
-                            resumePlaybackAfterDrag = false,
-                            needlePreviewRotationDegrees = null,
-                            needleSettlingPositionMs = null,
-                            needleParkedOutside = false,
+                        launchDiscScratchFling(
+                            startPositionMs = positionMs,
+                            initialVelocityDegreesPerSecond = flingVelocityDegreesPerSecond,
+                            resumePlaybackAfterDrag = resumePlaybackAfterDrag,
+                            durationMs = durationMs,
                         )
-                        controller?.seekTo(positionMs)
-                        if (resumePlaybackAfterDrag) {
-                            controller?.play()
-                        }
-                        controller?.setScratchSeekModeEnabled(false)
-                        scratchSoundController.stop()
                     },
                     onDiscScratchCancel = {
                         resetCoverPageInteraction(resumePlayback = true)
@@ -1321,7 +1438,7 @@ private fun PlaybackVisualStage(
     onDiscScratchStart: () -> Unit,
     onDiscScratchMotion: (Long, Float) -> Unit,
     onDiscScratchPositionChange: (Long, Float) -> Unit,
-    onDiscScratchEnd: (Long) -> Unit,
+    onDiscScratchEnd: (Long, Float) -> Unit,
     onDiscScratchCancel: () -> Unit,
     onNeedleSeekStart: (Float, Long?) -> Unit,
     onNeedleSeekPositionChange: (Float, Long?) -> Unit,
@@ -1442,7 +1559,7 @@ private fun PlaybackCoverPage(
     onDiscScratchStart: () -> Unit,
     onDiscScratchMotion: (Long, Float) -> Unit,
     onDiscScratchPositionChange: (Long, Float) -> Unit,
-    onDiscScratchEnd: (Long) -> Unit,
+    onDiscScratchEnd: (Long, Float) -> Unit,
     onDiscScratchCancel: () -> Unit,
     onNeedleSeekStart: (Float, Long?) -> Unit,
     onNeedleSeekPositionChange: (Float, Long?) -> Unit,
@@ -1593,6 +1710,10 @@ private fun PlaybackCoverPage(
                                 var maxMoveDistance = 0f
                                 var scratchPositionMs = 0L
                                 var lastAngleDegrees = angleDegrees(initialPosition, center)
+                                var lastMotionUptimeMs = down.uptimeMillis
+                                var lastAngularVelocityDegreesPerSecond = 0f
+                                var lastScratchDirection = 0
+                                val scratchMotionSamples = ArrayDeque<ScratchMotionSample>()
                                 val pointerId = down.id
                                 var scratchStarted = false
                                 var cancelled = true
@@ -1609,7 +1730,21 @@ private fun PlaybackCoverPage(
                                     )
                                     if (!change.pressed) {
                                         if (scratchStarted) {
-                                            latestDiscScratchEnd(scratchPositionMs)
+                                            latestDiscScratchEnd(
+                                                scratchPositionMs,
+                                                scratchReleaseVelocityDegreesPerSecond(
+                                                    angularVelocityDegreesPerSecond =
+                                                        lastAngularVelocityDegreesPerSecond,
+                                                    pixelFlingVelocityDegreesPerSecond =
+                                                        scratchPixelFlingVelocityDegreesPerSecond(
+                                                            samples = scratchMotionSamples,
+                                                            releasePosition = change.position,
+                                                            releaseUptimeMs = change.uptimeMillis,
+                                                        ),
+                                                    releaseDelayMs = change.uptimeMillis - lastMotionUptimeMs,
+                                                    directionHint = lastScratchDirection,
+                                                ),
+                                            )
                                             change.consume()
                                         } else if (
                                             isDiscTapWithinSlop(
@@ -1636,6 +1771,15 @@ private fun PlaybackCoverPage(
                                             durationMs = latestDurationMs,
                                         )
                                         lastAngleDegrees = angleDegrees(change.position, center)
+                                        lastMotionUptimeMs = change.uptimeMillis
+                                        lastAngularVelocityDegreesPerSecond = 0f
+                                        lastScratchDirection = 0
+                                        scratchMotionSamples.clear()
+                                        recordScratchMotionSample(
+                                            samples = scratchMotionSamples,
+                                            position = change.position,
+                                            uptimeMs = change.uptimeMillis,
+                                        )
                                         latestDiscScratchStart()
                                         latestDiscScratchPositionChange(scratchPositionMs, 0f)
                                         change.consume()
@@ -1649,10 +1793,29 @@ private fun PlaybackCoverPage(
                                             ScratchMaxAngleStepDegrees,
                                         )
                                     lastAngleDegrees = currentAngle
+                                    val deltaTimeMs = (change.uptimeMillis - lastMotionUptimeMs)
+                                        .coerceAtLeast(1L)
+                                    lastAngularVelocityDegreesPerSecond = (
+                                        deltaAngle * 1_000f / deltaTimeMs.toFloat()
+                                    ).coerceIn(
+                                        -ScratchVelocityMaxDegreesPerSecond,
+                                        ScratchVelocityMaxDegreesPerSecond,
+                                    )
+                                    if (deltaAngle != 0f) {
+                                        lastScratchDirection = if (deltaAngle < 0f) -1 else 1
+                                    }
+                                    lastMotionUptimeMs = change.uptimeMillis
+                                    recordScratchMotionSample(
+                                        samples = scratchMotionSamples,
+                                        position = change.position,
+                                        uptimeMs = change.uptimeMillis,
+                                    )
 
-                                    val targetPosition = (
-                                        scratchPositionMs + (deltaAngle / 360f) * ScratchCycleDurationMs
-                                    ).roundToLong().coerceIn(0L, latestDurationMs)
+                                    val targetPosition = scratchPositionAfterAngle(
+                                        positionMs = scratchPositionMs,
+                                        deltaAngleDegrees = deltaAngle,
+                                        durationMs = latestDurationMs,
+                                    )
                                     latestDiscScratchMotion(targetPosition, deltaAngle)
                                     if (targetPosition != scratchPositionMs) {
                                         scratchPositionMs = targetPosition
@@ -2516,6 +2679,136 @@ internal fun scratchStartPosition(
     positionMs: Long,
     durationMs: Long,
 ): Long = positionMs.coerceIn(0L, durationMs)
+
+private fun scratchReleaseVelocityDegreesPerSecond(
+    angularVelocityDegreesPerSecond: Float,
+    pixelFlingVelocityDegreesPerSecond: Float,
+    releaseDelayMs: Long,
+    directionHint: Int,
+): Float {
+    val recentAngularVelocity = if (releaseDelayMs <= ScratchFlingReleaseTimeoutMs) {
+        angularVelocityDegreesPerSecond
+    } else {
+        0f
+    }
+    val direction = when {
+        recentAngularVelocity < 0f -> -1
+        recentAngularVelocity > 0f -> 1
+        directionHint < 0 -> -1
+        directionHint > 0 -> 1
+        else -> 0
+    }
+    if (direction == 0) {
+        return 0f
+    }
+    val blendedVelocity = (
+        abs(recentAngularVelocity) +
+            pixelFlingVelocityDegreesPerSecond.coerceAtLeast(0f)
+    ) / 2f
+    if (blendedVelocity < ScratchFlingMinVelocityDegreesPerSecond) {
+        return 0f
+    }
+    val signedVelocity = blendedVelocity * direction
+    return signedVelocity.coerceIn(
+        -ScratchVelocityMaxDegreesPerSecond,
+        ScratchVelocityMaxDegreesPerSecond,
+    )
+}
+
+private data class ScratchMotionSample(
+    val position: Offset,
+    val uptimeMs: Long,
+)
+
+private fun recordScratchMotionSample(
+    samples: ArrayDeque<ScratchMotionSample>,
+    position: Offset,
+    uptimeMs: Long,
+) {
+    samples.addLast(ScratchMotionSample(position, uptimeMs))
+    while (
+        samples.size > 2 &&
+        uptimeMs - samples.first().uptimeMs > ScratchFlingVelocitySampleWindowMs
+    ) {
+        samples.removeFirst()
+    }
+}
+
+private fun scratchPixelFlingVelocityDegreesPerSecond(
+    samples: ArrayDeque<ScratchMotionSample>,
+    releasePosition: Offset,
+    releaseUptimeMs: Long,
+): Float {
+    val sample = samples.firstOrNull {
+        val ageMs = releaseUptimeMs - it.uptimeMs
+        ageMs in ScratchFlingMinVelocitySampleMs..ScratchFlingVelocitySampleWindowMs
+    } ?: samples.lastOrNull {
+        releaseUptimeMs - it.uptimeMs >= ScratchFlingMinVelocitySampleMs
+    } ?: return 0f
+
+    val deltaTimeMs = (releaseUptimeMs - sample.uptimeMs).coerceAtLeast(1L).toFloat()
+    val velocityX = (releasePosition.x - sample.position.x) * 1_000f / deltaTimeMs
+    val velocityY = (releasePosition.y - sample.position.y) * 1_000f / deltaTimeMs
+    return ((abs(velocityX) + abs(velocityY)) / ScratchPixelFlingDivisor)
+        .coerceIn(0f, ScratchVelocityMaxDegreesPerSecond)
+}
+
+private fun scratchFlingDurationMs(
+    velocityDegreesPerSecond: Float,
+    resumePlaybackAfterDrag: Boolean,
+): Long {
+    var duration = abs(velocityDegreesPerSecond) * ScratchFlingDurationMultiplier
+    if (velocityDegreesPerSecond < 0f && resumePlaybackAfterDrag) {
+        duration *= ScratchFlingPlayingRewindDurationScale
+    }
+    return duration.roundToLong().coerceAtLeast(1L)
+}
+
+private fun scratchFlingVelocityKeyframes(
+    velocityDegreesPerSecond: Float,
+    resumePlaybackAfterDrag: Boolean,
+): FloatArray {
+    return when {
+        velocityDegreesPerSecond < 0f && resumePlaybackAfterDrag -> floatArrayOf(
+            velocityDegreesPerSecond,
+            (2f * velocityDegreesPerSecond) / 3f,
+            velocityDegreesPerSecond / 3f,
+            0f,
+            -velocityDegreesPerSecond * 0.2f,
+        )
+        velocityDegreesPerSecond < 0f -> floatArrayOf(velocityDegreesPerSecond, 0f)
+        else -> floatArrayOf(velocityDegreesPerSecond, ScratchPlaybackVelocityDegreesPerSecond)
+    }
+}
+
+private fun scratchFlingVelocityAt(
+    keyframes: FloatArray,
+    elapsedMs: Float,
+    durationMs: Long,
+): Float {
+    if (keyframes.isEmpty()) {
+        return 0f
+    }
+    if (keyframes.size == 1 || durationMs <= 0L) {
+        return keyframes.last()
+    }
+    val scaledFraction = (elapsedMs / durationMs.toFloat())
+        .coerceIn(0f, 1f) * (keyframes.size - 1)
+    val startIndex = scaledFraction.toInt().coerceAtMost(keyframes.size - 2)
+    val segmentFraction = scaledFraction - startIndex
+    return keyframes[startIndex] +
+        ((keyframes[startIndex + 1] - keyframes[startIndex]) * segmentFraction)
+}
+
+private fun scratchPositionAfterAngle(
+    positionMs: Long,
+    deltaAngleDegrees: Float,
+    durationMs: Long,
+): Long {
+    return (
+        positionMs + (deltaAngleDegrees / DiscRotationDegrees) * ScratchCycleDurationMs
+    ).roundToLong().coerceIn(0L, durationMs)
+}
 
 internal data class PlaybackNeedleGeometry(
     val left: Float,

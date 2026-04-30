@@ -18,7 +18,7 @@ import kotlin.concurrent.withLock
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-private const val ScratchPlaybackCycleMs = 3_500f
+private const val ScratchPlaybackCycleMs = 1_800f
 private const val ScratchMinMotionDegrees = 0.18f
 private const val ScratchIdleTimeoutMs = 110L
 private const val ScratchDecodeTimeoutUs = 10_000L
