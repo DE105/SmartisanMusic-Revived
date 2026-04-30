@@ -5,6 +5,7 @@
 
 .DS_Store
 Thumbs.db
+AGENTS.md
 
 /build
 /captures
@@ -19,7 +20,3 @@ Thumbs.db
 
 # Reverse engineering workspace
 /reverse/*
-!/reverse/apk/
-/reverse/apk/*
-!/reverse/apk/音乐_6.8.0.apk
-!/reverse/音乐_6.8.0-逆向整理与复刻规划.md
