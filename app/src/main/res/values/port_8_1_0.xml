@@ -40,6 +40,8 @@
     <id name="item_summary" />
     <id name="item_title" />
     <id name="legacy_album_artwork_request" />
+    <id name="legacy_folder_row_height_animator" />
+    <id name="legacy_folder_row_force_zero_height" />
     <id name="main_quickbar" />
     <id name="iv_right" />
     <id name="iv_right_view" />
@@ -56,6 +58,7 @@
     <id name="left_btn" />
     <id name="listview_item_line_one" />
     <id name="listview_item_line_two" />
+    <id name="ll_bright" />
     <id name="ll_group_button_container" />
     <id name="ll_title" />
     <id name="mid_container" />

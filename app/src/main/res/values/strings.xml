@@ -71,9 +71,15 @@
     <string name="listview_header_tile">平铺</string>
     <string name="tab_local_search">搜索</string>
     <string name="library_refresh">重扫</string>
+    <string name="library_rescan_full">重新扫描媒体库</string>
     <string name="library_refreshing">扫描中</string>
     <string name="library_refresh_success">媒体库已刷新</string>
     <string name="library_refresh_failed">媒体库刷新失败</string>
+    <string name="folder_count">%1$d 个文件夹</string>
+    <string name="dialog_remove_song_by_dor">确认要删除选中的文件夹?</string>
+    <string name="hiden_dir">已隐藏</string>
+    <string name="shown_dir">已显示</string>
+    <string name="hide_dir_content_description">隐藏显示</string>
     <string name="search_hint">搜索关键字</string>
     <string name="clear_search_text">清空搜索内容</string>
     <string name="search_history">搜索历史</string>

@@ -25,12 +25,11 @@ import android.widget.ImageView
 import android.widget.ListView
 import android.widget.RelativeLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.DrawableRes
-import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,6 +66,7 @@ import androidx.compose.ui.zIndex
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.session.SessionResult
 import com.smartisanos.music.ExternalAudioExtraKey
 import com.smartisanos.music.ExternalAudioLaunchRequest
 import com.smartisanos.music.ExternalAudioMediaIdPrefix
@@ -85,6 +85,7 @@ import com.smartisanos.music.playback.LocalPlaybackController
 import com.smartisanos.music.playback.ProvidePlaybackController
 import com.smartisanos.music.playback.await
 import com.smartisanos.music.playback.invalidateLibrary
+import com.smartisanos.music.playback.refreshLibrary
 import com.smartisanos.music.playback.removeMediaItemsByMediaIds
 import com.smartisanos.music.resolveExternalAudioAlbumId
 import com.smartisanos.music.resolveExternalAudioArtist
@@ -100,7 +101,6 @@ import kotlinx.coroutines.withContext
 import java.text.Normalizer
 import java.util.Locale
 import smartisanos.widget.ActionButtonGroup
-import smartisanos.widget.ListContentItemText
 import smartisanos.widget.TitleBar
 import smartisanos.widget.letters.QuickBarEx
 import smartisanos.widget.tabswitcher.TabSwitcher
@@ -148,7 +148,6 @@ private fun LegacyPortMainShellContent(
     val favoriteIds by favoriteRepository.observeFavoriteIds().collectAsState(initial = emptySet())
     val libraryExclusions by libraryExclusionsStore.exclusions.collectAsState(initial = LibraryExclusions())
     val playbackSettings by playbackSettingsStore.settings.collectAsState(initial = PlaybackSettings())
-    val legacyLibrary = rememberLegacyLibraryMediaState()
     var playbackVisible by remember { mutableStateOf(false) }
     var currentDestination by remember { mutableStateOf(MusicDestination.Songs) }
     var playlistAddModeActive by remember { mutableStateOf(false) }
@@ -161,6 +160,8 @@ private fun LegacyPortMainShellContent(
     var selectedAlbumTitle by remember { mutableStateOf<String?>(null) }
     var artistAlbumViewMode by remember { mutableStateOf(AlbumViewMode.List) }
     var selectedArtistTarget by remember { mutableStateOf<LegacyArtistTarget?>(null) }
+    var libraryRefreshVersion by remember { mutableStateOf(0) }
+    var libraryRefreshing by remember { mutableStateOf(false) }
     var showSongDeleteConfirm by remember { mutableStateOf(false) }
     var pendingSystemDeleteSongIds by remember { mutableStateOf(emptySet<String>()) }
     var snapshot by remember(controller) {
@@ -171,6 +172,7 @@ private fun LegacyPortMainShellContent(
             ),
         )
     }
+    val legacyLibrary = rememberLegacyLibraryMediaState(libraryRefreshVersion)
     val artworkBitmap by produceState<Bitmap?>(initialValue = null, snapshot.mediaItem?.mediaId) {
         value = snapshot.mediaItem?.let { mediaItem ->
             loadLegacyArtworkBitmap(context.applicationContext, mediaItem)
@@ -214,6 +216,38 @@ private fun LegacyPortMainShellContent(
             runCatching {
                 controller?.invalidateLibrary()?.await(context)
             }
+            libraryRefreshVersion += 1
+        }
+    }
+
+    fun reclaimHiddenMediaIds(mediaIds: Set<String>) {
+        if (mediaIds.isEmpty()) {
+            return
+        }
+        controller.removeMediaItemsByMediaIds(mediaIds)
+    }
+
+    fun refreshLegacyLibrary() {
+        if (libraryRefreshing) {
+            return
+        }
+        val playbackController = controller
+        if (playbackController == null) {
+            Toast.makeText(context, R.string.library_refresh_failed, Toast.LENGTH_SHORT).show()
+            return
+        }
+        libraryRefreshing = true
+        scope.launch {
+            val result = runCatching {
+                playbackController.refreshLibrary().await(context)
+            }.getOrNull()
+            libraryRefreshing = false
+            if (result?.resultCode == SessionResult.RESULT_SUCCESS) {
+                libraryRefreshVersion += 1
+                Toast.makeText(context, R.string.library_refresh_success, Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, R.string.library_refresh_failed, Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -224,6 +258,36 @@ private fun LegacyPortMainShellContent(
         pendingSystemDeleteSongIds = emptySet()
         if (result.resultCode == Activity.RESULT_OK) {
             cleanupDeletedSongs(mediaIds, hideFromLibrary = false)
+        }
+    }
+
+    fun requestSystemDeleteMediaIds(mediaIds: Set<String>) {
+        if (mediaIds.isEmpty()) {
+            return
+        }
+        val deleteUris = mediaIds.mapNotNull { mediaId ->
+            mediaId.toLegacyMediaStoreDeleteUri()
+        }
+        if (deleteUris.isEmpty()) {
+            cleanupDeletedSongs(mediaIds, hideFromLibrary = true)
+            return
+        }
+        val request = runCatching {
+            val pendingIntent = MediaStore.createDeleteRequest(
+                context.contentResolver,
+                deleteUris,
+            )
+            IntentSenderRequest.Builder(pendingIntent.intentSender).build()
+        }.getOrElse {
+            cleanupDeletedSongs(mediaIds, hideFromLibrary = true)
+            return
+        }
+        pendingSystemDeleteSongIds = mediaIds
+        runCatching {
+            deleteMediaLauncher.launch(request)
+        }.onFailure {
+            pendingSystemDeleteSongIds = emptySet()
+            cleanupDeletedSongs(mediaIds, hideFromLibrary = true)
         }
     }
 
@@ -356,8 +420,8 @@ private fun LegacyPortMainShellContent(
                     modifier = titleModifier,
                 )
             }
-            if (currentDestination == MusicDestination.Playlist) {
-                // 播放列表页需要复刻原版自身的标题栏、详情栈和加歌 Activity 过渡。
+            if (currentDestination == MusicDestination.Playlist || currentDestination == MusicDestination.More) {
+                // 播放列表页和更多二级页需要复刻原版自身的标题栏、详情栈和加歌/文件夹过渡。
             } else if (currentDestination == MusicDestination.Album) {
                 LegacyPortPageStackTransition(
                     secondaryKey = selectedAlbumTitle,
@@ -397,6 +461,11 @@ private fun LegacyPortMainShellContent(
                 artistAlbumViewMode = artistAlbumViewMode,
                 selectedArtistTarget = selectedArtistTarget,
                 hiddenMediaIds = libraryExclusions.hiddenMediaIds,
+                libraryRefreshVersion = libraryRefreshVersion,
+                libraryRefreshing = libraryRefreshing,
+                onRefreshLibrary = ::refreshLegacyLibrary,
+                onMediaIdsHidden = ::reclaimHiddenMediaIds,
+                onRequestDeleteMediaIds = ::requestSystemDeleteMediaIds,
                 onToggleSongSelected = { mediaId ->
                     selectedSongIds = if (mediaId in selectedSongIds) {
                         selectedSongIds - mediaId
@@ -500,30 +569,7 @@ private fun LegacyPortMainShellContent(
                     showSongDeleteConfirm = false
                     songsEditMode = false
                     selectedSongIds = emptySet()
-                    val deleteUris = mediaIds.mapNotNull { mediaId ->
-                        mediaId.toLegacyMediaStoreDeleteUri()
-                    }
-                    if (deleteUris.isEmpty()) {
-                        cleanupDeletedSongs(mediaIds, hideFromLibrary = true)
-                        return@LegacySongDeleteConfirmOverlay
-                    }
-                    val request = runCatching {
-                        val pendingIntent = MediaStore.createDeleteRequest(
-                            context.contentResolver,
-                            deleteUris,
-                        )
-                        IntentSenderRequest.Builder(pendingIntent.intentSender).build()
-                    }.getOrElse {
-                        cleanupDeletedSongs(mediaIds, hideFromLibrary = true)
-                        return@LegacySongDeleteConfirmOverlay
-                    }
-                    pendingSystemDeleteSongIds = mediaIds
-                    runCatching {
-                        deleteMediaLauncher.launch(request)
-                    }.onFailure {
-                        pendingSystemDeleteSongIds = emptySet()
-                        cleanupDeletedSongs(mediaIds, hideFromLibrary = true)
-                    }
+                    requestSystemDeleteMediaIds(mediaIds)
                 },
                 modifier = Modifier
                     .fillMaxSize()
@@ -608,6 +654,11 @@ private fun LegacyPortTabContent(
     artistAlbumViewMode: AlbumViewMode,
     selectedArtistTarget: LegacyArtistTarget?,
     hiddenMediaIds: Set<String>,
+    libraryRefreshVersion: Int,
+    libraryRefreshing: Boolean,
+    onRefreshLibrary: () -> Unit,
+    onMediaIdsHidden: (Set<String>) -> Unit,
+    onRequestDeleteMediaIds: (Set<String>) -> Unit,
     onToggleSongSelected: (String) -> Unit,
     onToggleAlbumSelected: (String) -> Unit,
     onAlbumSelected: (String, String) -> Unit,
@@ -654,8 +705,13 @@ private fun LegacyPortTabContent(
             onAddModeActiveChanged = onPlaylistAddModeActiveChanged,
             modifier = modifier,
         )
-        MusicDestination.More -> LegacyPortMoreList(
+        MusicDestination.More -> LegacyPortMorePage(
             active = true,
+            libraryRefreshVersion = libraryRefreshVersion,
+            libraryRefreshing = libraryRefreshing,
+            onRefreshLibrary = onRefreshLibrary,
+            onMediaIdsHidden = onMediaIdsHidden,
+            onRequestDeleteMediaIds = onRequestDeleteMediaIds,
             modifier = modifier,
         )
     }
@@ -950,41 +1006,15 @@ private fun LegacyPortPlaylistList(
 }
 
 @Composable
-private fun LegacyPortMoreList(
-    active: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    AndroidView(
-        modifier = modifier,
-        factory = { viewContext ->
-            LayoutInflater.from(viewContext).inflate(R.layout.more_fragment_layout, null, false).apply {
-                findViewById<ListView>(R.id.list)?.apply {
-                    adapter = LegacyMoreAdapter()
-                    layoutAnimation = AnimationUtils.loadLayoutAnimation(viewContext, R.anim.list_anim_layout)
-                    setOnItemClickListener { _, _, _, _ -> }
-                }
-            }
-        },
-        update = { root ->
-            root.visibility = if (active) View.VISIBLE else View.INVISIBLE
-            root.findViewById<ListView>(R.id.list)?.apply {
-                if (adapter !is LegacyMoreAdapter) {
-                    adapter = LegacyMoreAdapter()
-                    scheduleLayoutAnimation()
-                }
-            }
-        },
-    )
-}
-
-@Composable
-internal fun rememberLegacyLibraryMediaState(): LegacyLibraryMediaState {
+internal fun rememberLegacyLibraryMediaState(
+    libraryRefreshVersion: Int = 0,
+): LegacyLibraryMediaState {
     val context = LocalContext.current
     val browser = LocalPlaybackBrowser.current
     val hasPermission = hasAudioPermission(context)
     var state by remember(browser) { mutableStateOf(LegacyLibraryMediaState()) }
 
-    LaunchedEffect(browser, hasPermission) {
+    LaunchedEffect(browser, hasPermission, libraryRefreshVersion) {
         val playbackBrowser = browser ?: run {
             state = LegacyLibraryMediaState(loaded = true)
             return@LaunchedEffect
@@ -1294,49 +1324,6 @@ private class LegacyPlaylistAdapter : BaseAdapter() {
         view.findViewById<View>(R.id.cb_del)?.visibility = View.GONE
         view.findViewById<View>(R.id.arrow)?.visibility = View.VISIBLE
         view.findViewById<View>(R.id.iv_right_view)?.visibility = View.GONE
-        return view
-    }
-}
-
-private enum class LegacyMoreEntry(
-    @param:StringRes val labelRes: Int,
-    @param:DrawableRes val iconRes: Int,
-) {
-    Style(
-        labelRes = R.string.tab_style,
-        iconRes = R.drawable.tabbar_style_selector,
-    ),
-    LovedSongs(
-        labelRes = R.string.collect_music,
-        iconRes = R.drawable.tabbar_like_selector,
-    ),
-    Folder(
-        labelRes = R.string.tab_directory,
-        iconRes = R.drawable.tabbar_folder_selector,
-    ),
-}
-
-private class LegacyMoreAdapter : BaseAdapter() {
-    private val entries = LegacyMoreEntry.entries
-
-    override fun getCount(): Int = entries.size
-
-    override fun getItem(position: Int): Any = entries[position]
-
-    override fun getItemId(position: Int): Long = position.toLong()
-
-    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-        val view = convertView ?: LayoutInflater.from(parent.context)
-            .inflate(R.layout.more_item, parent, false)
-        val itemView: ListContentItemText = (view as? ListContentItemText)
-            ?: view.findViewById<ListContentItemText>(R.id.list_content_item)
-            ?: return view
-        val entry = entries[position]
-        itemView.setIcon(entry.iconRes)
-        itemView.setTitle(parent.context.getString(entry.labelRes))
-        itemView.setSummary(null)
-        itemView.setSubtitle(null)
-        itemView.setArrowVisible(true)
         return view
     }
 }
