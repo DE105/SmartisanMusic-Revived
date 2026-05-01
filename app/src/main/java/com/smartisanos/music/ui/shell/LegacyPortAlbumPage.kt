@@ -3,14 +3,15 @@ package com.smartisanos.music.ui.shell
 import android.animation.Animator
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
 import android.content.Context
 import android.graphics.Color
-import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.animation.AnimationUtils
 import android.view.animation.DecelerateInterpolator
 import android.widget.AbsListView
@@ -46,6 +47,13 @@ private const val AlbumSwitchStaggerMillis = 10L
 private val LegacyAlbumPrimaryTextColor = Color.rgb(0x35, 0x35, 0x39)
 private val LegacyAlbumSecondaryTextColor = Color.rgb(0xa4, 0xa7, 0xac)
 private val LegacyAlbumSelectedTextColor = Color.rgb(0xe6, 0x40, 0x40)
+
+private fun android.content.res.Resources.getLegacyAlbumScrollBottomPadding(): Int {
+    val playbackBarHeight = getDimensionPixelSize(R.dimen.play_back_content_height)
+    val playbackShadowHeight = (6f * displayMetrics.density).toInt()
+    val contentBottomCompensation = (6f * displayMetrics.density).toInt()
+    return playbackBarHeight + playbackShadowHeight + contentBottomCompensation
+}
 
 @Composable
 internal fun LegacyPortAlbumPage(
@@ -289,6 +297,8 @@ private class LegacyAlbumRoot(context: Context) : LinearLayout(context) {
             selector = context.getDrawable(R.drawable.listview_selector)
             cacheColorHint = Color.TRANSPARENT
             setBackgroundColor(Color.WHITE)
+            setPadding(0, 0, 0, resources.getLegacyAlbumScrollBottomPadding())
+            clipToPadding = false
             layoutAnimation = AnimationUtils.loadLayoutAnimation(context, R.anim.list_anim_layout)
         }
         listHost.addView(
@@ -312,9 +322,9 @@ private class LegacyAlbumRoot(context: Context) : LinearLayout(context) {
                 resources.getDimensionPixelSize(R.dimen.gridview_margin),
                 0,
                 resources.getDimensionPixelSize(R.dimen.gridview_margin),
-                0,
+                resources.getLegacyAlbumScrollBottomPadding(),
             )
-            clipToPadding = true
+            clipToPadding = false
             visibility = View.GONE
         }
         content.addView(
@@ -358,6 +368,7 @@ private class LegacyAlbumRoot(context: Context) : LinearLayout(context) {
         listHost.alpha = 1f
         listView.alpha = 1f
         listView.visibility = View.VISIBLE
+        gridView.alpha = 1f
         gridView.visibility = if (mode == AlbumViewMode.Tile) View.VISIBLE else View.GONE
     }
 
@@ -627,73 +638,71 @@ private class LegacyAlbumViewSwitchAnimator {
         val gridView = root.gridView
         val firstVisiblePosition = listView.firstVisiblePosition
         val lastVisiblePosition = listView.lastVisiblePosition
-        val firstVisibleTop = listView.getChildAt(0)?.top ?: 0
-        gridView.visibility = View.VISIBLE
+        listHost.animate().cancel()
         listHost.visibility = View.VISIBLE
         listHost.alpha = 1f
-        gridView.post {
-            if (gen != generation) return@post
-            // 避免最后一帧跳动：先等 GridView 进入 layout，再同步滚动位置后再计算 target bounds。
-            gridView.setSelectionFromTop(firstVisiblePosition, firstVisibleTop)
-            gridView.post {
-                if (gen != generation) return@post
-                val animators = mutableListOf<Animator>()
-                for (index in 0 until gridView.childCount) {
-                    val gridChild = gridView.getChildAt(index) ?: continue
-                    val gridCover = gridChild.findViewById<View>(R.id.gridview_image) ?: continue
-                    val position = gridCover.getTag(R.string.add_track) as? Int ?: continue
-                    val listCover = listView.findCoverByPosition(position)
-                    val start = listCover?.boundsOnScreen()
-                    val target = gridCover.boundsOnScreen()
-                    gridChild.findViewById<View>(R.id.tv_album_name)?.visibility = View.INVISIBLE
-                    if (start != null) {
-                        gridChild.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-                        gridChild.pivotX = 0f
-                        gridChild.pivotY = 0f
-                        gridChild.translationX = (start.left - target.left).toFloat()
-                        gridChild.translationY = (start.top - target.top).toFloat()
-                        gridChild.scaleX = start.width().toFloat() / target.width().coerceAtLeast(1)
-                        gridChild.scaleY = start.height().toFloat() / target.height().coerceAtLeast(1)
-                    } else {
-                        gridChild.applyListToGridFallbackStart(
-                            listView = listView,
-                            gridCover = gridCover,
-                            targetPosition = position,
-                            listFirstPosition = firstVisiblePosition,
-                            listLastPosition = lastVisiblePosition,
-                        )
-                    }
-                    animators += ObjectAnimator.ofPropertyValuesHolder(
-                        gridChild,
-                        android.animation.PropertyValuesHolder.ofFloat(View.TRANSLATION_X, gridChild.translationX, 0f),
-                        android.animation.PropertyValuesHolder.ofFloat(View.TRANSLATION_Y, gridChild.translationY, 0f),
-                        android.animation.PropertyValuesHolder.ofFloat(View.SCALE_X, gridChild.scaleX, 1f),
-                        android.animation.PropertyValuesHolder.ofFloat(View.SCALE_Y, gridChild.scaleY, 1f),
-                    ).apply {
-                        duration = AlbumSwitchBaseDurationMillis + index * AlbumSwitchStaggerMillis
-                        interpolator = this@LegacyAlbumViewSwitchAnimator.interpolator
-                    }
+        gridView.alpha = 0f
+        afterNextLayout(gridView, gen) {
+            if (gen != generation) return@afterNextLayout
+            val animators = mutableListOf<Animator>()
+            for (index in 0 until gridView.childCount) {
+                val gridChild = gridView.getChildAt(index) ?: continue
+                val gridCover = gridChild.findViewById<View>(R.id.gridview_image) ?: continue
+                val position = gridCover.getTag(R.string.add_track) as? Int ?: continue
+                val listCover = listView.findCoverByPosition(position)
+                gridChild.prepareForAlbumSwitch()
+                gridChild.applyListToGridStart(
+                    listView = listView,
+                    listCover = listCover,
+                    gridCover = gridCover,
+                    targetPosition = position,
+                    listFirstPosition = firstVisiblePosition,
+                    listLastPosition = lastVisiblePosition,
+                )
+                animators += ObjectAnimator.ofPropertyValuesHolder(
+                    gridChild,
+                    PropertyValuesHolder.ofFloat(View.TRANSLATION_X, gridChild.translationX, 0f),
+                    PropertyValuesHolder.ofFloat(View.TRANSLATION_Y, gridChild.translationY, 0f),
+                    PropertyValuesHolder.ofFloat(View.SCALE_X, gridChild.scaleX, 1f),
+                    PropertyValuesHolder.ofFloat(View.SCALE_Y, gridChild.scaleY, 1f),
+                ).apply {
+                    duration = AlbumSwitchBaseDurationMillis + index * AlbumSwitchStaggerMillis
+                    interpolator = this@LegacyAlbumViewSwitchAnimator.interpolator
                 }
-                // 和 8.1.0 行为一致：切到平铺时列表直接隐藏，避免叠影/触摸冲突。
-                listHost.visibility = View.GONE
-                val nextAnimator = AnimatorSet().apply {
-                    playTogether(animators)
-                    addListener(
-                        object : android.animation.AnimatorListenerAdapter() {
-                            override fun onAnimationEnd(animation: Animator) {
-                                resetGridChildren(gridView)
-                            }
-
-                            override fun onAnimationCancel(animation: Animator) {
-                                resetGridChildren(gridView)
-                            }
-                        },
-                    )
-                }
-                animator = nextAnimator
-                nextAnimator.start()
             }
+            if (animators.isEmpty()) {
+                gridView.alpha = 1f
+                listHost.visibility = View.GONE
+                resetGridChildren(gridView)
+                return@afterNextLayout
+            }
+            val nextAnimator = AnimatorSet().apply {
+                playTogether(animators)
+                addListener(
+                    object : android.animation.AnimatorListenerAdapter() {
+                        override fun onAnimationStart(animation: Animator) {
+                            gridView.alpha = 1f
+                            listHost.visibility = View.GONE
+                        }
+
+                        override fun onAnimationEnd(animation: Animator) {
+                            resetGridChildren(gridView)
+                            (gridView.adapter as? BaseAdapter)?.notifyDataSetChanged()
+                        }
+
+                        override fun onAnimationCancel(animation: Animator) {
+                            resetGridChildren(gridView)
+                            (gridView.adapter as? BaseAdapter)?.notifyDataSetChanged()
+                        }
+                    },
+                )
+            }
+            animator = nextAnimator
+            nextAnimator.start()
         }
+        gridView.setSelection(firstVisiblePosition)
+        gridView.visibility = View.VISIBLE
+        gridView.requestLayout()
     }
 
     private fun animateGridToList(root: LegacyAlbumRoot, gen: Int) {
@@ -701,81 +710,118 @@ private class LegacyAlbumViewSwitchAnimator {
         val listView = root.listView
         val gridView = root.gridView
         val firstVisiblePosition = gridView.firstVisiblePosition
-        val firstVisibleTop = gridView.getChildAt(0)?.top ?: 0
         listHost.animate().cancel()
         listHost.alpha = 0f
         listHost.visibility = View.VISIBLE
         listView.alpha = 1f
         listView.visibility = View.VISIBLE
-        listView.post {
-            if (gen != generation) return@post
-            // 避免最后一帧跳动：等 ListView 进入 layout 后再同步滚动位置，再开始计算 target bounds 做动画。
-            listView.setSelectionFromTop(firstVisiblePosition, firstVisibleTop)
-            listView.post {
-                if (gen != generation) return@post
-                val animators = mutableListOf<Animator>()
-                val hiddenListTargets = mutableSetOf<View>()
-                val hiddenGridChildren = mutableListOf<View>()
-                val transitionDuration = gridView.transitionDurationMillis()
-                for (index in 0 until gridView.childCount) {
-                    val gridChild = gridView.getChildAt(index) ?: continue
-                    val gridCover = gridChild.findViewById<View>(R.id.gridview_image) ?: continue
-                    val position = gridCover.getTag(R.string.add_track) as? Int ?: continue
-                    val listCover = listView.findCoverByPosition(position)
-                    val start = gridCover.boundsOnScreen()
-                    val target = listCover?.boundsOnScreen()
-                    if (target != null) {
-                        listCover.parentView()?.let { listTarget ->
-                            listTarget.visibility = View.INVISIBLE
-                            hiddenListTargets += listTarget
-                        }
-                        gridChild.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-                        gridChild.pivotX = 0f
-                        gridChild.pivotY = 0f
-                        animators += ObjectAnimator.ofPropertyValuesHolder(
-                            gridChild,
-                            android.animation.PropertyValuesHolder.ofFloat(View.TRANSLATION_X, 0f, (target.left - start.left).toFloat()),
-                            android.animation.PropertyValuesHolder.ofFloat(View.TRANSLATION_Y, 0f, (target.top - start.top).toFloat()),
-                            android.animation.PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, target.width().toFloat() / start.width().coerceAtLeast(1)),
-                            android.animation.PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, target.height().toFloat() / start.height().coerceAtLeast(1)),
-                        ).apply {
-                            duration = AlbumSwitchBaseDurationMillis + index * AlbumSwitchStaggerMillis
-                            interpolator = this@LegacyAlbumViewSwitchAnimator.interpolator
-                        }
-                    } else {
-                        gridChild.alpha = 0f
-                        hiddenGridChildren += gridChild
-                    }
-                }
-                animators += ObjectAnimator.ofFloat(listHost, View.ALPHA, 0f, 1f).apply {
-                    duration = transitionDuration
+        afterNextLayout(listView, gen) {
+            if (gen != generation) return@afterNextLayout
+            val animators = mutableListOf<Animator>()
+            val hiddenListTargets = mutableSetOf<View>()
+            val listFirstPosition = listView.firstVisiblePosition
+            val listLastPosition = listView.lastVisiblePosition
+            for (index in 0 until gridView.childCount) {
+                val gridChild = gridView.getChildAt(index) ?: continue
+                val gridCover = gridChild.findViewById<View>(R.id.gridview_image) ?: continue
+                val position = gridCover.getTag(R.string.add_track) as? Int ?: continue
+                val listCover = listView.findCoverByPosition(position)
+                gridChild.prepareForAlbumSwitch()
+                val target = gridChild.gridToListTarget(
+                    listView = listView,
+                    listCover = listCover,
+                    gridView = gridView,
+                    gridCover = gridCover,
+                    targetPosition = position,
+                    listFirstPosition = listFirstPosition,
+                    listLastPosition = listLastPosition,
+                )
+                animators += ObjectAnimator.ofPropertyValuesHolder(
+                    gridChild,
+                    PropertyValuesHolder.ofFloat(View.TRANSLATION_X, 0f, target.translationX),
+                    PropertyValuesHolder.ofFloat(View.TRANSLATION_Y, 0f, target.translationY),
+                    PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, target.scaleX),
+                    PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, target.scaleY),
+                ).apply {
+                    duration = AlbumSwitchBaseDurationMillis + index * AlbumSwitchStaggerMillis
                     interpolator = this@LegacyAlbumViewSwitchAnimator.interpolator
-                }
-                val nextAnimator = AnimatorSet().apply {
-                    playTogether(animators)
                     addListener(
                         object : android.animation.AnimatorListenerAdapter() {
+                            override fun onAnimationStart(animation: Animator) {
+                                listCover?.parentView()?.let { listTarget ->
+                                    listTarget.visibility = View.INVISIBLE
+                                    hiddenListTargets += listTarget
+                                }
+                            }
+
                             override fun onAnimationEnd(animation: Animator) {
-                                listHost.animate().cancel()
-                                listHost.alpha = 1f
-                                restoreHiddenViews(hiddenListTargets, hiddenGridChildren)
-                                gridView.visibility = View.GONE
-                                resetGridChildren(gridView)
+                                listCover?.parentView()?.visibility = View.VISIBLE
                             }
 
                             override fun onAnimationCancel(animation: Animator) {
-                                listHost.alpha = 1f
-                                restoreHiddenViews(hiddenListTargets, hiddenGridChildren)
-                                gridView.visibility = View.GONE
-                                resetGridChildren(gridView)
+                                listCover?.parentView()?.visibility = View.VISIBLE
                             }
                         },
                     )
                 }
-                animator = nextAnimator
-                nextAnimator.start()
+            }
+            if (animators.isEmpty()) {
+                listHost.alpha = 1f
+                gridView.visibility = View.GONE
+                resetGridChildren(gridView)
+                return@afterNextLayout
+            }
+            val nextAnimator = AnimatorSet().apply {
+                playTogether(animators)
+                addListener(
+                    object : android.animation.AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            finishGridToList(listHost, gridView, hiddenListTargets)
+                        }
+
+                        override fun onAnimationCancel(animation: Animator) {
+                            finishGridToList(listHost, gridView, hiddenListTargets)
+                        }
+                    },
+                )
+            }
+            animator = nextAnimator
+            nextAnimator.start()
+        }
+        listView.setSelectionFromTop(firstVisiblePosition, 0)
+        listView.requestLayout()
+    }
+
+    private fun afterNextLayout(
+        view: View,
+        gen: Int,
+        block: () -> Unit,
+    ) {
+        val listener = object : ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                if (view.viewTreeObserver.isAlive) {
+                    view.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                }
+                if (gen == generation) {
+                    block()
+                }
             }
         }
+        view.viewTreeObserver.addOnGlobalLayoutListener(listener)
+    }
+
+    private fun finishGridToList(
+        listHost: View,
+        gridView: GridView,
+        hiddenListTargets: Set<View>,
+    ) {
+        hiddenListTargets.forEach { target ->
+            target.visibility = View.VISIBLE
+        }
+        listHost.animate().cancel()
+        listHost.alpha = 1f
+        gridView.visibility = View.GONE
+        resetGridChildren(gridView)
     }
 
     private fun resetGridChildren(gridView: GridView) {
@@ -791,23 +837,6 @@ private class LegacyAlbumViewSwitchAnimator {
             }
         }
     }
-
-    private fun restoreHiddenViews(
-        hiddenListTargets: Set<View>,
-        hiddenGridChildren: List<View>,
-    ) {
-        hiddenListTargets.forEach { target ->
-            target.visibility = View.VISIBLE
-        }
-        hiddenGridChildren.forEach { child ->
-            child.alpha = 1f
-        }
-    }
-}
-
-private fun GridView.transitionDurationMillis(): Long {
-    val childCount = childCount.coerceAtLeast(1)
-    return AlbumSwitchBaseDurationMillis + (childCount - 1) * AlbumSwitchStaggerMillis
 }
 
 private fun ListView.findCoverByPosition(position: Int): View? {
@@ -821,8 +850,16 @@ private fun ListView.findCoverByPosition(position: Int): View? {
     return null
 }
 
-private fun View.applyListToGridFallbackStart(
+private fun View.prepareForAlbumSwitch() {
+    setLayerType(View.LAYER_TYPE_HARDWARE, null)
+    pivotX = 0f
+    pivotY = 0f
+    findViewById<View>(R.id.tv_album_name)?.visibility = View.INVISIBLE
+}
+
+private fun View.applyListToGridStart(
     listView: ListView,
+    listCover: View?,
     gridCover: View,
     targetPosition: Int,
     listFirstPosition: Int,
@@ -831,31 +868,94 @@ private fun View.applyListToGridFallbackStart(
     val sampleListCover = listView.getChildAt(0)?.findViewById<View>(R.id.listview_item_image)
     val sourceWidth = sampleListCover?.width?.takeIf { it > 0 } ?: gridCover.width.coerceAtLeast(1)
     val sourceHeight = sampleListCover?.height?.takeIf { it > 0 } ?: gridCover.height.coerceAtLeast(1)
-    setLayerType(View.LAYER_TYPE_HARDWARE, null)
-    pivotX = 0f
-    pivotY = 0f
+    val gridInnerWidth = (gridCover.width - gridCover.paddingTop * 2).coerceAtLeast(1)
+    val gridInnerHeight = (gridCover.height - gridCover.paddingTop * 2).coerceAtLeast(1)
+    scaleX = sourceWidth.toFloat() / gridInnerWidth
+    scaleY = sourceHeight.toFloat() / gridInnerHeight
+    if (listCover != null && targetPosition in listFirstPosition..listLastPosition) {
+        val gridCoverOffsetX = gridCover.leftRelativeTo(this) + gridCover.paddingTop
+        val gridCoverOffsetY = gridCover.topRelativeTo(this) + gridCover.paddingTop
+        translationX = listCover.leftRelativeTo(listView) - left - gridCoverOffsetX * scaleX
+        translationY = listCover.topRelativeTo(listView) - top - gridCoverOffsetY * scaleY
+        return
+    }
     translationX = -left.toFloat()
     translationY = when {
         targetPosition > listLastPosition -> top.toFloat()
-        targetPosition < listFirstPosition -> {
-            val lastChildTop = listView.getChildAt(listView.childCount - 1)?.top ?: top
-            -lastChildTop / 2f
-        }
+        targetPosition < listFirstPosition -> -listView.lastChildTop() / 2f
         else -> -top.toFloat()
     }
-    scaleX = sourceWidth.toFloat() / gridCover.width.coerceAtLeast(1)
-    scaleY = sourceHeight.toFloat() / gridCover.height.coerceAtLeast(1)
+}
+
+private data class AlbumSwitchTarget(
+    val translationX: Float,
+    val translationY: Float,
+    val scaleX: Float,
+    val scaleY: Float,
+)
+
+private fun View.gridToListTarget(
+    listView: ListView,
+    listCover: View?,
+    gridView: GridView,
+    gridCover: View,
+    targetPosition: Int,
+    listFirstPosition: Int,
+    listLastPosition: Int,
+): AlbumSwitchTarget {
+    val gridInnerWidth = (gridCover.width - gridCover.paddingTop * 2).coerceAtLeast(1)
+    val gridInnerHeight = (gridCover.height - gridCover.paddingTop * 2).coerceAtLeast(1)
+    val sampleListCover = listCover ?: listView.getChildAt(0)?.findViewById<View>(R.id.listview_item_image)
+    val scaleX = (sampleListCover?.width ?: gridInnerWidth).toFloat() / gridInnerWidth
+    val scaleY = (sampleListCover?.height ?: gridInnerHeight).toFloat() / gridInnerHeight
+    if (listCover != null && targetPosition in listFirstPosition..listLastPosition) {
+        val gridChildX = leftRelativeTo(gridView)
+        val gridChildY = topRelativeTo(gridView)
+        val gridCoverX = gridCover.leftRelativeTo(gridView) + gridCover.paddingTop
+        val gridCoverY = gridCover.topRelativeTo(gridView) + gridCover.paddingTop
+        val listCoverX = listCover.leftRelativeTo(listView)
+        val listCoverY = listCover.topRelativeTo(listView)
+        return AlbumSwitchTarget(
+            translationX = listCoverX - (gridChildX + (gridCoverX - gridChildX) * scaleX),
+            translationY = listCoverY - (gridChildY + (gridCoverY - gridChildY) * scaleY),
+            scaleX = scaleX,
+            scaleY = scaleY,
+        )
+    }
+    return AlbumSwitchTarget(
+        translationX = -left.toFloat(),
+        translationY = when {
+            targetPosition > listLastPosition -> listView.lastChildTop().toFloat()
+            targetPosition < listFirstPosition -> -listView.lastChildTop() / 2f
+            else -> -top.toFloat()
+        },
+        scaleX = scaleX,
+        scaleY = scaleY,
+    )
+}
+
+private fun ListView.lastChildTop(): Int {
+    return getChildAt(childCount - 1)?.top ?: 0
 }
 
 private fun View.parentView(): View? = parent as? View
 
-private fun View.boundsOnScreen(): Rect {
-    val location = IntArray(2)
-    getLocationOnScreen(location)
-    return Rect(
-        location[0],
-        location[1],
-        location[0] + width,
-        location[1] + height,
-    )
+private fun View.leftRelativeTo(ancestor: View): Float {
+    var result = left.toFloat()
+    var current = parent as? View
+    while (current != null && current !== ancestor) {
+        result += current.left - current.scrollX
+        current = current.parent as? View
+    }
+    return result
+}
+
+private fun View.topRelativeTo(ancestor: View): Float {
+    var result = top.toFloat()
+    var current = parent as? View
+    while (current != null && current !== ancestor) {
+        result += current.top - current.scrollY
+        current = current.parent as? View
+    }
+    return result
 }
