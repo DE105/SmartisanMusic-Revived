@@ -454,22 +454,25 @@ private class LegacyAlbumDetailHeader(context: Context) : LinearLayout(context) 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 }
 
-private class LegacyAlbumTrackAdapter : BaseAdapter() {
+internal class LegacyAlbumTrackAdapter : BaseAdapter() {
     private var items: List<MediaItem> = emptyList()
     private var currentMediaId: String? = null
     private var currentIsPlaying: Boolean = false
     private var showTrackArtists: Boolean = false
+    private var forceSequentialTrackNumbers: Boolean = false
 
     fun updateItems(
         nextItems: List<MediaItem>,
         nextCurrentMediaId: String?,
         nextCurrentIsPlaying: Boolean,
         nextShowTrackArtists: Boolean,
+        nextForceSequentialTrackNumbers: Boolean = false,
     ): Boolean {
         val contentChanged = items != nextItems
         val stateChanged = currentMediaId != nextCurrentMediaId ||
             currentIsPlaying != nextCurrentIsPlaying ||
-            showTrackArtists != nextShowTrackArtists
+            showTrackArtists != nextShowTrackArtists ||
+            forceSequentialTrackNumbers != nextForceSequentialTrackNumbers
         if (!contentChanged && !stateChanged) {
             return false
         }
@@ -477,6 +480,7 @@ private class LegacyAlbumTrackAdapter : BaseAdapter() {
         currentMediaId = nextCurrentMediaId
         currentIsPlaying = nextCurrentIsPlaying
         showTrackArtists = nextShowTrackArtists
+        forceSequentialTrackNumbers = nextForceSequentialTrackNumbers
         if (contentChanged) {
             notifyDataSetChanged()
         }
@@ -484,6 +488,18 @@ private class LegacyAlbumTrackAdapter : BaseAdapter() {
     }
 
     fun itemAt(position: Int): MediaItem? = items.getOrNull(position)
+
+    fun setPlaybackState(
+        nextCurrentMediaId: String?,
+        nextCurrentIsPlaying: Boolean,
+    ): Boolean {
+        if (currentMediaId == nextCurrentMediaId && currentIsPlaying == nextCurrentIsPlaying) {
+            return false
+        }
+        currentMediaId = nextCurrentMediaId
+        currentIsPlaying = nextCurrentIsPlaying
+        return true
+    }
 
     fun updateVisibleRows(listView: ListView) {
         for (childIndex in 0 until listView.childCount) {
@@ -496,6 +512,7 @@ private class LegacyAlbumTrackAdapter : BaseAdapter() {
                 selected = item.mediaId == currentMediaId,
                 playing = currentIsPlaying,
                 showArtist = showTrackArtists,
+                forceSequentialTrackNumber = forceSequentialTrackNumbers,
             )
         }
     }
@@ -516,6 +533,7 @@ private class LegacyAlbumTrackAdapter : BaseAdapter() {
             selected = item.mediaId == currentMediaId,
             playing = currentIsPlaying,
             showArtist = showTrackArtists,
+            forceSequentialTrackNumber = forceSequentialTrackNumbers,
         )
         return view
     }
@@ -662,9 +680,14 @@ private data class LegacyAlbumTrackViewHolder(
         selected: Boolean,
         playing: Boolean,
         showArtist: Boolean,
+        forceSequentialTrackNumber: Boolean,
     ) {
         val metadata = item.mediaMetadata
-        index.text = item.displayTrackNumber(fallbackIndex)
+        index.text = if (forceSequentialTrackNumber) {
+            fallbackIndex.toString()
+        } else {
+            item.displayTrackNumber(fallbackIndex)
+        }
         title.text = metadata.displayTitle
             ?: metadata.title
             ?: ""

@@ -90,8 +90,6 @@ import com.smartisanos.music.resolveExternalAudioAlbumId
 import com.smartisanos.music.resolveExternalAudioArtist
 import com.smartisanos.music.ui.components.hasAudioPermission
 import com.smartisanos.music.ui.album.AlbumViewMode
-import com.smartisanos.music.ui.artist.ArtistSummary
-import com.smartisanos.music.ui.artist.buildArtistSummaries
 import com.smartisanos.music.ui.navigation.MusicDestination
 import com.smartisanos.music.ui.widgets.EditableListViewItem
 import com.smartisanos.music.ui.widgets.StretchTextView
@@ -160,6 +158,8 @@ private fun LegacyPortMainShellContent(
     var selectedAlbumIds by remember { mutableStateOf(emptySet<String>()) }
     var selectedAlbumId by remember { mutableStateOf<String?>(null) }
     var selectedAlbumTitle by remember { mutableStateOf<String?>(null) }
+    var artistAlbumViewMode by remember { mutableStateOf(AlbumViewMode.List) }
+    var selectedArtistTarget by remember { mutableStateOf<LegacyArtistTarget?>(null) }
     var showSongDeleteConfirm by remember { mutableStateOf(false) }
     var pendingSystemDeleteSongIds by remember { mutableStateOf(emptySet<String>()) }
     var snapshot by remember(controller) {
@@ -244,11 +244,18 @@ private fun LegacyPortMainShellContent(
             selectedAlbumId = null
             selectedAlbumTitle = null
         }
+        if (currentDestination != MusicDestination.Artist) {
+            selectedArtistTarget = null
+        }
     }
 
     BackHandler(enabled = currentDestination == MusicDestination.Album && selectedAlbumId != null) {
         selectedAlbumId = null
         selectedAlbumTitle = null
+    }
+
+    BackHandler(enabled = currentDestination == MusicDestination.Artist && selectedArtistTarget != null) {
+        selectedArtistTarget = selectedArtistTarget?.parentTarget()
     }
 
     LaunchedEffect(externalAudioLaunchRequest, controller) {
@@ -288,7 +295,7 @@ private fun LegacyPortMainShellContent(
         ) {
             val titleContentHeight = dimensionResource(R.dimen.title_bar_height)
             val titleAreaHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + titleContentHeight
-            val titleBarContent: @Composable (String?, Modifier) -> Unit = { albumDetailTitle, titleModifier ->
+            val titleBarContent: @Composable (String?, LegacyArtistTarget?, Modifier) -> Unit = { albumDetailTitle, artistTarget, titleModifier ->
                 LegacyPortTitleBar(
                     destination = currentDestination,
                     songsEditMode = currentDestination == MusicDestination.Songs && songsEditMode,
@@ -297,6 +304,8 @@ private fun LegacyPortMainShellContent(
                     selectedAlbumCount = selectedAlbumIds.size,
                     albumDetailTitle = albumDetailTitle,
                     albumViewMode = albumViewMode,
+                    artistTarget = artistTarget,
+                    artistAlbumViewMode = artistAlbumViewMode,
                     onEnterSongsEditMode = {
                         songsEditMode = true
                         selectedSongIds = emptySet()
@@ -330,6 +339,16 @@ private fun LegacyPortMainShellContent(
                         selectedAlbumId = null
                         selectedAlbumTitle = null
                     },
+                    onArtistBack = {
+                        selectedArtistTarget = selectedArtistTarget?.parentTarget()
+                    },
+                    onToggleArtistAlbumViewMode = {
+                        artistAlbumViewMode = if (artistAlbumViewMode == AlbumViewMode.List) {
+                            AlbumViewMode.Tile
+                        } else {
+                            AlbumViewMode.List
+                        }
+                    },
                     modifier = titleModifier,
                 )
             }
@@ -341,14 +360,23 @@ private fun LegacyPortMainShellContent(
                         .height(titleAreaHeight),
                     label = "legacy album title transition",
                     primaryContent = {
-                        titleBarContent(null, Modifier.fillMaxSize())
+                        titleBarContent(null, null, Modifier.fillMaxSize())
                     },
                     secondaryContent = { detailTitle ->
-                        titleBarContent(detailTitle, Modifier.fillMaxSize())
+                        titleBarContent(detailTitle, null, Modifier.fillMaxSize())
                     },
                 )
+            } else if (currentDestination == MusicDestination.Artist) {
+                LegacyPortArtistTitleStack(
+                    selectedTarget = selectedArtistTarget,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(titleAreaHeight),
+                ) { artistTarget, titleModifier ->
+                    titleBarContent(null, artistTarget, titleModifier)
+                }
             } else {
-                titleBarContent(null, Modifier.fillMaxWidth())
+                titleBarContent(null, null, Modifier.fillMaxWidth())
             }
             LegacyPortTabContent(
                 destination = currentDestination,
@@ -360,6 +388,8 @@ private fun LegacyPortMainShellContent(
                 albumEditMode = currentDestination == MusicDestination.Album && albumEditMode,
                 selectedAlbumId = selectedAlbumId,
                 selectedAlbumIds = selectedAlbumIds,
+                artistAlbumViewMode = artistAlbumViewMode,
+                selectedArtistTarget = selectedArtistTarget,
                 hiddenMediaIds = libraryExclusions.hiddenMediaIds,
                 onToggleSongSelected = { mediaId ->
                     selectedSongIds = if (mediaId in selectedSongIds) {
@@ -380,6 +410,9 @@ private fun LegacyPortMainShellContent(
                     selectedAlbumIds = emptySet()
                     selectedAlbumId = albumId
                     selectedAlbumTitle = albumTitle
+                },
+                onArtistTargetChanged = { target ->
+                    selectedArtistTarget = target
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -563,10 +596,13 @@ private fun LegacyPortTabContent(
     albumEditMode: Boolean,
     selectedAlbumId: String?,
     selectedAlbumIds: Set<String>,
+    artistAlbumViewMode: AlbumViewMode,
+    selectedArtistTarget: LegacyArtistTarget?,
     hiddenMediaIds: Set<String>,
     onToggleSongSelected: (String) -> Unit,
     onToggleAlbumSelected: (String) -> Unit,
     onAlbumSelected: (String, String) -> Unit,
+    onArtistTargetChanged: (LegacyArtistTarget?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (destination) {
@@ -592,9 +628,13 @@ private fun LegacyPortTabContent(
             onToggleAlbumSelected = onToggleAlbumSelected,
             modifier = modifier,
         )
-        MusicDestination.Artist -> LegacyPortArtistList(
+        MusicDestination.Artist -> LegacyPortArtistPage(
             mediaItems = mediaItems,
             active = true,
+            selectedTarget = selectedArtistTarget,
+            albumViewMode = artistAlbumViewMode,
+            hiddenMediaIds = hiddenMediaIds,
+            onTargetChanged = onArtistTargetChanged,
             modifier = modifier,
         )
         MusicDestination.Playlist -> LegacyPortPlaylistList(
@@ -859,44 +899,6 @@ private object LegacyTitleNormalizer {
             .lowercase(Locale.ROOT)
             .trim()
     }
-}
-
-@Composable
-private fun LegacyPortArtistList(
-    mediaItems: List<MediaItem>,
-    active: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val context = LocalContext.current
-    val artists = remember(mediaItems) {
-        buildArtistSummaries(
-            mediaItems = mediaItems,
-            unknownArtistTitle = context.getString(R.string.unknown_artist),
-            unknownAlbumTitle = context.getString(R.string.unknown_album),
-        )
-    }
-    AndroidView(
-        modifier = modifier,
-        factory = { viewContext ->
-            ListView(viewContext).apply {
-                divider = ColorDrawable(viewContext.getColor(R.color.listview_divider_color))
-                dividerHeight = resources.getDimensionPixelSize(R.dimen.listview_dividerHeight)
-                selector = viewContext.getDrawable(R.drawable.listview_selector)
-                cacheColorHint = Color.TRANSPARENT
-                setBackgroundColor(Color.TRANSPARENT)
-                layoutAnimation = AnimationUtils.loadLayoutAnimation(viewContext, R.anim.list_anim_layout)
-            }
-        },
-        update = { listView ->
-            listView.visibility = if (active) View.VISIBLE else View.INVISIBLE
-            val adapter = listView.adapter as? LegacyArtistAdapter ?: LegacyArtistAdapter().also { adapter ->
-                listView.adapter = adapter
-            }
-            if (adapter.updateItems(artists)) {
-                listView.scheduleLayoutAnimation()
-            }
-        },
-    )
 }
 
 @Composable
@@ -1247,41 +1249,6 @@ private fun buildLegacySongRows(
     return rows
 }
 
-private class LegacyArtistAdapter : BaseAdapter() {
-    private var items: List<ArtistSummary> = emptyList()
-
-    fun updateItems(nextItems: List<ArtistSummary>): Boolean {
-        if (items == nextItems) {
-            return false
-        }
-        items = nextItems
-        notifyDataSetChanged()
-        return true
-    }
-
-    override fun getCount(): Int = items.size
-
-    override fun getItem(position: Int): Any = items[position]
-
-    override fun getItemId(position: Int): Long = position.toLong()
-
-    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-        val view = convertView ?: LayoutInflater.from(parent.context)
-            .inflate(R.layout.artist_listview_items, parent, false)
-        val item = items[position]
-        view.findViewById<TextView>(R.id.listview_item_line_one)?.text = item.name
-        view.findViewById<TextView>(R.id.listview_item_line_two)?.text =
-            parent.context.getString(
-                R.string.legacy_artist_summary,
-                item.albumCount,
-                item.trackCount,
-            )
-        view.findViewById<ImageView>(R.id.listview_item_image)?.setImageResource(R.drawable.noalbumcover_120)
-        view.findViewById<View>(R.id.iv_mask_albumcover)?.setBackgroundResource(R.drawable.mask_albumcover_list)
-        return view
-    }
-}
-
 private class LegacyPlaylistAdapter : BaseAdapter() {
     private var items: List<UserPlaylistSummary> = emptyList()
 
@@ -1394,6 +1361,8 @@ private fun LegacyPortTitleBar(
     selectedAlbumCount: Int,
     albumDetailTitle: String?,
     albumViewMode: AlbumViewMode,
+    artistTarget: LegacyArtistTarget?,
+    artistAlbumViewMode: AlbumViewMode,
     onEnterSongsEditMode: () -> Unit,
     onExitSongsEditMode: () -> Unit,
     onRequestDeleteSelected: () -> Unit,
@@ -1401,6 +1370,8 @@ private fun LegacyPortTitleBar(
     onExitAlbumEditMode: () -> Unit,
     onToggleAlbumViewMode: () -> Unit,
     onAlbumDetailBack: () -> Unit,
+    onArtistBack: () -> Unit,
+    onToggleArtistAlbumViewMode: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val titleContentHeight = dimensionResource(R.dimen.title_bar_height)
@@ -1432,6 +1403,8 @@ private fun LegacyPortTitleBar(
                     selectedAlbumCount = selectedAlbumCount,
                     albumDetailTitle = albumDetailTitle,
                     albumViewMode = albumViewMode,
+                    artistTarget = artistTarget,
+                    artistAlbumViewMode = artistAlbumViewMode,
                     onEnterSongsEditMode = onEnterSongsEditMode,
                     onExitSongsEditMode = onExitSongsEditMode,
                     onRequestDeleteSelected = onRequestDeleteSelected,
@@ -1439,6 +1412,8 @@ private fun LegacyPortTitleBar(
                     onExitAlbumEditMode = onExitAlbumEditMode,
                     onToggleAlbumViewMode = onToggleAlbumViewMode,
                     onAlbumDetailBack = onAlbumDetailBack,
+                    onArtistBack = onArtistBack,
+                    onToggleArtistAlbumViewMode = onToggleArtistAlbumViewMode,
                 )
             },
         )
@@ -1453,6 +1428,8 @@ private fun TitleBar.setupLegacyMainTitleBar(
     selectedAlbumCount: Int,
     albumDetailTitle: String?,
     albumViewMode: AlbumViewMode,
+    artistTarget: LegacyArtistTarget?,
+    artistAlbumViewMode: AlbumViewMode,
     onEnterSongsEditMode: () -> Unit,
     onExitSongsEditMode: () -> Unit,
     onRequestDeleteSelected: () -> Unit,
@@ -1460,17 +1437,39 @@ private fun TitleBar.setupLegacyMainTitleBar(
     onExitAlbumEditMode: () -> Unit,
     onToggleAlbumViewMode: () -> Unit,
     onAlbumDetailBack: () -> Unit,
+    onArtistBack: () -> Unit,
+    onToggleArtistAlbumViewMode: () -> Unit,
 ) {
     removeAllLeftViews()
     removeAllRightViews()
     setShadowVisible(false)
-    setCenterText(albumDetailTitle ?: destination.label)
+    setCenterText(albumDetailTitle ?: artistTarget?.title ?: destination.label)
 
     if (destination == MusicDestination.Album && albumDetailTitle != null) {
         addLeftImageView(R.drawable.standard_icon_back_selector).apply {
             setOnClickListener {
                 onAlbumDetailBack()
             }
+        }
+        return
+    }
+
+    if (destination == MusicDestination.Artist && artistTarget != null) {
+        addLeftImageView(R.drawable.standard_icon_back_selector).apply {
+            setOnClickListener {
+                onArtistBack()
+            }
+        }
+        if (artistTarget.showsAlbumSwitch) {
+            val switchButton = CheckBox(context, null).apply {
+                setButtonDrawable(R.drawable.album_switch_selector)
+                background = null
+                isChecked = artistAlbumViewMode == AlbumViewMode.List
+                setOnClickListener {
+                    onToggleArtistAlbumViewMode()
+                }
+            }
+            addRightView(switchButton)
         }
         return
     }
