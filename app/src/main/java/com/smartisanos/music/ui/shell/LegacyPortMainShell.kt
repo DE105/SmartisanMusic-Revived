@@ -92,7 +92,6 @@ import com.smartisanos.music.ui.album.buildAlbumSummaries
 import com.smartisanos.music.ui.artist.ArtistSummary
 import com.smartisanos.music.ui.artist.buildArtistSummaries
 import com.smartisanos.music.ui.navigation.MusicDestination
-import com.smartisanos.music.ui.playback.PlaybackScreen
 import com.smartisanos.music.ui.widgets.EditableListViewItem
 import com.smartisanos.music.ui.widgets.StretchTextView
 import smartisanos.app.MenuDialog
@@ -352,22 +351,19 @@ private fun LegacyPortMainShellContent(
                 },
             )
         }
-        if (playbackVisible) {
-            PlaybackScreen(
-                playbackSettings = playbackSettings,
-                onScratchEnabledChange = { enabled ->
-                    scope.launch {
-                        playbackSettingsStore.setScratchEnabled(enabled)
-                    }
-                },
-                onCollapse = {
-                    playbackVisible = false
-                },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .zIndex(1f),
-            )
-        }
+        LegacyPortPlaybackOverlay(
+            visible = playbackVisible,
+            playbackSettings = playbackSettings,
+            onScratchEnabledChange = { enabled ->
+                scope.launch {
+                    playbackSettingsStore.setScratchEnabled(enabled)
+                }
+            },
+            onCollapse = {
+                playbackVisible = false
+            },
+            modifier = Modifier.zIndex(1f),
+        )
         if (showSongDeleteConfirm) {
             LegacySongDeleteConfirmOverlay(
                 onDismiss = {
