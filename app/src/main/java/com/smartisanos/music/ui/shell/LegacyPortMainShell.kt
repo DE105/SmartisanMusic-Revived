@@ -87,8 +87,7 @@ import com.smartisanos.music.playback.removeMediaItemsByMediaIds
 import com.smartisanos.music.resolveExternalAudioAlbumId
 import com.smartisanos.music.resolveExternalAudioArtist
 import com.smartisanos.music.ui.components.hasAudioPermission
-import com.smartisanos.music.ui.album.AlbumSummary
-import com.smartisanos.music.ui.album.buildAlbumSummaries
+import com.smartisanos.music.ui.album.AlbumViewMode
 import com.smartisanos.music.ui.artist.ArtistSummary
 import com.smartisanos.music.ui.artist.buildArtistSummaries
 import com.smartisanos.music.ui.navigation.MusicDestination
@@ -153,6 +152,9 @@ private fun LegacyPortMainShellContent(
     var currentDestination by remember { mutableStateOf(MusicDestination.Songs) }
     var songsEditMode by remember { mutableStateOf(false) }
     var selectedSongIds by remember { mutableStateOf(emptySet<String>()) }
+    var albumViewMode by remember { mutableStateOf(AlbumViewMode.List) }
+    var albumEditMode by remember { mutableStateOf(false) }
+    var selectedAlbumIds by remember { mutableStateOf(emptySet<String>()) }
     var showSongDeleteConfirm by remember { mutableStateOf(false) }
     var pendingSystemDeleteSongIds by remember { mutableStateOf(emptySet<String>()) }
     var snapshot by remember(controller) {
@@ -231,6 +233,10 @@ private fun LegacyPortMainShellContent(
             selectedSongIds = emptySet()
             showSongDeleteConfirm = false
         }
+        if (currentDestination != MusicDestination.Album) {
+            albumEditMode = false
+            selectedAlbumIds = emptySet()
+        }
     }
 
     LaunchedEffect(externalAudioLaunchRequest, controller) {
@@ -272,6 +278,9 @@ private fun LegacyPortMainShellContent(
                 destination = currentDestination,
                 songsEditMode = currentDestination == MusicDestination.Songs && songsEditMode,
                 selectedSongCount = selectedSongIds.size,
+                albumEditMode = currentDestination == MusicDestination.Album && albumEditMode,
+                selectedAlbumCount = selectedAlbumIds.size,
+                albumViewMode = albumViewMode,
                 onEnterSongsEditMode = {
                     songsEditMode = true
                     selectedSongIds = emptySet()
@@ -286,6 +295,21 @@ private fun LegacyPortMainShellContent(
                         showSongDeleteConfirm = true
                     }
                 },
+                onEnterAlbumEditMode = {
+                    albumEditMode = true
+                    selectedAlbumIds = emptySet()
+                },
+                onExitAlbumEditMode = {
+                    albumEditMode = false
+                    selectedAlbumIds = emptySet()
+                },
+                onToggleAlbumViewMode = {
+                    albumViewMode = if (albumViewMode == AlbumViewMode.List) {
+                        AlbumViewMode.Tile
+                    } else {
+                        AlbumViewMode.List
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth(),
             )
@@ -293,12 +317,22 @@ private fun LegacyPortMainShellContent(
                 destination = currentDestination,
                 songsEditMode = currentDestination == MusicDestination.Songs && songsEditMode,
                 selectedSongIds = selectedSongIds,
+                albumViewMode = albumViewMode,
+                albumEditMode = currentDestination == MusicDestination.Album && albumEditMode,
+                selectedAlbumIds = selectedAlbumIds,
                 hiddenMediaIds = libraryExclusions.hiddenMediaIds,
                 onToggleSongSelected = { mediaId ->
                     selectedSongIds = if (mediaId in selectedSongIds) {
                         selectedSongIds - mediaId
                     } else {
                         selectedSongIds + mediaId
+                    }
+                },
+                onToggleAlbumSelected = { albumId ->
+                    selectedAlbumIds = if (albumId in selectedAlbumIds) {
+                        selectedAlbumIds - albumId
+                    } else {
+                        selectedAlbumIds + albumId
                     }
                 },
                 modifier = Modifier
@@ -477,8 +511,12 @@ private fun LegacyPortTabContent(
     destination: MusicDestination,
     songsEditMode: Boolean,
     selectedSongIds: Set<String>,
+    albumViewMode: AlbumViewMode,
+    albumEditMode: Boolean,
+    selectedAlbumIds: Set<String>,
     hiddenMediaIds: Set<String>,
     onToggleSongSelected: (String) -> Unit,
+    onToggleAlbumSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (destination) {
@@ -489,7 +527,14 @@ private fun LegacyPortTabContent(
             onToggleSongSelected = onToggleSongSelected,
             modifier = modifier,
         )
-        MusicDestination.Album -> LegacyPortAlbumList(modifier = modifier)
+        MusicDestination.Album -> LegacyPortAlbumPage(
+            viewMode = albumViewMode,
+            editMode = albumEditMode,
+            selectedAlbumIds = selectedAlbumIds,
+            hiddenMediaIds = hiddenMediaIds,
+            onToggleAlbumSelected = onToggleAlbumSelected,
+            modifier = modifier,
+        )
         MusicDestination.Artist -> LegacyPortArtistList(modifier = modifier)
         MusicDestination.Playlist -> LegacyPortPlaylistList(modifier = modifier)
         MusicDestination.More -> LegacyPortMoreList(modifier = modifier)
@@ -745,39 +790,6 @@ private object LegacyTitleNormalizer {
 }
 
 @Composable
-private fun LegacyPortAlbumList(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val mediaItems = rememberLegacyLibraryMediaItems()
-    val albums = remember(mediaItems) {
-        buildAlbumSummaries(
-            mediaItems = mediaItems,
-            unknownAlbumTitle = context.getString(R.string.unknown_album),
-            multipleArtistsTitle = context.getString(R.string.many_artist),
-        )
-    }
-    AndroidView(
-        modifier = modifier,
-        factory = { viewContext ->
-            ListView(viewContext).apply {
-                divider = ColorDrawable(viewContext.getColor(R.color.listview_divider_color))
-                dividerHeight = resources.getDimensionPixelSize(R.dimen.listview_dividerHeight)
-                selector = viewContext.getDrawable(R.drawable.listview_selector)
-                cacheColorHint = Color.TRANSPARENT
-                setBackgroundColor(Color.TRANSPARENT)
-                layoutAnimation = AnimationUtils.loadLayoutAnimation(viewContext, R.anim.list_anim_layout)
-            }
-        },
-        update = { listView ->
-            val adapter = listView.adapter as? LegacyAlbumAdapter ?: LegacyAlbumAdapter().also { adapter ->
-                listView.adapter = adapter
-            }
-            adapter.updateItems(albums)
-            listView.scheduleLayoutAnimation()
-        },
-    )
-}
-
-@Composable
 private fun LegacyPortArtistList(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val mediaItems = rememberLegacyLibraryMediaItems()
@@ -866,7 +878,7 @@ private fun LegacyPortMoreList(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun rememberLegacyLibraryMediaItems(): List<MediaItem> {
+internal fun rememberLegacyLibraryMediaItems(): List<MediaItem> {
     val context = LocalContext.current
     val browser = LocalPlaybackBrowser.current
     val hasPermission = hasAudioPermission(context)
@@ -1142,42 +1154,6 @@ private fun buildLegacySongRows(
     return rows
 }
 
-private class LegacyAlbumAdapter : BaseAdapter() {
-    private var items: List<AlbumSummary> = emptyList()
-
-    fun updateItems(nextItems: List<AlbumSummary>) {
-        if (items == nextItems) {
-            return
-        }
-        items = nextItems
-        notifyDataSetChanged()
-    }
-
-    override fun getCount(): Int = items.size
-
-    override fun getItem(position: Int): Any = items[position]
-
-    override fun getItemId(position: Int): Long = position.toLong()
-
-    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-        val view = convertView ?: LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_list_album_layout, parent, false)
-        val item = items[position]
-        view.findViewById<TextView>(R.id.listview_item_line_one)?.text = item.title
-        view.findViewById<TextView>(R.id.listview_item_line_two)?.text =
-            parent.context.resources.getQuantityString(
-                R.plurals.legacy_album_song_count,
-                item.trackCount,
-                item.trackCount,
-                item.artist,
-            )
-        view.findViewById<ImageView>(R.id.listview_item_image)?.setImageResource(R.drawable.noalbumcover_120)
-        view.findViewById<View>(R.id.iv_mask_albumcover)?.setBackgroundResource(R.drawable.mask_albumcover_list)
-        view.findViewById<View>(R.id.cb_del)?.visibility = View.GONE
-        return view
-    }
-}
-
 private class LegacyArtistAdapter : BaseAdapter() {
     private var items: List<ArtistSummary> = emptyList()
 
@@ -1319,9 +1295,15 @@ private fun LegacyPortTitleBar(
     destination: MusicDestination,
     songsEditMode: Boolean,
     selectedSongCount: Int,
+    albumEditMode: Boolean,
+    selectedAlbumCount: Int,
+    albumViewMode: AlbumViewMode,
     onEnterSongsEditMode: () -> Unit,
     onExitSongsEditMode: () -> Unit,
     onRequestDeleteSelected: () -> Unit,
+    onEnterAlbumEditMode: () -> Unit,
+    onExitAlbumEditMode: () -> Unit,
+    onToggleAlbumViewMode: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val titleContentHeight = dimensionResource(R.dimen.title_bar_height)
@@ -1349,9 +1331,15 @@ private fun LegacyPortTitleBar(
                     destination = destination,
                     songsEditMode = songsEditMode,
                     selectedSongCount = selectedSongCount,
+                    albumEditMode = albumEditMode,
+                    selectedAlbumCount = selectedAlbumCount,
+                    albumViewMode = albumViewMode,
                     onEnterSongsEditMode = onEnterSongsEditMode,
                     onExitSongsEditMode = onExitSongsEditMode,
                     onRequestDeleteSelected = onRequestDeleteSelected,
+                    onEnterAlbumEditMode = onEnterAlbumEditMode,
+                    onExitAlbumEditMode = onExitAlbumEditMode,
+                    onToggleAlbumViewMode = onToggleAlbumViewMode,
                 )
             },
         )
@@ -1362,9 +1350,15 @@ private fun TitleBar.setupLegacyMainTitleBar(
     destination: MusicDestination,
     songsEditMode: Boolean,
     selectedSongCount: Int,
+    albumEditMode: Boolean,
+    selectedAlbumCount: Int,
+    albumViewMode: AlbumViewMode,
     onEnterSongsEditMode: () -> Unit,
     onExitSongsEditMode: () -> Unit,
     onRequestDeleteSelected: () -> Unit,
+    onEnterAlbumEditMode: () -> Unit,
+    onExitAlbumEditMode: () -> Unit,
+    onToggleAlbumViewMode: () -> Unit,
 ) {
     removeAllLeftViews()
     removeAllRightViews()
@@ -1388,6 +1382,18 @@ private fun TitleBar.setupLegacyMainTitleBar(
         return
     }
 
+    if (destination == MusicDestination.Album && albumEditMode) {
+        addLeftImageView(R.drawable.standard_icon_cancel_selector).apply {
+            setOnClickListener {
+                onExitAlbumEditMode()
+            }
+        }
+        addRightImageView(R.drawable.titlebar_btn_delete_selector).apply {
+            isEnabled = selectedAlbumCount > 0
+        }
+        return
+    }
+
     when (destination) {
         MusicDestination.More -> {
             addLeftImageView(R.drawable.standard_icon_settings_selector)
@@ -1399,13 +1405,32 @@ private fun TitleBar.setupLegacyMainTitleBar(
         }
         else -> {
             addLeftImageView(R.drawable.standard_icon_multi_select_selector).apply {
-                if (destination == MusicDestination.Songs) {
-                    setOnClickListener {
-                        onEnterSongsEditMode()
+                setOnClickListener {
+                    when (destination) {
+                        MusicDestination.Songs -> {
+                            onEnterSongsEditMode()
+                        }
+                        MusicDestination.Album -> {
+                            onEnterAlbumEditMode()
+                        }
+                        else -> Unit
                     }
                 }
             }
             addRightImageView(R.drawable.search_btn_selector)
+            if (destination == MusicDestination.Album) {
+                addRightImageView(
+                    if (albumViewMode == AlbumViewMode.List) {
+                        R.drawable.album_switch_list
+                    } else {
+                        R.drawable.album_switch_grid
+                    },
+                ).apply {
+                    setOnClickListener {
+                        onToggleAlbumViewMode()
+                    }
+                }
+            }
         }
     }
 }

@@ -13,9 +13,13 @@
     <id name="divider_line" />
     <id name="elvitem" />
     <id name="edit_layout" />
+    <id name="edit_zone" />
     <id name="empty" />
+    <id name="empty_selected_view" />
     <id name="fragment_container" />
     <id name="fl_null_artist" />
+    <id name="fl_list_tile" />
+    <id name="gridview_image" />
     <id name="head" />
     <id name="icon_layout" />
     <id name="img_action_more" />
@@ -31,6 +35,7 @@
     <id name="linerlayout" />
     <id name="list" />
     <id name="list_content_item" />
+    <id name="listview_grid" />
     <id name="listview_item_char_hint" />
     <id name="listview_item_image" />
     <id name="left_btn" />
@@ -73,6 +78,7 @@
     <id name="text" />
     <id name="track_name" />
     <id name="tv_duration" />
+    <id name="tv_album_name" />
     <id name="tv_count" />
     <id name="tv_head" />
     <id name="view_divider" />
@@ -82,6 +88,7 @@
     <id name="btn_ok" />
     <id name="contentPanel" />
     <id name="content_list" />
+    <id name="check_view" />
     <id name="menu_dialog_title_bar" />
     <id name="menu_dialog_title_bar_container" />
     <id name="title" />
@@ -131,6 +138,12 @@
     <dimen name="float_button_margin">3.0dp</dimen>
     <dimen name="float_cover_padding_left">12.0dp</dimen>
     <dimen name="flexible_space">18.0dp</dimen>
+    <dimen name="gridview_horizontalSpacing">1.0px</dimen>
+    <dimen name="gridview_item_ccontainer_height">116.0dp</dimen>
+    <dimen name="gridview_margin">9.0dp</dimen>
+    <dimen name="gridview_padding">3.0dp</dimen>
+    <dimen name="gridview_padding_top2">7.0dp</dimen>
+    <dimen name="gridview_verticalSpacing">2.0dp</dimen>
     <dimen name="left_icon_area_width">60.0dp</dimen>
     <dimen name="listview_dividerHeight">0.6700001dp</dimen>
     <dimen name="listview_item_height">60.0dp</dimen>
@@ -240,6 +253,7 @@
     <string name="tab_more">更多</string>
 
     <integer name="item_flip">30</integer>
+    <integer name="gridview_columns">3</integer>
     <integer name="quickbar_ex_num_columns">3</integer>
     <integer name="smartisan_letterbar_gridview_column_num">3</integer>
 
