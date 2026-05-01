@@ -621,7 +621,9 @@ private class LegacyAlbumViewSwitchAnimator {
         val listHost = root.listHost
         val listView = root.listView
         val gridView = root.gridView
-        gridView.setSelection(listView.firstVisiblePosition)
+        val firstVisiblePosition = listView.firstVisiblePosition
+        val firstVisibleTop = listView.getChildAt(0)?.top ?: 0
+        gridView.setSelectionFromTop(firstVisiblePosition, firstVisibleTop)
         gridView.visibility = View.VISIBLE
         listHost.visibility = View.VISIBLE
         listHost.alpha = 1f
@@ -655,12 +657,17 @@ private class LegacyAlbumViewSwitchAnimator {
                     interpolator = this@LegacyAlbumViewSwitchAnimator.interpolator
                 }
             }
+            // 和 8.1.0 行为一致：切到平铺时列表直接隐藏，避免叠影/触摸冲突。
             listHost.visibility = View.GONE
             animator = AnimatorSet().apply {
                 playTogether(animators)
                 addListener(
                     object : android.animation.AnimatorListenerAdapter() {
                         override fun onAnimationEnd(animation: Animator) {
+                            resetGridChildren(gridView)
+                        }
+
+                        override fun onAnimationCancel(animation: Animator) {
                             resetGridChildren(gridView)
                         }
                     },
@@ -674,7 +681,9 @@ private class LegacyAlbumViewSwitchAnimator {
         val listHost = root.listHost
         val listView = root.listView
         val gridView = root.gridView
-        listView.setSelection(gridView.firstVisiblePosition)
+        val firstVisiblePosition = gridView.firstVisiblePosition
+        val firstVisibleTop = gridView.getChildAt(0)?.top ?: 0
+        listView.setSelectionFromTop(firstVisiblePosition, firstVisibleTop)
         listHost.animate().cancel()
         listHost.alpha = 0f
         listHost.visibility = View.VISIBLE
@@ -682,7 +691,7 @@ private class LegacyAlbumViewSwitchAnimator {
         listView.visibility = View.VISIBLE
         listView.post {
             val animators = mutableListOf<Animator>()
-            val hiddenListTargets = mutableSetOf<View>()
+            val transitionDuration = gridView.transitionDurationMillis()
             for (index in 0 until gridView.childCount) {
                 val gridChild = gridView.getChildAt(index) ?: continue
                 val gridCover = gridChild.findViewById<View>(R.id.gridview_image) ?: continue
@@ -691,10 +700,6 @@ private class LegacyAlbumViewSwitchAnimator {
                 val start = gridCover.boundsOnScreen()
                 val target = listCover?.boundsOnScreen()
                 if (target != null) {
-                    listCover.parentView()?.let { listTargetParent ->
-                        listTargetParent.visibility = View.INVISIBLE
-                        hiddenListTargets += listTargetParent
-                    }
                     gridChild.setLayerType(View.LAYER_TYPE_HARDWARE, null)
                     gridChild.pivotX = 0f
                     gridChild.pivotY = 0f
@@ -710,14 +715,15 @@ private class LegacyAlbumViewSwitchAnimator {
                     }
                 }
             }
+            animators += ObjectAnimator.ofFloat(listHost, View.ALPHA, 0f, 1f).apply {
+                duration = transitionDuration
+                interpolator = this@LegacyAlbumViewSwitchAnimator.interpolator
+            }
             animator = AnimatorSet().apply {
                 playTogether(animators)
                 addListener(
                     object : android.animation.AnimatorListenerAdapter() {
                         override fun onAnimationEnd(animation: Animator) {
-                            hiddenListTargets.forEach { hiddenTarget ->
-                                hiddenTarget.visibility = View.VISIBLE
-                            }
                             listHost.animate().cancel()
                             listHost.alpha = 1f
                             gridView.visibility = View.GONE
@@ -725,9 +731,8 @@ private class LegacyAlbumViewSwitchAnimator {
                         }
 
                         override fun onAnimationCancel(animation: Animator) {
-                            hiddenListTargets.forEach { hiddenTarget ->
-                                hiddenTarget.visibility = View.VISIBLE
-                            }
+                            listHost.alpha = 1f
+                            gridView.visibility = View.GONE
                             resetGridChildren(gridView)
                         }
                     },
@@ -749,6 +754,11 @@ private class LegacyAlbumViewSwitchAnimator {
             }
         }
     }
+}
+
+private fun GridView.transitionDurationMillis(): Long {
+    val childCount = childCount.coerceAtLeast(1)
+    return AlbumSwitchBaseDurationMillis + (childCount - 1) * AlbumSwitchStaggerMillis
 }
 
 private fun ListView.findCoverByPosition(position: Int): View? {
