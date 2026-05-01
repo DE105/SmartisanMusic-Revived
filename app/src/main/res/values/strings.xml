@@ -34,6 +34,8 @@
     <string name="playlist_delete_confirm">确认删除选中的播放列表？</string>
     <string name="playlist_delete_single_confirm">确认删除此播放列表？</string>
     <string name="playlist_remove_song_confirm">确认删除选中的歌曲?</string>
+    <string name="delete_song_title_text">确认删除选中的歌曲?</string>
+    <string name="dialog_delete_conform">确认删除</string>
     <string name="playlist_song_count">%1$d 首歌曲</string>
     <string name="playlists_count">%1$d 个播放列表</string>
     <string name="delete_track">移除歌曲</string>
@@ -141,4 +143,11 @@
     <string name="audio_permission_action">授予权限</string>
     <string name="audio_permission_settings">打开设置</string>
     <string name="toggle_directory_visibility">隐藏显示</string>
+    <string name="legacy_artist_summary">%1$d 张专辑，%2$d 首歌曲</string>
+    <plurals name="legacy_album_song_count">
+        <item quantity="other">%1$d 首歌曲，%2$s</item>
+    </plurals>
+    <plurals name="legacy_playlist_song_count">
+        <item quantity="other">%1$d 首歌曲</item>
+    </plurals>
 </resources>
