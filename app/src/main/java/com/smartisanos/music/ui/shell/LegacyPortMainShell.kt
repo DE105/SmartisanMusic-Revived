@@ -25,6 +25,7 @@ import android.widget.ImageView
 import android.widget.ListView
 import android.widget.RelativeLayout
 import android.widget.TextView
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -148,6 +149,7 @@ private fun LegacyPortMainShellContent(
     val favoriteIds by favoriteRepository.observeFavoriteIds().collectAsState(initial = emptySet())
     val libraryExclusions by libraryExclusionsStore.exclusions.collectAsState(initial = LibraryExclusions())
     val playbackSettings by playbackSettingsStore.settings.collectAsState(initial = PlaybackSettings())
+    val legacyLibrary = rememberLegacyLibraryMediaState()
     var playbackVisible by remember { mutableStateOf(false) }
     var currentDestination by remember { mutableStateOf(MusicDestination.Songs) }
     var songsEditMode by remember { mutableStateOf(false) }
@@ -155,6 +157,8 @@ private fun LegacyPortMainShellContent(
     var albumViewMode by remember { mutableStateOf(AlbumViewMode.List) }
     var albumEditMode by remember { mutableStateOf(false) }
     var selectedAlbumIds by remember { mutableStateOf(emptySet<String>()) }
+    var selectedAlbumId by remember { mutableStateOf<String?>(null) }
+    var selectedAlbumTitle by remember { mutableStateOf<String?>(null) }
     var showSongDeleteConfirm by remember { mutableStateOf(false) }
     var pendingSystemDeleteSongIds by remember { mutableStateOf(emptySet<String>()) }
     var snapshot by remember(controller) {
@@ -236,7 +240,14 @@ private fun LegacyPortMainShellContent(
         if (currentDestination != MusicDestination.Album) {
             albumEditMode = false
             selectedAlbumIds = emptySet()
+            selectedAlbumId = null
+            selectedAlbumTitle = null
         }
+    }
+
+    BackHandler(enabled = currentDestination == MusicDestination.Album && selectedAlbumId != null) {
+        selectedAlbumId = null
+        selectedAlbumTitle = null
     }
 
     LaunchedEffect(externalAudioLaunchRequest, controller) {
@@ -280,6 +291,7 @@ private fun LegacyPortMainShellContent(
                 selectedSongCount = selectedSongIds.size,
                 albumEditMode = currentDestination == MusicDestination.Album && albumEditMode,
                 selectedAlbumCount = selectedAlbumIds.size,
+                albumDetailTitle = if (currentDestination == MusicDestination.Album) selectedAlbumTitle else null,
                 albumViewMode = albumViewMode,
                 onEnterSongsEditMode = {
                     songsEditMode = true
@@ -310,15 +322,22 @@ private fun LegacyPortMainShellContent(
                         AlbumViewMode.List
                     }
                 },
+                onAlbumDetailBack = {
+                    selectedAlbumId = null
+                    selectedAlbumTitle = null
+                },
                 modifier = Modifier
                     .fillMaxWidth(),
             )
             LegacyPortTabContent(
                 destination = currentDestination,
+                mediaItems = legacyLibrary.items,
+                libraryLoaded = legacyLibrary.loaded,
                 songsEditMode = currentDestination == MusicDestination.Songs && songsEditMode,
                 selectedSongIds = selectedSongIds,
                 albumViewMode = albumViewMode,
                 albumEditMode = currentDestination == MusicDestination.Album && albumEditMode,
+                selectedAlbumId = selectedAlbumId,
                 selectedAlbumIds = selectedAlbumIds,
                 hiddenMediaIds = libraryExclusions.hiddenMediaIds,
                 onToggleSongSelected = { mediaId ->
@@ -334,6 +353,12 @@ private fun LegacyPortMainShellContent(
                     } else {
                         selectedAlbumIds + albumId
                     }
+                },
+                onAlbumSelected = { albumId, albumTitle ->
+                    albumEditMode = false
+                    selectedAlbumIds = emptySet()
+                    selectedAlbumId = albumId
+                    selectedAlbumTitle = albumTitle
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -509,18 +534,25 @@ private fun LegacySongDeleteConfirmOverlay(
 @Composable
 private fun LegacyPortTabContent(
     destination: MusicDestination,
+    mediaItems: List<MediaItem>,
+    libraryLoaded: Boolean,
     songsEditMode: Boolean,
     selectedSongIds: Set<String>,
     albumViewMode: AlbumViewMode,
     albumEditMode: Boolean,
+    selectedAlbumId: String?,
     selectedAlbumIds: Set<String>,
     hiddenMediaIds: Set<String>,
     onToggleSongSelected: (String) -> Unit,
     onToggleAlbumSelected: (String) -> Unit,
+    onAlbumSelected: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (destination) {
         MusicDestination.Songs -> LegacyPortSongsPage(
+            mediaItems = mediaItems,
+            libraryLoaded = libraryLoaded,
+            active = true,
             editMode = songsEditMode,
             selectedSongIds = selectedSongIds,
             hiddenMediaIds = hiddenMediaIds,
@@ -528,21 +560,38 @@ private fun LegacyPortTabContent(
             modifier = modifier,
         )
         MusicDestination.Album -> LegacyPortAlbumPage(
+            mediaItems = mediaItems,
+            active = true,
             viewMode = albumViewMode,
             editMode = albumEditMode,
+            selectedAlbumId = selectedAlbumId,
             selectedAlbumIds = selectedAlbumIds,
             hiddenMediaIds = hiddenMediaIds,
+            onAlbumSelected = onAlbumSelected,
             onToggleAlbumSelected = onToggleAlbumSelected,
             modifier = modifier,
         )
-        MusicDestination.Artist -> LegacyPortArtistList(modifier = modifier)
-        MusicDestination.Playlist -> LegacyPortPlaylistList(modifier = modifier)
-        MusicDestination.More -> LegacyPortMoreList(modifier = modifier)
+        MusicDestination.Artist -> LegacyPortArtistList(
+            mediaItems = mediaItems,
+            active = true,
+            modifier = modifier,
+        )
+        MusicDestination.Playlist -> LegacyPortPlaylistList(
+            active = true,
+            modifier = modifier,
+        )
+        MusicDestination.More -> LegacyPortMoreList(
+            active = true,
+            modifier = modifier,
+        )
     }
 }
 
 @Composable
 private fun LegacyPortSongsPage(
+    mediaItems: List<MediaItem>,
+    libraryLoaded: Boolean,
+    active: Boolean,
     editMode: Boolean,
     selectedSongIds: Set<String>,
     hiddenMediaIds: Set<String>,
@@ -550,10 +599,9 @@ private fun LegacyPortSongsPage(
     modifier: Modifier = Modifier,
 ) {
     val browser = LocalPlaybackBrowser.current
-    val songs = rememberLegacyLibraryMediaItems()
     var selectedSortIndex by remember { mutableStateOf(0) }
-    val visibleSongs = remember(songs, hiddenMediaIds) {
-        songs.filterNot { mediaItem -> mediaItem.mediaId in hiddenMediaIds }
+    val visibleSongs = remember(mediaItems, hiddenMediaIds) {
+        mediaItems.filterNot { mediaItem -> mediaItem.mediaId in hiddenMediaIds }
     }
     val sortedSongs = remember(visibleSongs, selectedSortIndex) {
         visibleSongs.sortedForLegacySort(selectedSortIndex)
@@ -581,9 +629,11 @@ private fun LegacyPortSongsPage(
             }
         },
         update = { root ->
+            root.visibility = if (active) View.VISIBLE else View.INVISIBLE
             val hasSongs = sortedSongs.isNotEmpty()
+            val showEmptyState = libraryLoaded && !hasSongs
             val playActionsEnabled = hasSongs && !editMode
-            root.findViewById<View>(R.id.fl_null_artist)?.visibility = if (hasSongs) View.GONE else View.VISIBLE
+            root.findViewById<View>(R.id.fl_null_artist)?.visibility = if (showEmptyState) View.VISIBLE else View.GONE
             root.findViewById<ActionButtonGroup>(R.id.l_alltrack_header)?.apply {
                 visibility = if (hasSongs) View.VISIBLE else View.GONE
                 setupLegacySongsSortHeader(selectedSortIndex) { index ->
@@ -621,6 +671,7 @@ private fun LegacyPortSongsPage(
                 }
             }
             val listView = root.findViewById<ListView>(R.id.list) ?: return@AndroidView
+            listView.visibility = if (hasSongs || libraryLoaded) View.VISIBLE else View.INVISIBLE
             val adapter = listView.adapter as? LegacySongsAdapter ?: LegacySongsAdapter().also { adapter ->
                 listView.adapter = adapter
             }
@@ -790,9 +841,12 @@ private object LegacyTitleNormalizer {
 }
 
 @Composable
-private fun LegacyPortArtistList(modifier: Modifier = Modifier) {
+private fun LegacyPortArtistList(
+    mediaItems: List<MediaItem>,
+    active: Boolean,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
-    val mediaItems = rememberLegacyLibraryMediaItems()
     val artists = remember(mediaItems) {
         buildArtistSummaries(
             mediaItems = mediaItems,
@@ -813,17 +867,22 @@ private fun LegacyPortArtistList(modifier: Modifier = Modifier) {
             }
         },
         update = { listView ->
+            listView.visibility = if (active) View.VISIBLE else View.INVISIBLE
             val adapter = listView.adapter as? LegacyArtistAdapter ?: LegacyArtistAdapter().also { adapter ->
                 listView.adapter = adapter
             }
-            adapter.updateItems(artists)
-            listView.scheduleLayoutAnimation()
+            if (adapter.updateItems(artists)) {
+                listView.scheduleLayoutAnimation()
+            }
         },
     )
 }
 
 @Composable
-private fun LegacyPortPlaylistList(modifier: Modifier = Modifier) {
+private fun LegacyPortPlaylistList(
+    active: Boolean,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val playlistRepository = remember(context.applicationContext) {
         PlaylistRepository.getInstance(context.applicationContext)
@@ -843,17 +902,22 @@ private fun LegacyPortPlaylistList(modifier: Modifier = Modifier) {
             }
         },
         update = { listView ->
+            listView.visibility = if (active) View.VISIBLE else View.INVISIBLE
             val adapter = listView.adapter as? LegacyPlaylistAdapter ?: LegacyPlaylistAdapter().also { adapter ->
                 listView.adapter = adapter
             }
-            adapter.updateItems(playlists)
-            listView.scheduleLayoutAnimation()
+            if (adapter.updateItems(playlists)) {
+                listView.scheduleLayoutAnimation()
+            }
         },
     )
 }
 
 @Composable
-private fun LegacyPortMoreList(modifier: Modifier = Modifier) {
+private fun LegacyPortMoreList(
+    active: Boolean,
+    modifier: Modifier = Modifier,
+) {
     AndroidView(
         modifier = modifier,
         factory = { viewContext ->
@@ -866,46 +930,54 @@ private fun LegacyPortMoreList(modifier: Modifier = Modifier) {
             }
         },
         update = { root ->
+            root.visibility = if (active) View.VISIBLE else View.INVISIBLE
             root.findViewById<ListView>(R.id.list)?.apply {
-                val adapter = adapter as? LegacyMoreAdapter ?: LegacyMoreAdapter().also { nextAdapter ->
-                    this.adapter = nextAdapter
+                if (adapter !is LegacyMoreAdapter) {
+                    adapter = LegacyMoreAdapter()
+                    scheduleLayoutAnimation()
                 }
-                adapter.notifyDataSetChanged()
-                scheduleLayoutAnimation()
             }
         },
     )
 }
 
 @Composable
-internal fun rememberLegacyLibraryMediaItems(): List<MediaItem> {
+internal fun rememberLegacyLibraryMediaState(): LegacyLibraryMediaState {
     val context = LocalContext.current
     val browser = LocalPlaybackBrowser.current
     val hasPermission = hasAudioPermission(context)
-    var mediaItems by remember(browser) { mutableStateOf(emptyList<MediaItem>()) }
+    var state by remember(browser) { mutableStateOf(LegacyLibraryMediaState()) }
 
     LaunchedEffect(browser, hasPermission) {
         val playbackBrowser = browser ?: run {
-            mediaItems = emptyList()
+            state = LegacyLibraryMediaState(loaded = true)
             return@LaunchedEffect
         }
         if (!hasPermission) {
-            mediaItems = emptyList()
+            state = LegacyLibraryMediaState(loaded = true)
             return@LaunchedEffect
         }
         val rootItem = playbackBrowser.getLibraryRoot(null).await(context).value ?: run {
-            mediaItems = emptyList()
+            state = LegacyLibraryMediaState(loaded = true)
             return@LaunchedEffect
         }
-        mediaItems = playbackBrowser.getChildren(rootItem.mediaId, 0, Int.MAX_VALUE, null)
-            .await(context)
-            .value
-            ?.toList()
-            .orEmpty()
+        state = LegacyLibraryMediaState(
+            items = playbackBrowser.getChildren(rootItem.mediaId, 0, Int.MAX_VALUE, null)
+                .await(context)
+                .value
+                ?.toList()
+                .orEmpty(),
+            loaded = true,
+        )
     }
 
-    return mediaItems
+    return state
 }
+
+internal data class LegacyLibraryMediaState(
+    val items: List<MediaItem> = emptyList(),
+    val loaded: Boolean = false,
+)
 
 private class LegacySongsAdapter : BaseAdapter() {
     var items: List<MediaItem> = emptyList()
@@ -1157,12 +1229,13 @@ private fun buildLegacySongRows(
 private class LegacyArtistAdapter : BaseAdapter() {
     private var items: List<ArtistSummary> = emptyList()
 
-    fun updateItems(nextItems: List<ArtistSummary>) {
+    fun updateItems(nextItems: List<ArtistSummary>): Boolean {
         if (items == nextItems) {
-            return
+            return false
         }
         items = nextItems
         notifyDataSetChanged()
+        return true
     }
 
     override fun getCount(): Int = items.size
@@ -1191,12 +1264,13 @@ private class LegacyArtistAdapter : BaseAdapter() {
 private class LegacyPlaylistAdapter : BaseAdapter() {
     private var items: List<UserPlaylistSummary> = emptyList()
 
-    fun updateItems(nextItems: List<UserPlaylistSummary>) {
+    fun updateItems(nextItems: List<UserPlaylistSummary>): Boolean {
         if (items == nextItems) {
-            return
+            return false
         }
         items = nextItems
         notifyDataSetChanged()
+        return true
     }
 
     override fun getCount(): Int = items.size
@@ -1297,6 +1371,7 @@ private fun LegacyPortTitleBar(
     selectedSongCount: Int,
     albumEditMode: Boolean,
     selectedAlbumCount: Int,
+    albumDetailTitle: String?,
     albumViewMode: AlbumViewMode,
     onEnterSongsEditMode: () -> Unit,
     onExitSongsEditMode: () -> Unit,
@@ -1304,6 +1379,7 @@ private fun LegacyPortTitleBar(
     onEnterAlbumEditMode: () -> Unit,
     onExitAlbumEditMode: () -> Unit,
     onToggleAlbumViewMode: () -> Unit,
+    onAlbumDetailBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val titleContentHeight = dimensionResource(R.dimen.title_bar_height)
@@ -1333,6 +1409,7 @@ private fun LegacyPortTitleBar(
                     selectedSongCount = selectedSongCount,
                     albumEditMode = albumEditMode,
                     selectedAlbumCount = selectedAlbumCount,
+                    albumDetailTitle = albumDetailTitle,
                     albumViewMode = albumViewMode,
                     onEnterSongsEditMode = onEnterSongsEditMode,
                     onExitSongsEditMode = onExitSongsEditMode,
@@ -1340,6 +1417,7 @@ private fun LegacyPortTitleBar(
                     onEnterAlbumEditMode = onEnterAlbumEditMode,
                     onExitAlbumEditMode = onExitAlbumEditMode,
                     onToggleAlbumViewMode = onToggleAlbumViewMode,
+                    onAlbumDetailBack = onAlbumDetailBack,
                 )
             },
         )
@@ -1352,6 +1430,7 @@ private fun TitleBar.setupLegacyMainTitleBar(
     selectedSongCount: Int,
     albumEditMode: Boolean,
     selectedAlbumCount: Int,
+    albumDetailTitle: String?,
     albumViewMode: AlbumViewMode,
     onEnterSongsEditMode: () -> Unit,
     onExitSongsEditMode: () -> Unit,
@@ -1359,11 +1438,21 @@ private fun TitleBar.setupLegacyMainTitleBar(
     onEnterAlbumEditMode: () -> Unit,
     onExitAlbumEditMode: () -> Unit,
     onToggleAlbumViewMode: () -> Unit,
+    onAlbumDetailBack: () -> Unit,
 ) {
     removeAllLeftViews()
     removeAllRightViews()
     setShadowVisible(false)
-    setCenterText(destination.label)
+    setCenterText(albumDetailTitle ?: destination.label)
+
+    if (destination == MusicDestination.Album && albumDetailTitle != null) {
+        addLeftImageView(R.drawable.standard_icon_back_selector).apply {
+            setOnClickListener {
+                onAlbumDetailBack()
+            }
+        }
+        return
+    }
 
     if (destination == MusicDestination.Songs && songsEditMode) {
         addLeftImageView(R.drawable.standard_icon_cancel_selector).apply {
@@ -1419,17 +1508,15 @@ private fun TitleBar.setupLegacyMainTitleBar(
             }
             addRightImageView(R.drawable.search_btn_selector)
             if (destination == MusicDestination.Album) {
-                addRightImageView(
-                    if (albumViewMode == AlbumViewMode.List) {
-                        R.drawable.album_switch_list
-                    } else {
-                        R.drawable.album_switch_grid
-                    },
-                ).apply {
+                val switchButton = CheckBox(context, null).apply {
+                    setButtonDrawable(R.drawable.album_switch_selector)
+                    background = null
+                    isChecked = albumViewMode == AlbumViewMode.List
                     setOnClickListener {
                         onToggleAlbumViewMode()
                     }
                 }
+                addRightView(switchButton)
             }
         }
     }
