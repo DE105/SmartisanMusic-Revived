@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.smartisanos.music.ui.shell.MusicApp
+import com.smartisanos.music.ui.shell.LegacyPortMainShell
 import com.smartisanos.music.ui.theme.MusicTheme
 
 class MainActivity : ComponentActivity() {
@@ -36,11 +37,19 @@ class MainActivity : ComponentActivity() {
         setContent {
             MusicTheme(darkTheme = false, dynamicColor = false) {
                 RequestAudioPermissionOnLaunch()
-                MusicApp(
-                    playbackLaunchRequest = playbackLaunchRequest,
-                    externalAudioLaunchRequest = externalAudioLaunchRequest,
-                    onExternalAudioLaunchConsumed = ::clearExternalAudioLaunchRequest,
-                )
+                if (UsePortShellPreview) {
+                    LegacyPortMainShell(
+                        playbackLaunchRequest = playbackLaunchRequest,
+                        externalAudioLaunchRequest = externalAudioLaunchRequest,
+                        onExternalAudioLaunchConsumed = ::clearExternalAudioLaunchRequest,
+                    )
+                } else {
+                    MusicApp(
+                        playbackLaunchRequest = playbackLaunchRequest,
+                        externalAudioLaunchRequest = externalAudioLaunchRequest,
+                        onExternalAudioLaunchConsumed = ::clearExternalAudioLaunchRequest,
+                    )
+                }
             }
         }
     }
@@ -113,6 +122,7 @@ class MainActivity : ComponentActivity() {
         private const val ExtraExternalAudioConsumed = "com.smartisanos.music.extra.EXTERNAL_AUDIO_CONSUMED"
         private const val ContentScheme = "content"
         private const val FileScheme = "file"
+        private const val UsePortShellPreview = true
 
         fun createOpenPlaybackIntent(context: Context): Intent {
             return Intent(context, MainActivity::class.java).apply {
