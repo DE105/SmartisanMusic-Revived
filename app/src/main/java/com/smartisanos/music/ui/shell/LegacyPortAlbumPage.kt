@@ -18,6 +18,7 @@ import android.widget.AbsListView
 import android.widget.BaseAdapter
 import android.widget.FrameLayout
 import android.widget.GridView
+import android.widget.HeaderViewListAdapter
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
@@ -44,15 +45,27 @@ import com.smartisanos.music.ui.widgets.EditableLayout
 
 private const val AlbumSwitchBaseDurationMillis = 150L
 private const val AlbumSwitchStaggerMillis = 10L
+private const val LegacyAlbumListFooterThreshold = 8
+private const val LegacyAlbumGridFooterThreshold = 12
 private val LegacyAlbumPrimaryTextColor = Color.rgb(0x35, 0x35, 0x39)
 private val LegacyAlbumSecondaryTextColor = Color.rgb(0xa4, 0xa7, 0xac)
 private val LegacyAlbumSelectedTextColor = Color.rgb(0xe6, 0x40, 0x40)
+private val LegacyAlbumFooterTextColor = Color.rgb(0xbc, 0xbc, 0xbc)
 
 private fun android.content.res.Resources.getLegacyAlbumScrollBottomPadding(): Int {
     val playbackBarHeight = getDimensionPixelSize(R.dimen.play_back_content_height)
     val playbackShadowHeight = (6f * displayMetrics.density).toInt()
     val contentBottomCompensation = (6f * displayMetrics.density).toInt()
     return playbackBarHeight + playbackShadowHeight + contentBottomCompensation
+}
+
+private fun android.content.res.Resources.getDimensionPixelSizeCompatFooterPadding(): Int {
+    return (8f * displayMetrics.density).toInt()
+}
+
+private fun android.content.res.Resources.getDimensionPixelSizeCompatFooterHeight(): Int {
+    val textHeight = (24f * displayMetrics.density).toInt()
+    return textHeight + getDimensionPixelSizeCompatFooterPadding() * 2
 }
 
 @Composable
@@ -169,7 +182,7 @@ private fun LegacyPortAlbumOverviewPage(
                 },
             )
 
-            val listAdapter = root.listView.adapter as? LegacyAlbumListAdapter
+            val listAdapter = root.listView.legacyAlbumListAdapter()
                 ?: LegacyAlbumListAdapter(root.artworkLoader).also { adapter ->
                     root.listView.adapter = adapter
                 }
@@ -192,6 +205,7 @@ private fun LegacyPortAlbumOverviewPage(
                 nextEditMode = editMode,
                 nextSelectedAlbumIds = selectedAlbumIds,
             )
+            root.bindFooter(albumCount = albums.size)
             if (!listContentChanged) {
                 listAdapter.updateVisibleRows(root.listView, animate = animateEditMode)
             }
@@ -236,6 +250,9 @@ private class LegacyAlbumRoot(context: Context) : LinearLayout(context) {
     val listView: ListView
     val gridView: GridView
     val artworkLoader = LegacyAlbumArtworkLoader(context)
+    private val listFooterView = LegacyAlbumFooterView(context)
+    private val gridFooterView = LegacyAlbumGridFooterOverlay(context)
+    private var albumCount: Int = 0
     var viewMode: AlbumViewMode? = null
     var editMode: Boolean? = null
 
@@ -300,6 +317,7 @@ private class LegacyAlbumRoot(context: Context) : LinearLayout(context) {
             setPadding(0, 0, 0, resources.getLegacyAlbumScrollBottomPadding())
             clipToPadding = false
             layoutAnimation = AnimationUtils.loadLayoutAnimation(context, R.anim.list_anim_layout)
+            addFooterView(listFooterView, null, false)
         }
         listHost.addView(
             listView,
@@ -326,12 +344,34 @@ private class LegacyAlbumRoot(context: Context) : LinearLayout(context) {
             )
             clipToPadding = false
             visibility = View.GONE
+            setOnScrollListener(
+                object : AbsListView.OnScrollListener {
+                    override fun onScrollStateChanged(view: AbsListView?, scrollState: Int) = Unit
+
+                    override fun onScroll(
+                        view: AbsListView?,
+                        firstVisibleItem: Int,
+                        visibleItemCount: Int,
+                        totalItemCount: Int,
+                    ) {
+                        updateGridFooterVisibility()
+                    }
+                },
+            )
         }
         content.addView(
             gridView,
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        content.addView(
+            gridFooterView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                resources.getDimensionPixelSizeCompatFooterHeight(),
+                Gravity.BOTTOM,
             ),
         )
     }
@@ -370,6 +410,34 @@ private class LegacyAlbumRoot(context: Context) : LinearLayout(context) {
         listView.visibility = View.VISIBLE
         gridView.alpha = 1f
         gridView.visibility = if (mode == AlbumViewMode.Tile) View.VISIBLE else View.GONE
+        updateGridFooterVisibility()
+    }
+
+    fun bindFooter(albumCount: Int) {
+        this.albumCount = albumCount
+        listFooterView.bind(
+            albumCount = albumCount,
+            visible = albumCount >= LegacyAlbumListFooterThreshold,
+        )
+        gridFooterView.bind(albumCount = albumCount)
+        updateGridFooterVisibility()
+    }
+
+    fun hideGridFooter() {
+        gridFooterView.visibility = View.GONE
+    }
+
+    fun updateGridFooterVisibility() {
+        gridFooterView.visibility = if (
+            viewMode == AlbumViewMode.Tile &&
+            gridView.visibility == View.VISIBLE &&
+            albumCount >= LegacyAlbumGridFooterThreshold &&
+            !gridView.canScrollVertically(1)
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
     }
 
     override fun onDetachedFromWindow() {
@@ -474,6 +542,9 @@ private class LegacyAlbumGridAdapter(
     private var currentMediaId: String? = null
     private var editMode: Boolean = false
     private var selectedAlbumIds: Set<String> = emptySet()
+
+    val albumCount: Int
+        get() = items.size
 
     fun updateItems(
         nextItems: List<AlbumSummary>,
@@ -607,6 +678,60 @@ private class LegacyAlbumGridAdapter(
             )
         }
     }
+
+}
+
+private class LegacyAlbumFooterView(context: Context) : LinearLayout(context) {
+    private val content = TextView(context).apply {
+        gravity = Gravity.CENTER
+        setTextColor(LegacyAlbumFooterTextColor)
+        textSize = 15f
+        setBackgroundColor(Color.WHITE)
+        setPadding(0, resources.getDimensionPixelSizeCompatFooterPadding(), 0, resources.getDimensionPixelSizeCompatFooterPadding())
+    }
+
+    init {
+        orientation = VERTICAL
+        setBackgroundColor(Color.WHITE)
+        addView(
+            content,
+            LayoutParams(
+                LayoutParams.MATCH_PARENT,
+                LayoutParams.WRAP_CONTENT,
+            ),
+        )
+        bind(albumCount = 0, visible = false)
+    }
+
+    fun bind(albumCount: Int, visible: Boolean) {
+        content.text = context.getString(R.string.legacy_album_count, albumCount)
+        content.visibility = if (visible) View.VISIBLE else View.GONE
+    }
+}
+
+private class LegacyAlbumGridFooterOverlay(context: Context) : FrameLayout(context) {
+    private val content = TextView(context).apply {
+        gravity = Gravity.CENTER
+        setTextColor(LegacyAlbumFooterTextColor)
+        textSize = 15f
+        setBackgroundColor(Color.WHITE)
+    }
+
+    init {
+        setBackgroundColor(Color.WHITE)
+        visibility = View.GONE
+        addView(
+            content,
+            LayoutParams(
+                LayoutParams.MATCH_PARENT,
+                LayoutParams.MATCH_PARENT,
+            ),
+        )
+    }
+
+    fun bind(albumCount: Int) {
+        content.text = context.getString(R.string.legacy_album_count, albumCount)
+    }
 }
 
 private class LegacyAlbumViewSwitchAnimator {
@@ -638,6 +763,7 @@ private class LegacyAlbumViewSwitchAnimator {
         val gridView = root.gridView
         val firstVisiblePosition = listView.firstVisiblePosition
         val lastVisiblePosition = listView.lastVisiblePosition
+        root.hideGridFooter()
         listHost.animate().cancel()
         listHost.visibility = View.VISIBLE
         listHost.alpha = 1f
@@ -645,10 +771,16 @@ private class LegacyAlbumViewSwitchAnimator {
         afterNextLayout(gridView, gen) {
             if (gen != generation) return@afterNextLayout
             val animators = mutableListOf<Animator>()
+            val gridFirstVisiblePosition = gridView.firstVisiblePosition
             for (index in 0 until gridView.childCount) {
                 val gridChild = gridView.getChildAt(index) ?: continue
                 val gridCover = gridChild.findViewById<View>(R.id.gridview_image) ?: continue
                 val position = gridCover.getTag(R.string.add_track) as? Int ?: continue
+                val animationOrder = gridAnimationOrder(
+                    position = position,
+                    firstVisiblePosition = gridFirstVisiblePosition,
+                    fallbackIndex = index,
+                )
                 val listCover = listView.findCoverByPosition(position)
                 gridChild.prepareForAlbumSwitch()
                 gridChild.applyListToGridStart(
@@ -666,7 +798,8 @@ private class LegacyAlbumViewSwitchAnimator {
                     PropertyValuesHolder.ofFloat(View.SCALE_X, gridChild.scaleX, 1f),
                     PropertyValuesHolder.ofFloat(View.SCALE_Y, gridChild.scaleY, 1f),
                 ).apply {
-                    duration = AlbumSwitchBaseDurationMillis + index * AlbumSwitchStaggerMillis
+                    duration = AlbumSwitchBaseDurationMillis
+                    startDelay = animationOrder * AlbumSwitchStaggerMillis
                     interpolator = this@LegacyAlbumViewSwitchAnimator.interpolator
                 }
             }
@@ -688,11 +821,13 @@ private class LegacyAlbumViewSwitchAnimator {
                         override fun onAnimationEnd(animation: Animator) {
                             resetGridChildren(gridView)
                             (gridView.adapter as? BaseAdapter)?.notifyDataSetChanged()
+                            root.updateGridFooterVisibility()
                         }
 
                         override fun onAnimationCancel(animation: Animator) {
                             resetGridChildren(gridView)
                             (gridView.adapter as? BaseAdapter)?.notifyDataSetChanged()
+                            root.updateGridFooterVisibility()
                         }
                     },
                 )
@@ -710,6 +845,7 @@ private class LegacyAlbumViewSwitchAnimator {
         val listView = root.listView
         val gridView = root.gridView
         val firstVisiblePosition = gridView.firstVisiblePosition
+        root.hideGridFooter()
         listHost.animate().cancel()
         listHost.alpha = 0f
         listHost.visibility = View.VISIBLE
@@ -719,12 +855,18 @@ private class LegacyAlbumViewSwitchAnimator {
             if (gen != generation) return@afterNextLayout
             val animators = mutableListOf<Animator>()
             val hiddenListTargets = mutableSetOf<View>()
+            val gridFirstVisiblePosition = gridView.firstVisiblePosition
             val listFirstPosition = listView.firstVisiblePosition
             val listLastPosition = listView.lastVisiblePosition
             for (index in 0 until gridView.childCount) {
                 val gridChild = gridView.getChildAt(index) ?: continue
                 val gridCover = gridChild.findViewById<View>(R.id.gridview_image) ?: continue
                 val position = gridCover.getTag(R.string.add_track) as? Int ?: continue
+                val animationOrder = gridAnimationOrder(
+                    position = position,
+                    firstVisiblePosition = gridFirstVisiblePosition,
+                    fallbackIndex = index,
+                )
                 val listCover = listView.findCoverByPosition(position)
                 gridChild.prepareForAlbumSwitch()
                 val target = gridChild.gridToListTarget(
@@ -743,7 +885,8 @@ private class LegacyAlbumViewSwitchAnimator {
                     PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, target.scaleX),
                     PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, target.scaleY),
                 ).apply {
-                    duration = AlbumSwitchBaseDurationMillis + index * AlbumSwitchStaggerMillis
+                    duration = AlbumSwitchBaseDurationMillis
+                    startDelay = animationOrder * AlbumSwitchStaggerMillis
                     interpolator = this@LegacyAlbumViewSwitchAnimator.interpolator
                     addListener(
                         object : android.animation.AnimatorListenerAdapter() {
@@ -839,6 +982,15 @@ private class LegacyAlbumViewSwitchAnimator {
     }
 }
 
+private fun gridAnimationOrder(
+    position: Int,
+    firstVisiblePosition: Int,
+    fallbackIndex: Int,
+): Long {
+    val order = position - firstVisiblePosition
+    return if (order >= 0) order.toLong() else fallbackIndex.toLong()
+}
+
 private fun ListView.findCoverByPosition(position: Int): View? {
     for (index in 0 until childCount) {
         val child = getChildAt(index) ?: continue
@@ -848,6 +1000,14 @@ private fun ListView.findCoverByPosition(position: Int): View? {
         }
     }
     return null
+}
+
+private fun ListView.legacyAlbumListAdapter(): LegacyAlbumListAdapter? {
+    return when (val currentAdapter = adapter) {
+        is LegacyAlbumListAdapter -> currentAdapter
+        is HeaderViewListAdapter -> currentAdapter.wrappedAdapter as? LegacyAlbumListAdapter
+        else -> null
+    }
 }
 
 private fun View.prepareForAlbumSwitch() {

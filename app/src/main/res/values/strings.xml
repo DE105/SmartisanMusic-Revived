@@ -58,6 +58,7 @@
     <string name="many_artist">多位艺术家</string>
     <string name="unknown_style">未知风格</string>
     <string name="album_track_count">%1$d 首歌曲</string>
+    <string name="legacy_album_count">%1$d 张专辑</string>
     <string name="artist_album_song_count">%1$d 张专辑，%2$d 首歌曲</string>
     <string name="listview_header_list">列表</string>
     <string name="listview_header_tile">平铺</string>
