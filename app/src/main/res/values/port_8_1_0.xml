@@ -39,6 +39,7 @@
     <id name="img_action_more" />
     <id name="item_summary" />
     <id name="item_title" />
+    <id name="legacy_album_artwork_request" />
     <id name="main_quickbar" />
     <id name="iv_right" />
     <id name="iv_right_view" />

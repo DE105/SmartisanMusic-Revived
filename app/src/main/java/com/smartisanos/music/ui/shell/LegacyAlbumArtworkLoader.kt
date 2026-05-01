@@ -9,6 +9,7 @@ import android.util.LruCache
 import android.util.Size
 import android.widget.ImageView
 import androidx.media3.common.MediaItem
+import com.smartisanos.music.R
 import com.smartisanos.music.playback.LocalAudioLibrary
 import com.smartisanos.music.ui.album.AlbumSummary
 import kotlinx.coroutines.CoroutineScope
@@ -36,6 +37,7 @@ internal fun ImageView.bindLegacyAlbumArtwork(
 
 internal class LegacyAlbumArtworkLoader(context: Context) {
     private val appContext = context.applicationContext
+    private val audioLibrary = LocalAudioLibrary(appContext)
     private var scope = newScope()
     private val pendingViews = mutableMapOf<String, MutableSet<ImageView>>()
     private val jobs = mutableMapOf<String, Job>()
@@ -46,14 +48,15 @@ internal class LegacyAlbumArtworkLoader(context: Context) {
         fallbackRes: Int,
         sizePx: Int,
     ) {
-        val previousKey = imageView.tag as? String
-        val request = album.artworkRequest(sizePx)
+        val previousKey = imageView.getTag(R.id.legacy_album_artwork_request) as? String
+        val request = buildArtworkRequest(album, sizePx)
         if (request == null) {
+            imageView.setTag(R.id.legacy_album_artwork_request, null)
             imageView.setImageResource(fallbackRes)
             return
         }
 
-        imageView.tag = request.viewTag
+        imageView.setTag(R.id.legacy_album_artwork_request, request.viewTag)
         cache.get(request.cacheKey)?.let { cached ->
             imageView.setImageBitmap(cached)
             if (cached.width >= request.sizePx && cached.height >= request.sizePx) {
@@ -80,7 +83,7 @@ internal class LegacyAlbumArtworkLoader(context: Context) {
             }
             val views = pendingViews.remove(request.jobKey).orEmpty()
             views.forEach { pendingImageView ->
-                if (pendingImageView.tag == request.viewTag) {
+                if (pendingImageView.getTag(R.id.legacy_album_artwork_request) == request.viewTag) {
                     if (bitmap != null) {
                         pendingImageView.setImageBitmap(bitmap)
                     } else {
@@ -123,9 +126,9 @@ internal class LegacyAlbumArtworkLoader(context: Context) {
 
     private fun loadBitmapFromUri(uri: Uri, size: Size): Bitmap? {
         return runCatching {
-            appContext.contentResolver.loadThumbnail(uri, size, null)
-        }.getOrNull() ?: runCatching {
             decodeStreamSampled(uri, size)
+        }.getOrNull() ?: runCatching {
+            appContext.contentResolver.loadThumbnail(uri, size, null)
         }.getOrNull()
     }
 
@@ -159,6 +162,47 @@ internal class LegacyAlbumArtworkLoader(context: Context) {
         }.getOrNull()
     }
 
+    private fun buildArtworkRequest(
+        album: AlbumSummary,
+        sizePx: Int,
+    ): LegacyAlbumArtworkRequest? {
+        val representative = album.representative
+        val sourceItem = representative.localConfiguration?.uri?.let { representative }
+            ?: audioLibrary.getItem(representative.mediaId)
+            ?: representative
+        val sourceMetadata = sourceItem.mediaMetadata
+        val representativeMetadata = representative.mediaMetadata
+        val mediaId = sourceItem.mediaId.toLongOrNull() ?: representative.mediaId.toLongOrNull()
+        val albumId = sourceMetadata.extras
+            ?.getLong(LocalAudioLibrary.AlbumIdExtraKey)
+            ?.takeIf { it > 0L }
+            ?: representativeMetadata.extras
+                ?.getLong(LocalAudioLibrary.AlbumIdExtraKey)
+                ?.takeIf { it > 0L }
+        val artworkUri = sourceMetadata.artworkUri
+            ?: representativeMetadata.artworkUri
+            ?: albumId?.let(LocalAudioLibrary::albumArtworkUri)
+        val trackArtworkUri = mediaId?.let { id ->
+            Uri.parse("content://media/external/audio/media/$id/albumart")
+        }
+        val mediaUri = sourceItem.localConfiguration?.uri ?: representative.localConfiguration?.uri
+        val artworkData = sourceMetadata.artworkData ?: representativeMetadata.artworkData
+        if (artworkUri == null && trackArtworkUri == null && mediaUri == null && artworkData == null) {
+            return null
+        }
+        return LegacyAlbumArtworkRequest(
+            mediaItem = sourceItem,
+            artworkUri = artworkUri,
+            trackArtworkUri = trackArtworkUri,
+            mediaUri = mediaUri,
+            artworkData = artworkData,
+            viewTag = albumId?.let { resolvedAlbumId -> "album:$resolvedAlbumId" }
+                ?: mediaId?.let { resolvedMediaId -> "track:$resolvedMediaId" }
+                ?: album.id,
+            sizePx = sizePx,
+        )
+    }
+
     private fun newScope(): CoroutineScope {
         return CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     }
@@ -183,35 +227,6 @@ private data class LegacyAlbumArtworkRequest(
 ) {
     val cacheKey: String = viewTag
     val jobKey: String = "$viewTag@$sizePx"
-}
-
-private fun AlbumSummary.artworkRequest(sizePx: Int): LegacyAlbumArtworkRequest? {
-    val mediaItem = representative
-    val mediaId = mediaItem.mediaId.toLongOrNull()
-    val albumId = representative.mediaMetadata.extras
-        ?.getLong(LocalAudioLibrary.AlbumIdExtraKey)
-        ?.takeIf { it > 0L }
-    val artworkUri = representative.mediaMetadata.artworkUri
-        ?: albumId?.let(LocalAudioLibrary::albumArtworkUri)
-    val trackArtworkUri = mediaId?.let { id ->
-        Uri.parse("content://media/external/audio/media/$id/albumart")
-    }
-    val mediaUri = mediaItem.localConfiguration?.uri
-    val artworkData = mediaItem.mediaMetadata.artworkData
-    if (artworkUri == null && trackArtworkUri == null && mediaUri == null && artworkData == null) {
-        return null
-    }
-    return LegacyAlbumArtworkRequest(
-        mediaItem = mediaItem,
-        artworkUri = artworkUri,
-        trackArtworkUri = trackArtworkUri,
-        mediaUri = mediaUri,
-        artworkData = artworkData,
-        viewTag = albumId?.let { album -> "album:$album" }
-            ?: mediaId?.let { id -> "track:$id" }
-            ?: "${title}|${artist}",
-        sizePx = sizePx,
-    )
 }
 
 private fun decodeByteArraySampled(
