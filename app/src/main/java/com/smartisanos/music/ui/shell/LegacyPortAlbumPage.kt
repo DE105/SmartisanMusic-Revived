@@ -40,7 +40,6 @@ import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.ui.album.AlbumSummary
 import com.smartisanos.music.ui.album.AlbumViewMode
 import com.smartisanos.music.ui.album.buildAlbumSummaries
-import com.smartisanos.music.ui.components.SecondaryPageTransition
 import com.smartisanos.music.ui.widgets.EditableLayout
 
 private const val AlbumSwitchBaseDurationMillis = 150L
@@ -114,8 +113,8 @@ internal fun LegacyPortAlbumPage(
         }
     }
 
-    SecondaryPageTransition(
-        secondaryKey = selectedAlbum?.id,
+    LegacyPortPageStackTransition(
+        secondaryKey = selectedAlbum,
         modifier = modifier,
         label = "legacy album detail transition",
         primaryContent = {
@@ -133,14 +132,11 @@ internal fun LegacyPortAlbumPage(
                 modifier = Modifier.fillMaxSize(),
             )
         },
-        secondaryContent = {
-            val album = selectedAlbum
-            if (album != null) {
-                LegacyPortAlbumDetailPage(
-                    album = album,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
+        secondaryContent = { album ->
+            LegacyPortAlbumDetailPage(
+                album = album,
+                modifier = Modifier.fillMaxSize(),
+            )
         },
     )
 }

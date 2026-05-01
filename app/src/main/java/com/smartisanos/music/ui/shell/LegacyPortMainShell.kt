@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -285,50 +286,70 @@ private fun LegacyPortMainShellContent(
                 .fillMaxSize()
                 .padding(bottom = realTabContentBottomMargin),
         ) {
-            LegacyPortTitleBar(
-                destination = currentDestination,
-                songsEditMode = currentDestination == MusicDestination.Songs && songsEditMode,
-                selectedSongCount = selectedSongIds.size,
-                albumEditMode = currentDestination == MusicDestination.Album && albumEditMode,
-                selectedAlbumCount = selectedAlbumIds.size,
-                albumDetailTitle = if (currentDestination == MusicDestination.Album) selectedAlbumTitle else null,
-                albumViewMode = albumViewMode,
-                onEnterSongsEditMode = {
-                    songsEditMode = true
-                    selectedSongIds = emptySet()
-                },
-                onExitSongsEditMode = {
-                    songsEditMode = false
-                    selectedSongIds = emptySet()
-                    showSongDeleteConfirm = false
-                },
-                onRequestDeleteSelected = {
-                    if (selectedSongIds.isNotEmpty()) {
-                        showSongDeleteConfirm = true
-                    }
-                },
-                onEnterAlbumEditMode = {
-                    albumEditMode = true
-                    selectedAlbumIds = emptySet()
-                },
-                onExitAlbumEditMode = {
-                    albumEditMode = false
-                    selectedAlbumIds = emptySet()
-                },
-                onToggleAlbumViewMode = {
-                    albumViewMode = if (albumViewMode == AlbumViewMode.List) {
-                        AlbumViewMode.Tile
-                    } else {
-                        AlbumViewMode.List
-                    }
-                },
-                onAlbumDetailBack = {
-                    selectedAlbumId = null
-                    selectedAlbumTitle = null
-                },
-                modifier = Modifier
-                    .fillMaxWidth(),
-            )
+            val titleContentHeight = dimensionResource(R.dimen.title_bar_height)
+            val titleAreaHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + titleContentHeight
+            val titleBarContent: @Composable (String?, Modifier) -> Unit = { albumDetailTitle, titleModifier ->
+                LegacyPortTitleBar(
+                    destination = currentDestination,
+                    songsEditMode = currentDestination == MusicDestination.Songs && songsEditMode,
+                    selectedSongCount = selectedSongIds.size,
+                    albumEditMode = currentDestination == MusicDestination.Album && albumEditMode,
+                    selectedAlbumCount = selectedAlbumIds.size,
+                    albumDetailTitle = albumDetailTitle,
+                    albumViewMode = albumViewMode,
+                    onEnterSongsEditMode = {
+                        songsEditMode = true
+                        selectedSongIds = emptySet()
+                    },
+                    onExitSongsEditMode = {
+                        songsEditMode = false
+                        selectedSongIds = emptySet()
+                        showSongDeleteConfirm = false
+                    },
+                    onRequestDeleteSelected = {
+                        if (selectedSongIds.isNotEmpty()) {
+                            showSongDeleteConfirm = true
+                        }
+                    },
+                    onEnterAlbumEditMode = {
+                        albumEditMode = true
+                        selectedAlbumIds = emptySet()
+                    },
+                    onExitAlbumEditMode = {
+                        albumEditMode = false
+                        selectedAlbumIds = emptySet()
+                    },
+                    onToggleAlbumViewMode = {
+                        albumViewMode = if (albumViewMode == AlbumViewMode.List) {
+                            AlbumViewMode.Tile
+                        } else {
+                            AlbumViewMode.List
+                        }
+                    },
+                    onAlbumDetailBack = {
+                        selectedAlbumId = null
+                        selectedAlbumTitle = null
+                    },
+                    modifier = titleModifier,
+                )
+            }
+            if (currentDestination == MusicDestination.Album) {
+                LegacyPortPageStackTransition(
+                    secondaryKey = selectedAlbumTitle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(titleAreaHeight),
+                    label = "legacy album title transition",
+                    primaryContent = {
+                        titleBarContent(null, Modifier.fillMaxSize())
+                    },
+                    secondaryContent = { detailTitle ->
+                        titleBarContent(detailTitle, Modifier.fillMaxSize())
+                    },
+                )
+            } else {
+                titleBarContent(null, Modifier.fillMaxWidth())
+            }
             LegacyPortTabContent(
                 destination = currentDestination,
                 mediaItems = legacyLibrary.items,

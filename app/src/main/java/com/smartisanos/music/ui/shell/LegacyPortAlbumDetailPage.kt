@@ -33,11 +33,11 @@ import com.smartisanos.music.R
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.ui.album.AlbumSummary
 import com.smartisanos.music.ui.album.displayTrackNumber
+import com.smartisanos.music.ui.widgets.StretchTextView
 import java.util.Locale
 
 private val LegacyAlbumDetailPrimaryTextColor = Color.rgb(0x35, 0x35, 0x39)
 private val LegacyAlbumDetailSecondaryTextColor = Color.rgb(0xa4, 0xa7, 0xac)
-private val LegacyAlbumDetailSelectedTextColor = Color.rgb(0xe6, 0x40, 0x40)
 
 @Composable
 internal fun LegacyPortAlbumDetailPage(
@@ -48,12 +48,16 @@ internal fun LegacyPortAlbumDetailPage(
     var currentMediaId by remember(browser) {
         mutableStateOf(browser?.currentMediaItem?.mediaId)
     }
+    var currentIsPlaying by remember(browser) {
+        mutableStateOf(browser?.isPlaying == true)
+    }
 
     DisposableEffect(browser) {
         val playbackBrowser = browser ?: return@DisposableEffect onDispose { }
         val listener = object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
                 currentMediaId = player.currentMediaItem?.mediaId
+                currentIsPlaying = player.isPlaying
             }
         }
         playbackBrowser.addListener(listener)
@@ -101,6 +105,8 @@ internal fun LegacyPortAlbumDetailPage(
             val contentChanged = adapter.updateItems(
                 nextItems = album.songs,
                 nextCurrentMediaId = currentMediaId,
+                nextCurrentIsPlaying = currentIsPlaying,
+                nextShowTrackArtists = album.songs.hasMultipleArtists(),
             )
             if (!contentChanged) {
                 adapter.updateVisibleRows(root.listView)
@@ -340,13 +346,19 @@ private class LegacyAlbumDetailHeader(context: Context) : LinearLayout(context) 
             LinearLayout(context).apply {
                 orientation = HORIZONTAL
                 setBackgroundColor(Color.WHITE)
-                playAll.legacyAlbumActionText(
-                    id = R.id.header_play_all,
-                    text = context.getString(R.string.play_all),
-                    iconRes = R.drawable.btn_play_all_selector,
-                )
                 addView(
-                    playAll,
+                    LinearLayout(context).apply {
+                        gravity = Gravity.CENTER
+                        playAll.legacyAlbumActionText(
+                            id = R.id.header_play_all,
+                            text = context.getString(R.string.play_all),
+                            iconRes = R.drawable.btn_play_all_selector,
+                        )
+                        addView(
+                            playAll,
+                            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT),
+                        )
+                    },
                     LayoutParams(0, LayoutParams.MATCH_PARENT, 1f),
                 )
                 addView(
@@ -359,13 +371,19 @@ private class LegacyAlbumDetailHeader(context: Context) : LinearLayout(context) 
                         LayoutParams.MATCH_PARENT,
                     ),
                 )
-                shuffle.legacyAlbumActionText(
-                    id = R.id.header_play_shuffle,
-                    text = context.getString(R.string.play_shuffle),
-                    iconRes = R.drawable.btn_shuffle3_selector,
-                )
                 addView(
-                    shuffle,
+                    LinearLayout(context).apply {
+                        gravity = Gravity.CENTER
+                        shuffle.legacyAlbumActionText(
+                            id = R.id.header_play_shuffle,
+                            text = context.getString(R.string.play_shuffle),
+                            iconRes = R.drawable.btn_shuffle3_selector,
+                        )
+                        addView(
+                            shuffle,
+                            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT),
+                        )
+                    },
                     LayoutParams(0, LayoutParams.MATCH_PARENT, 1f),
                 )
             },
@@ -439,18 +457,26 @@ private class LegacyAlbumDetailHeader(context: Context) : LinearLayout(context) 
 private class LegacyAlbumTrackAdapter : BaseAdapter() {
     private var items: List<MediaItem> = emptyList()
     private var currentMediaId: String? = null
+    private var currentIsPlaying: Boolean = false
+    private var showTrackArtists: Boolean = false
 
     fun updateItems(
         nextItems: List<MediaItem>,
         nextCurrentMediaId: String?,
+        nextCurrentIsPlaying: Boolean,
+        nextShowTrackArtists: Boolean,
     ): Boolean {
         val contentChanged = items != nextItems
-        val stateChanged = currentMediaId != nextCurrentMediaId
+        val stateChanged = currentMediaId != nextCurrentMediaId ||
+            currentIsPlaying != nextCurrentIsPlaying ||
+            showTrackArtists != nextShowTrackArtists
         if (!contentChanged && !stateChanged) {
             return false
         }
         items = nextItems
         currentMediaId = nextCurrentMediaId
+        currentIsPlaying = nextCurrentIsPlaying
+        showTrackArtists = nextShowTrackArtists
         if (contentChanged) {
             notifyDataSetChanged()
         }
@@ -464,7 +490,13 @@ private class LegacyAlbumTrackAdapter : BaseAdapter() {
             val position = listView.firstVisiblePosition + childIndex - listView.headerViewsCount
             val item = itemAt(position) ?: continue
             val holder = listView.getChildAt(childIndex)?.tag as? LegacyAlbumTrackViewHolder ?: continue
-            holder.bind(item, position + 1, item.mediaId == currentMediaId)
+            holder.bind(
+                item = item,
+                fallbackIndex = position + 1,
+                selected = item.mediaId == currentMediaId,
+                playing = currentIsPlaying,
+                showArtist = showTrackArtists,
+            )
         }
     }
 
@@ -478,7 +510,13 @@ private class LegacyAlbumTrackAdapter : BaseAdapter() {
         val view = convertView ?: createTrackRow(parent)
         val holder = view.tag as LegacyAlbumTrackViewHolder
         val item = items[position]
-        holder.bind(item, position + 1, item.mediaId == currentMediaId)
+        holder.bind(
+            item = item,
+            fallbackIndex = position + 1,
+            selected = item.mediaId == currentMediaId,
+            playing = currentIsPlaying,
+            showArtist = showTrackArtists,
+        )
         return view
     }
 
@@ -567,7 +605,7 @@ private class LegacyAlbumTrackAdapter : BaseAdapter() {
             },
         )
 
-        val title = TextView(context).apply {
+        val title = StretchTextView(context).apply {
             id = R.id.album_list_item_title
             ellipsize = TextUtils.TruncateAt.MARQUEE
             isSingleLine = true
@@ -614,27 +652,39 @@ private class LegacyAlbumTrackAdapter : BaseAdapter() {
 
 private data class LegacyAlbumTrackViewHolder(
     val index: TextView,
-    val title: TextView,
+    val title: StretchTextView,
     val artist: TextView,
     val duration: TextView,
 ) {
-    fun bind(item: MediaItem, fallbackIndex: Int, selected: Boolean) {
+    fun bind(
+        item: MediaItem,
+        fallbackIndex: Int,
+        selected: Boolean,
+        playing: Boolean,
+        showArtist: Boolean,
+    ) {
         val metadata = item.mediaMetadata
         index.text = item.displayTrackNumber(fallbackIndex)
         title.text = metadata.displayTitle
             ?: metadata.title
             ?: ""
         title.isSelected = true
-        title.setTextColor(
-            if (selected) {
-                LegacyAlbumDetailSelectedTextColor
-            } else {
-                LegacyAlbumDetailPrimaryTextColor
-            },
-        )
+        title.setTextColor(LegacyAlbumDetailPrimaryTextColor)
+        if (selected) {
+            title.c(playing)
+        } else {
+            title.setShowingPlayImage(false)
+        }
         artist.text = metadata.artist ?: metadata.albumArtist ?: ""
+        artist.visibility = if (showArtist) View.VISIBLE else View.GONE
         duration.text = metadata.durationMs?.formatLegacyDuration().orEmpty()
     }
+}
+
+private fun List<MediaItem>.hasMultipleArtists(): Boolean {
+    return mapNotNull { item ->
+        item.mediaMetadata.artist?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+    }.distinctBy { it.lowercase(Locale.ROOT) }.size > 1
 }
 
 private fun TextView.legacyAlbumHeaderText(
