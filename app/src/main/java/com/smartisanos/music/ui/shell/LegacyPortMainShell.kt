@@ -151,6 +151,7 @@ private fun LegacyPortMainShellContent(
     val legacyLibrary = rememberLegacyLibraryMediaState()
     var playbackVisible by remember { mutableStateOf(false) }
     var currentDestination by remember { mutableStateOf(MusicDestination.Songs) }
+    var playlistAddModeActive by remember { mutableStateOf(false) }
     var songsEditMode by remember { mutableStateOf(false) }
     var selectedSongIds by remember { mutableStateOf(emptySet<String>()) }
     var albumViewMode by remember { mutableStateOf(AlbumViewMode.List) }
@@ -246,6 +247,9 @@ private fun LegacyPortMainShellContent(
         }
         if (currentDestination != MusicDestination.Artist) {
             selectedArtistTarget = null
+        }
+        if (currentDestination != MusicDestination.Playlist) {
+            playlistAddModeActive = false
         }
     }
 
@@ -352,7 +356,9 @@ private fun LegacyPortMainShellContent(
                     modifier = titleModifier,
                 )
             }
-            if (currentDestination == MusicDestination.Album) {
+            if (currentDestination == MusicDestination.Playlist) {
+                // 播放列表页需要复刻原版自身的标题栏、详情栈和加歌 Activity 过渡。
+            } else if (currentDestination == MusicDestination.Album) {
                 LegacyPortPageStackTransition(
                     secondaryKey = selectedAlbumTitle,
                     modifier = Modifier
@@ -414,6 +420,9 @@ private fun LegacyPortMainShellContent(
                 onArtistTargetChanged = { target ->
                     selectedArtistTarget = target
                 },
+                onPlaylistAddModeActiveChanged = { active ->
+                    playlistAddModeActive = active
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
@@ -458,7 +467,7 @@ private fun LegacyPortMainShellContent(
                     .height(67.dp),
             )
             LegacyPortBottomBar(
-                currentDestination = currentDestination,
+                currentDestination = if (playlistAddModeActive) MusicDestination.Songs else currentDestination,
                 onDestinationSelected = { destination ->
                     currentDestination = destination
                 },
@@ -603,6 +612,7 @@ private fun LegacyPortTabContent(
     onToggleAlbumSelected: (String) -> Unit,
     onAlbumSelected: (String, String) -> Unit,
     onArtistTargetChanged: (LegacyArtistTarget?) -> Unit,
+    onPlaylistAddModeActiveChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (destination) {
@@ -637,8 +647,11 @@ private fun LegacyPortTabContent(
             onTargetChanged = onArtistTargetChanged,
             modifier = modifier,
         )
-        MusicDestination.Playlist -> LegacyPortPlaylistList(
+        MusicDestination.Playlist -> LegacyPortPlaylistPage(
+            mediaItems = mediaItems,
             active = true,
+            hiddenMediaIds = hiddenMediaIds,
+            onAddModeActiveChanged = onPlaylistAddModeActiveChanged,
             modifier = modifier,
         )
         MusicDestination.More -> LegacyPortMoreList(
@@ -1374,48 +1387,26 @@ private fun LegacyPortTitleBar(
     onToggleArtistAlbumViewMode: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val titleContentHeight = dimensionResource(R.dimen.title_bar_height)
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(ComposeColor.White),
-    ) {
-        Spacer(
-            modifier = Modifier
-                .fillMaxWidth()
-                .windowInsetsTopHeight(WindowInsets.statusBars),
-        )
-        AndroidView(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(titleContentHeight),
-            factory = { context ->
-                TitleBar(context).apply {
-                    setShadowVisible(false)
-                }
-            },
-            update = { titleBar ->
-                titleBar.setupLegacyMainTitleBar(
-                    destination = destination,
-                    songsEditMode = songsEditMode,
-                    selectedSongCount = selectedSongCount,
-                    albumEditMode = albumEditMode,
-                    selectedAlbumCount = selectedAlbumCount,
-                    albumDetailTitle = albumDetailTitle,
-                    albumViewMode = albumViewMode,
-                    artistTarget = artistTarget,
-                    artistAlbumViewMode = artistAlbumViewMode,
-                    onEnterSongsEditMode = onEnterSongsEditMode,
-                    onExitSongsEditMode = onExitSongsEditMode,
-                    onRequestDeleteSelected = onRequestDeleteSelected,
-                    onEnterAlbumEditMode = onEnterAlbumEditMode,
-                    onExitAlbumEditMode = onExitAlbumEditMode,
-                    onToggleAlbumViewMode = onToggleAlbumViewMode,
-                    onAlbumDetailBack = onAlbumDetailBack,
-                    onArtistBack = onArtistBack,
-                    onToggleArtistAlbumViewMode = onToggleArtistAlbumViewMode,
-                )
-            },
+    LegacyPortSmartisanTitleBar(modifier = modifier) { titleBar ->
+        titleBar.setupLegacyMainTitleBar(
+            destination = destination,
+            songsEditMode = songsEditMode,
+            selectedSongCount = selectedSongCount,
+            albumEditMode = albumEditMode,
+            selectedAlbumCount = selectedAlbumCount,
+            albumDetailTitle = albumDetailTitle,
+            albumViewMode = albumViewMode,
+            artistTarget = artistTarget,
+            artistAlbumViewMode = artistAlbumViewMode,
+            onEnterSongsEditMode = onEnterSongsEditMode,
+            onExitSongsEditMode = onExitSongsEditMode,
+            onRequestDeleteSelected = onRequestDeleteSelected,
+            onEnterAlbumEditMode = onEnterAlbumEditMode,
+            onExitAlbumEditMode = onExitAlbumEditMode,
+            onToggleAlbumViewMode = onToggleAlbumViewMode,
+            onAlbumDetailBack = onAlbumDetailBack,
+            onArtistBack = onArtistBack,
+            onToggleArtistAlbumViewMode = onToggleArtistAlbumViewMode,
         )
     }
 }

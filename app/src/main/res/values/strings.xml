@@ -3,6 +3,8 @@
     <string name="back">返回</string>
     <string name="done">完成</string>
     <string name="continue_action">继续</string>
+    <string name="save">保存</string>
+    <string name="rename_continue">继续</string>
     <string name="edit">编辑</string>
     <string name="setting">设置</string>
     <string name="tab_style">风格</string>
@@ -24,7 +26,10 @@
     <string name="playlist_song_title">歌曲</string>
     <string name="playlist_add_songs_prefix">添加歌曲到</string>
     <string name="playlist_add_songs_title">添加歌曲到“%1$s”</string>
+    <string name="add_track_to">添加歌曲到</string>
+    <string name="name_tracks">歌曲</string>
     <string name="playlist_selected_song_count">已选择歌曲(%1$d/%2$d)</string>
+    <string name="selected_item_format">已选择歌曲 (%1$d/%2$d)</string>
     <string name="playlist_sort_song_name">歌曲名</string>
     <string name="playlist_sort_score">评分</string>
     <string name="playlist_sort_play_count">播放次数</string>

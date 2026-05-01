@@ -232,10 +232,12 @@
     <dimen name="tab_layout_second_column_width">360.0dp</dimen>
     <dimen name="tertiary_text_size">13.5sp</dimen>
     <dimen name="text_size_act_title">16.0dp</dimen>
+    <dimen name="text_size_better">15.0sp</dimen>
     <dimen name="text_size_large">16.0sp</dimen>
     <dimen name="text_size_medium">16.0sp</dimen>
     <dimen name="text_size_micro">13.0sp</dimen>
     <dimen name="text_size_small">13.0sp</dimen>
+    <dimen name="text_size_yun">17.0sp</dimen>
     <dimen name="title_bar_center_limite">114.0dp</dimen>
     <dimen name="title_bar_height">50.0dp</dimen>
     <dimen name="title_bar_margin_view">12.0dp</dimen>
@@ -254,6 +256,8 @@
 
     <color name="btn_text_color_red">#e65c53</color>
     <color name="btn_text_color_red_pressed">#e03d34</color>
+    <color name="btn_text_color_blue">#5c89f2</color>
+    <color name="btn_text_color_blue_pressed">#3d70ef</color>
     <color name="has_chosen_letter_font_color">#f5f5f5</color>
     <color name="list_item_first_line">#99000000</color>
     <color name="list_item_second_line">#66000000</color>
