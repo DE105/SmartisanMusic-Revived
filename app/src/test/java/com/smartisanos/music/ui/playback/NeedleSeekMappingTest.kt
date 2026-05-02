@@ -27,6 +27,34 @@ class NeedleSeekMappingTest {
     }
 
     @Test
+    fun `needle outside seek needs deliberate movement from playable position`() {
+        assertFalse(
+            shouldStartNeedleSeekDrag(
+                initialPositionMs = 100_000L,
+                candidatePositionMs = 0L,
+                maxMoveDistance = 24f,
+                outsideActivationDistancePx = 36f,
+            ),
+        )
+        assertTrue(
+            shouldStartNeedleSeekDrag(
+                initialPositionMs = 100_000L,
+                candidatePositionMs = 0L,
+                maxMoveDistance = 48f,
+                outsideActivationDistancePx = 36f,
+            ),
+        )
+        assertTrue(
+            shouldStartNeedleSeekDrag(
+                initialPositionMs = 100_000L,
+                candidatePositionMs = 96_000L,
+                maxMoveDistance = 24f,
+                outsideActivationDistancePx = 36f,
+            ),
+        )
+    }
+
+    @Test
     fun `needle point mapping clamps to supported arc`() {
         val containerSize = IntSize(width = 360, height = 357)
         val geometry = playbackNeedleGeometry(
@@ -181,6 +209,8 @@ class NeedleSeekMappingTest {
         assertEquals(354.6953f, geometry.height, 0.001f)
         assertEquals(29.199982f, geometry.top, 0.001f)
         assertEquals(355.90002f, geometry.left, 0.001f)
+        assertEquals(48f, geometry.pivotLocal.x, 0.001f)
+        assertEquals(28f, geometry.pivotLocal.y, 0.001f)
     }
 
     @Test

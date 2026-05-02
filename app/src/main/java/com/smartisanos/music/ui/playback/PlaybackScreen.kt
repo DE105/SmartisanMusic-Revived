@@ -78,6 +78,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.keepScreenOn
@@ -154,6 +155,7 @@ private val PlaybackPanelBorder = Color(0xFFE8E8E8)
 private val PlaybackPanelBottomEdge = Color(0xFFFDFDFD)
 private val PlaybackPanelShadow = Color(0x14000000)
 
+private const val PlaybackDiscCycleDurationMs = 15_500f
 private const val ScratchCycleDurationMs = 1_800f
 private const val DiscRotationDegrees = 360f
 private const val ScratchHubDeadZoneRatio = 0.06f
@@ -171,7 +173,7 @@ private const val ScratchFlingFrameDivisor = 1_700f
 private const val ScratchFlingReadyFraction = 0.7f
 private const val ScratchPixelFlingDivisor = 40f
 private const val ScratchPlaybackVelocityDegreesPerSecond =
-    DiscRotationDegrees * 1_000f / ScratchCycleDurationMs
+    DiscRotationDegrees * 1_000f / PlaybackDiscCycleDurationMs
 private const val CoverPreviewTimeoutMs = 260L
 private const val CoverPreviewSettleToleranceMs = 24L
 private const val NeedleSeekSettleHoldTimeoutMs = 900L
@@ -185,14 +187,14 @@ private const val OriginalNeedleTopWidthBaseDp = 41f
 private const val OriginalNeedleTopMarginBaseDp = 25.5f
 private const val OriginalNeedleRightMarginDp = 2.5f
 private const val OriginalNeedleShadowRightMarginDp = 2f
-private const val OriginalNeedlePivotXBase = 0.82f
-private const val OriginalNeedlePivotYBase = 0.08f
+private const val OriginalNeedlePivotXDp = 48f
+private const val OriginalNeedlePivotYDp = 28f
 private const val OriginalNeedleHeightLargeDp = 354.6953f
 private const val OriginalNeedleTopMarginLargeDp = 29.199982f
 private const val OriginalNeedleRightMarginLargeDp = 2.7999878f
 private const val OriginalNeedleShadowRightMarginLargeDp = 2.2999878f
-private const val OriginalNeedlePivotXLarge = 0.7858f
-private const val OriginalNeedlePivotYLarge = 0.0947f
+private const val NeedleSeekOutsideActivationDistanceDp = 36f
+private const val NeedleSeekStartPositionGuardMs = 1_000L
 private const val NeedleRestRotationDegrees = 0f
 private const val NeedlePlaybackStartRotationDegrees = 12f
 private const val NeedlePlaybackSweepDegrees = 22.3f
@@ -305,6 +307,7 @@ fun PlaybackScreen(
         mutableStateOf(PlaybackCoverPageState())
     }
     var scratchFlingJob by remember { mutableStateOf<Job?>(null) }
+    var discManualRotationOffsetDegrees by remember { mutableFloatStateOf(0f) }
     val sleepTimerState by PlaybackSleepTimer.state.collectAsStateWithLifecycle()
 
     fun clearPendingDeleteTarget() {
@@ -527,6 +530,7 @@ fun PlaybackScreen(
                 previousVelocity = currentVelocity
 
                 if (abs(deltaAngle) >= ScratchMinMotionDegrees) {
+                    discManualRotationOffsetDegrees += deltaAngle
                     val targetPosition = scratchPositionAfterAngle(
                         positionMs = positionMs,
                         deltaAngleDegrees = deltaAngle,
@@ -781,7 +785,8 @@ fun PlaybackScreen(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(PlaybackPageBackground),
+            .background(PlaybackPageBackground)
+            .consumePlaybackTouchFallthrough(),
     ) {
         val density = LocalDensity.current
         val topInset = with(density) {
@@ -841,6 +846,7 @@ fun PlaybackScreen(
                     previewPositionMs = coverPageState.previewPositionMs,
                     needlePreviewRotationDegrees = coverPageState.needlePreviewRotationDegrees,
                     needleParkedOutside = coverPageState.needleParkedOutside,
+                    discManualRotationOffsetDegrees = discManualRotationOffsetDegrees,
                     mediaId = state.mediaItem?.mediaId,
                     onMoreClick = {
                         showMorePanel = true
@@ -880,6 +886,7 @@ fun PlaybackScreen(
                         )
                     },
                     onDiscScratchMotion = { positionMs, deltaAngle ->
+                        discManualRotationOffsetDegrees += deltaAngle
                         scratchSoundController.onScratchMotion(positionMs, deltaAngle)
                     },
                     onDiscScratchPositionChange = { positionMs, _ ->
@@ -1424,6 +1431,7 @@ private fun PlaybackVisualStage(
     previewPositionMs: Long?,
     needlePreviewRotationDegrees: Float?,
     needleParkedOutside: Boolean,
+    discManualRotationOffsetDegrees: Float,
     mediaId: String?,
     onMoreClick: () -> Unit,
     onVisualPageToggle: () -> Unit,
@@ -1504,6 +1512,7 @@ private fun PlaybackVisualStage(
                     previewPositionMs = previewPositionMs,
                     needlePreviewRotationDegrees = needlePreviewRotationDegrees,
                     needleParkedOutside = needleParkedOutside,
+                    discManualRotationOffsetDegrees = discManualRotationOffsetDegrees,
                     mediaId = mediaId,
                     onVisualPageToggle = onVisualPageToggle,
                     onDiscScratchStart = onDiscScratchStart,
@@ -1547,6 +1556,7 @@ private fun PlaybackCoverPage(
     previewPositionMs: Long?,
     needlePreviewRotationDegrees: Float?,
     needleParkedOutside: Boolean,
+    discManualRotationOffsetDegrees: Float,
     mediaId: String?,
     onVisualPageToggle: () -> Unit,
     onDiscScratchStart: () -> Unit,
@@ -1630,16 +1640,18 @@ private fun PlaybackCoverPage(
     val discRunning = isPlaying &&
         coverDragMode == CoverDragMode.None &&
         previewPositionMs == null
-    val followStoppedDiscPosition = coverDragMode == CoverDragMode.DiscScratch ||
-        (coverDragMode == CoverDragMode.None && previewPositionMs != null)
+    val discRotationCycleDurationMs = if (coverDragMode == CoverDragMode.DiscScratch) {
+        ScratchCycleDurationMs
+    } else {
+        PlaybackDiscCycleDurationMs
+    }
 
     Box(modifier = modifier) {
         PlaybackTurntableDisc(
             albumArtwork = albumArtwork,
-            mediaId = mediaId,
-            positionMs = currentPositionMs,
             running = discRunning,
-            followStoppedPosition = followStoppedDiscPosition,
+            rotationCycleDurationMs = discRotationCycleDurationMs,
+            manualRotationOffsetDegrees = discManualRotationOffsetDegrees,
             hidePlayerAxisEnabled = hidePlayerAxisEnabled,
             turntableWidth = turntableWidth,
             modifier = Modifier.matchParentSize(),
@@ -1656,15 +1668,19 @@ private fun PlaybackCoverPage(
                         val size = latestDiscSize
                         val center = discCenter(size)
                         val radius = discRadius(size)
-                        val dragMode = when {
+                        val withinNeedleSeekRegion =
                             needleSeekAvailable && isWithinNeedleSeekRegion(
                                 point = down.position,
                                 containerSize = size,
                                 densityPxPerDp = densityPxPerDp,
                                 turntableScale = scale,
                                 rotationDegrees = latestNeedleRotation,
-                            ) -> CoverDragMode.NeedleSeek
-                            scratchAvailable && isWithinScratchRegion(down.position, center, radius) -> {
+                            )
+                        val withinScratchRegion =
+                            scratchAvailable && isWithinScratchRegion(down.position, center, radius)
+                        val dragMode = when {
+                            withinNeedleSeekRegion -> CoverDragMode.NeedleSeek
+                            withinScratchRegion -> {
                                 CoverDragMode.DiscScratch
                             }
                             else -> CoverDragMode.None
@@ -1840,6 +1856,8 @@ private fun PlaybackCoverPage(
                                 val pointerId = down.id
                                 var needleSeekStarted = false
                                 var cancelled = true
+                                val outsideActivationDistancePx =
+                                    NeedleSeekOutsideActivationDistanceDp * densityPxPerDp
                                 while (true) {
                                     val event = awaitPointerEvent()
                                     val change = event.changes.firstOrNull { it.id == pointerId }
@@ -1866,13 +1884,47 @@ private fun PlaybackCoverPage(
                                         if (maxMoveDistance <= tapTouchSlop) {
                                             continue
                                         }
+                                        val candidateNeedleAngleDegrees =
+                                            angleDegrees(change.position, needlePivot)
+                                        val candidateDeltaNeedleAngle = normalizeAngleDelta(
+                                            candidateNeedleAngleDegrees - lastNeedleAngleDegrees,
+                                        ).coerceIn(
+                                            -ScratchMaxAngleStepDegrees,
+                                            ScratchMaxAngleStepDegrees,
+                                        )
+                                        val candidateNeedleRotationDegrees =
+                                            (needleRotationDegrees + candidateDeltaNeedleAngle)
+                                                .coerceIn(
+                                                    NeedleRestRotationDegrees,
+                                                    NeedlePlaybackEndRotationDegrees,
+                                                )
+                                        val candidateNeedlePositionMs = needleSeekPositionFromRotation(
+                                            rotationDegrees = candidateNeedleRotationDegrees,
+                                            durationMs = latestDurationMs,
+                                        )
+                                        if (
+                                            !shouldStartNeedleSeekDrag(
+                                                initialPositionMs = needlePositionMs,
+                                                candidatePositionMs = candidateNeedlePositionMs,
+                                                maxMoveDistance = maxMoveDistance,
+                                                outsideActivationDistancePx =
+                                                    outsideActivationDistancePx,
+                                            )
+                                        ) {
+                                            continue
+                                        }
                                         needleSeekStarted = true
                                         needlePivot = playbackNeedleGeometry(
                                             containerSize = size,
                                             densityPxPerDp = densityPxPerDp,
                                             turntableScale = scale,
-                                            rotationDegrees = needleRotationDegrees,
+                                            rotationDegrees = candidateNeedleRotationDegrees,
                                         ).pivot
+                                        needleRotationDegrees = candidateNeedleRotationDegrees
+                                        needlePositionMs = candidateNeedlePositionMs
+                                        if (needlePositionMs != null) {
+                                            needleSeekHadPlayablePosition = true
+                                        }
                                         lastNeedleAngleDegrees = angleDegrees(change.position, needlePivot)
                                         latestNeedleSeekStart(needleRotationDegrees, needlePositionMs)
                                         change.consume()
@@ -1958,19 +2010,17 @@ private fun PlaybackLyricsPage(
 @Composable
 private fun PlaybackTurntableDisc(
     albumArtwork: ImageBitmap?,
-    mediaId: String?,
-    positionMs: Long,
     running: Boolean,
-    followStoppedPosition: Boolean,
+    rotationCycleDurationMs: Float,
+    manualRotationOffsetDegrees: Float,
     hidePlayerAxisEnabled: Boolean,
     turntableWidth: Dp,
     modifier: Modifier = Modifier,
 ) {
     val discRotation = rememberSmoothDiscRotation(
-        mediaId = mediaId,
-        positionMs = positionMs,
         running = running,
-        followStoppedPosition = followStoppedPosition,
+        cycleDurationMs = rotationCycleDurationMs,
+        manualRotationOffsetDegrees = manualRotationOffsetDegrees,
     )
 
     // 保留上一个非 null 封面，避免切歌时旧封面瞬间消失
@@ -2071,8 +2121,8 @@ private data class OriginalNeedleMetrics(
     val topMarginDp: Float,
     val rightMarginDp: Float,
     val shadowRightMarginDp: Float,
-    val pivotXRatio: Float,
-    val pivotYRatio: Float,
+    val pivotXDp: Float,
+    val pivotYDp: Float,
 )
 
 private val OriginalNeedleBaseMetrics = OriginalNeedleMetrics(
@@ -2082,8 +2132,8 @@ private val OriginalNeedleBaseMetrics = OriginalNeedleMetrics(
     topMarginDp = OriginalNeedleTopMarginBaseDp,
     rightMarginDp = OriginalNeedleRightMarginDp,
     shadowRightMarginDp = OriginalNeedleShadowRightMarginDp,
-    pivotXRatio = OriginalNeedlePivotXBase,
-    pivotYRatio = OriginalNeedlePivotYBase,
+    pivotXDp = OriginalNeedlePivotXDp,
+    pivotYDp = OriginalNeedlePivotYDp,
 )
 
 private val OriginalNeedleLargeMetrics = OriginalNeedleMetrics(
@@ -2093,8 +2143,8 @@ private val OriginalNeedleLargeMetrics = OriginalNeedleMetrics(
     topMarginDp = OriginalNeedleTopMarginLargeDp,
     rightMarginDp = OriginalNeedleRightMarginLargeDp,
     shadowRightMarginDp = OriginalNeedleShadowRightMarginLargeDp,
-    pivotXRatio = OriginalNeedlePivotXLarge,
-    pivotYRatio = OriginalNeedlePivotYLarge,
+    pivotXDp = OriginalNeedlePivotXDp,
+    pivotYDp = OriginalNeedlePivotYDp,
 )
 
 private fun originalNeedleMetrics(turntableScale: Float): OriginalNeedleMetrics =
@@ -2161,6 +2211,8 @@ private fun OriginalNeedleStack(
             val needleShadowRightMarginPx = with(density) {
                 metrics.shadowRightMarginDp.dp.roundToPx()
             }
+            val needlePivotXPx = with(density) { metrics.pivotXDp.dp.toPx() }
+            val needlePivotYPx = with(density) { metrics.pivotYDp.dp.toPx() }
 
             updateOriginalNeedleLayout(
                 view = views.base,
@@ -2195,8 +2247,8 @@ private fun OriginalNeedleStack(
             val shadowRotation = needleRotation -
                 (NeedleLiftShadowRotationOffsetDegrees * needleLiftFraction)
             listOf(views.shadow, views.needle).forEach { view ->
-                view.pivotX = needleWidthPx * metrics.pivotXRatio
-                view.pivotY = needleHeightPx * metrics.pivotYRatio
+                view.pivotX = needlePivotXPx
+                view.pivotY = needlePivotYPx
                 view.scaleY = liftedScaleY
             }
             views.shadow.rotation = shadowRotation
@@ -2535,21 +2587,23 @@ private fun MediaItem.toPlaybackQueueTrack(context: Context): PlaybackQueueTrack
 
 @Composable
 private fun rememberSmoothDiscRotation(
-    mediaId: String?,
-    positionMs: Long,
     running: Boolean,
-    followStoppedPosition: Boolean,
+    cycleDurationMs: Float,
+    manualRotationOffsetDegrees: Float,
 ): State<Float> {
     val rotation = remember {
-        mutableFloatStateOf(discRotationFromPosition(positionMs))
+        mutableFloatStateOf(0f)
+    }
+    var lastManualRotationOffsetDegrees by remember {
+        mutableFloatStateOf(manualRotationOffsetDegrees)
     }
 
-    LaunchedEffect(running) {
+    LaunchedEffect(running, cycleDurationMs) {
         if (!running) return@LaunchedEffect
 
         var anchorFrameTimeNanos = Long.MIN_VALUE
         val anchorRotation = rotation.floatValue
-        val degreesPerMs = DiscRotationDegrees / ScratchCycleDurationMs
+        val degreesPerMs = DiscRotationDegrees / cycleDurationMs
         while (isActive) {
             withFrameNanos { frameTimeNanos ->
                 if (anchorFrameTimeNanos == Long.MIN_VALUE) {
@@ -2561,19 +2615,15 @@ private fun rememberSmoothDiscRotation(
         }
     }
 
-    LaunchedEffect(mediaId, positionMs, followStoppedPosition, running) {
-        if (followStoppedPosition && !running) {
-            rotation.floatValue = discRotationFromPosition(positionMs)
+    LaunchedEffect(manualRotationOffsetDegrees) {
+        val deltaDegrees = manualRotationOffsetDegrees - lastManualRotationOffsetDegrees
+        lastManualRotationOffsetDegrees = manualRotationOffsetDegrees
+        if (deltaDegrees != 0f) {
+            rotation.floatValue += deltaDegrees
         }
     }
 
     return rotation
-}
-
-private fun discRotationFromPosition(positionMs: Long): Float {
-    val cycleMs = ScratchCycleDurationMs.toLong()
-    val cyclePositionMs = positionMs.floorMod(cycleMs)
-    return (cyclePositionMs.toFloat() / ScratchCycleDurationMs) * DiscRotationDegrees
 }
 
 internal fun nextPlaybackRepeatMode(repeatMode: Int): Int {
@@ -2611,7 +2661,19 @@ internal fun shuffleToastRes(shuffleEnabled: Boolean): Int {
     }
 }
 
-private fun Long.floorMod(divisor: Long): Long = ((this % divisor) + divisor) % divisor
+private fun Modifier.consumePlaybackTouchFallthrough(): Modifier = pointerInput(Unit) {
+    // 播放页叠在 legacy 主壳上，空白区域也要消费触摸，避免点到后方歌曲列表。
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Final)
+            event.changes.forEach { change ->
+                if (change.pressed || change.previousPressed) {
+                    change.consume()
+                }
+            }
+        }
+    }
+}
 
 private fun Context.musicStreamVolumeFraction(): Float {
     val audioManager = getSystemService(AudioManager::class.java) ?: return 1f
@@ -2858,8 +2920,8 @@ internal fun playbackNeedleGeometry(
         needleWidthPx
     val needleTopPx = metrics.topMarginDp * densityPxPerDp
     val pivotLocal = Offset(
-        x = needleWidthPx * metrics.pivotXRatio,
-        y = needleHeightPx * metrics.pivotYRatio,
+        x = metrics.pivotXDp * densityPxPerDp,
+        y = metrics.pivotYDp * densityPxPerDp,
     )
     val pivot = Offset(
         x = needleLeftPx + pivotLocal.x,
@@ -2961,6 +3023,20 @@ internal fun needleSeekPositionFromRotation(
     return (durationMs.toFloat() * fraction)
         .roundToLong()
         .coerceIn(0L, durationMs)
+}
+
+internal fun shouldStartNeedleSeekDrag(
+    initialPositionMs: Long?,
+    candidatePositionMs: Long?,
+    maxMoveDistance: Float,
+    outsideActivationDistancePx: Float,
+): Boolean {
+    if (initialPositionMs == null) {
+        return true
+    }
+    val movingToOutsideOrStart = candidatePositionMs == null ||
+        candidatePositionMs <= NeedleSeekStartPositionGuardMs
+    return !movingToOutsideOrStart || maxMoveDistance >= outsideActivationDistancePx
 }
 
 private fun angleDegrees(
