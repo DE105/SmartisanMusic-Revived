@@ -114,6 +114,9 @@ internal fun LegacyPortArtistPage(
     albumViewMode: AlbumViewMode,
     hiddenMediaIds: Set<String>,
     onTargetChanged: (LegacyArtistTarget?) -> Unit,
+    onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
+    onRequestAddToQueue: (List<MediaItem>) -> Unit,
+    onTrackMoreClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -195,6 +198,9 @@ internal fun LegacyPortArtistPage(
                 browser = browser,
                 albumViewMode = albumViewMode,
                 onTargetChanged = onTargetChanged,
+                onRequestAddToPlaylist = onRequestAddToPlaylist,
+                onRequestAddToQueue = onRequestAddToQueue,
+                onTrackMoreClick = onTrackMoreClick,
                 switchAnimator = switchAnimator,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -395,6 +401,9 @@ private fun LegacyPortSelectedArtistPage(
     browser: Player?,
     albumViewMode: AlbumViewMode,
     onTargetChanged: (LegacyArtistTarget?) -> Unit,
+    onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
+    onRequestAddToQueue: (List<MediaItem>) -> Unit,
+    onTrackMoreClick: (MediaItem) -> Unit,
     switchAnimator: LegacyArtistAlbumViewSwitchAnimator,
     modifier: Modifier = Modifier,
 ) {
@@ -404,6 +413,9 @@ private fun LegacyPortSelectedArtistPage(
         albums.firstOrNull { album -> album.id == directAlbumTarget.albumId }?.let { album ->
             LegacyPortAlbumDetailPage(
                 album = album,
+                onRequestAddToPlaylist = onRequestAddToPlaylist,
+                onRequestAddToQueue = onRequestAddToQueue,
+                onTrackMoreClick = onTrackMoreClick,
                 modifier = modifier,
             )
             return
@@ -441,6 +453,7 @@ private fun LegacyPortSelectedArtistPage(
                     LegacyPortArtistAllSongsPage(
                         artistName = artist.name,
                         songs = artist.songs,
+                        onTrackMoreClick = onTrackMoreClick,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -448,6 +461,9 @@ private fun LegacyPortSelectedArtistPage(
                     albums.firstOrNull { album -> album.id == detailTarget.albumId }?.let { album ->
                         LegacyPortAlbumDetailPage(
                             album = album,
+                            onRequestAddToPlaylist = onRequestAddToPlaylist,
+                            onRequestAddToQueue = onRequestAddToQueue,
+                            onTrackMoreClick = onTrackMoreClick,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -828,6 +844,7 @@ private class LegacyArtistAlbumGridAdapter(
 private fun LegacyPortArtistAllSongsPage(
     artistName: String,
     songs: List<MediaItem>,
+    onTrackMoreClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val browser = LocalPlaybackBrowser.current
@@ -860,6 +877,7 @@ private fun LegacyPortArtistAllSongsPage(
                 ?: LegacyAlbumTrackAdapter().also { adapter ->
                     root.listView.adapter = adapter
                 }
+            adapter.onMoreClick = onTrackMoreClick
             val contentChanged = adapter.updateItems(
                 nextItems = sortedSongs,
                 nextCurrentMediaId = browser?.currentMediaItem?.mediaId,

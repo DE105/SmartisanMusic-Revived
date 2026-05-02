@@ -122,6 +122,7 @@ internal fun LegacyPortPlaylistPage(
     mediaItems: List<MediaItem>,
     active: Boolean,
     hiddenMediaIds: Set<String>,
+    onTrackMoreClick: (MediaItem) -> Unit,
     onAddModeActiveChanged: (Boolean) -> Unit,
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -353,6 +354,7 @@ internal fun LegacyPortPlaylistPage(
                             }
                             browser.replaceQueueAndPlay(detailTracks, index)
                         },
+                        onTrackMoreClick = onTrackMoreClick,
                         modifier = Modifier.fillMaxSize(),
                     )
                 },
@@ -695,6 +697,7 @@ private fun LegacyPlaylistDetailPage(
     onToggleAll: (Boolean) -> Unit,
     onReorderTracks: (List<String>) -> Unit,
     onTrackClick: (MediaItem, Int) -> Unit,
+    onTrackMoreClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     AndroidView(
@@ -718,6 +721,7 @@ private fun LegacyPlaylistDetailPage(
                 onToggleAll = onToggleAll,
                 onReorderTracks = onReorderTracks,
                 onTrackClick = onTrackClick,
+                onTrackMoreClick = onTrackMoreClick,
             )
             root.bindPlayback(browser)
             if (playlist == null && tracks.isEmpty()) {
@@ -987,8 +991,14 @@ private class LegacyPlaylistDetailRootView(context: Context) : LinearLayout(cont
         onToggleAll: (Boolean) -> Unit,
         onReorderTracks: (List<String>) -> Unit,
         onTrackClick: (MediaItem, Int) -> Unit,
+        onTrackMoreClick: (MediaItem) -> Unit,
     ) {
         onReorderTracksCallback = onReorderTracks
+        trackAdapter.onMoreClick = { item ->
+            if (!editMode) {
+                onTrackMoreClick(item)
+            }
+        }
         header.bind(
             trackCount = tracks.size,
             selectedCount = selectedTrackIds.size,
@@ -1479,6 +1489,7 @@ private sealed class LegacyPlaylistSongRow {
 }
 
 private class LegacyPlaylistTrackAdapter : BaseAdapter(), LegacyListDragAdapter<MediaItem> {
+    var onMoreClick: (MediaItem) -> Unit = {}
     private var items: List<MediaItem> = emptyList()
     private var rows: List<LegacyPlaylistSongRow> = emptyList()
     private var currentMediaId: String? = null
@@ -1679,6 +1690,13 @@ private class LegacyPlaylistTrackAdapter : BaseAdapter(), LegacyListDragAdapter<
             setTextColor(PlaylistSecondaryTextColor)
         }
         view.findViewById<TextView>(R.id.tv_duration)?.text = item.mediaMetadata.durationMs?.formatPlaylistDuration().orEmpty()
+        view.findViewById<View>(R.id.img_action_more)?.apply {
+            isClickable = true
+            isFocusable = false
+            setOnClickListener {
+                onMoreClick(item)
+            }
+        }
         view.findViewById<ImageView>(R.id.mime_type)?.apply {
             val badge = item.playlistQualityBadgeRes()
             if (badge != null) {

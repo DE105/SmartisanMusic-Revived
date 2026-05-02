@@ -43,6 +43,9 @@ private val LegacyAlbumDetailSecondaryTextColor = Color.rgb(0xa4, 0xa7, 0xac)
 @Composable
 internal fun LegacyPortAlbumDetailPage(
     album: AlbumSummary,
+    onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
+    onRequestAddToQueue: (List<MediaItem>) -> Unit,
+    onTrackMoreClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val browser = LocalPlaybackBrowser.current
@@ -87,11 +90,13 @@ internal fun LegacyPortAlbumDetailPage(
                     )
                 },
                 onAddToPlaylist = {
-                    // 这里只接外观层，播放列表选择弹窗后续按 8.1.0 MenuDialog 单独移植。
+                    if (album.songs.isNotEmpty()) {
+                        onRequestAddToPlaylist(album.songs)
+                    }
                 },
                 onAddToQueue = {
                     if (album.songs.isNotEmpty()) {
-                        browser?.addMediaItems(album.songs)
+                        onRequestAddToQueue(album.songs)
                     }
                 },
             )
@@ -100,6 +105,7 @@ internal fun LegacyPortAlbumDetailPage(
                 ?: LegacyAlbumTrackAdapter().also { adapter ->
                     root.listView.adapter = adapter
                 }
+            adapter.onMoreClick = onTrackMoreClick
             val contentChanged = adapter.updateItems(
                 nextItems = album.songs,
                 nextCurrentMediaId = currentMediaId,
@@ -450,6 +456,7 @@ private class LegacyAlbumDetailHeader(context: Context) : LinearLayout(context) 
 }
 
 internal class LegacyAlbumTrackAdapter : BaseAdapter() {
+    var onMoreClick: (MediaItem) -> Unit = {}
     private var items: List<MediaItem> = emptyList()
     private var currentMediaId: String? = null
     private var currentIsPlaying: Boolean = false
@@ -530,6 +537,9 @@ internal class LegacyAlbumTrackAdapter : BaseAdapter() {
             showArtist = showTrackArtists,
             forceSequentialTrackNumber = forceSequentialTrackNumbers,
         )
+        holder.more.setOnClickListener {
+            onMoreClick(item)
+        }
         return view
     }
 
@@ -569,6 +579,8 @@ internal class LegacyAlbumTrackAdapter : BaseAdapter() {
             setImageResource(R.drawable.btn_more_selector)
             scaleType = ImageView.ScaleType.FIT_CENTER
             isDuplicateParentStateEnabled = true
+            isClickable = true
+            isFocusable = false
             contentDescription = context.getString(R.string.tab_more)
         }
         row.addView(
@@ -658,6 +670,7 @@ internal class LegacyAlbumTrackAdapter : BaseAdapter() {
             title = title,
             artist = artist,
             duration = duration,
+            more = more,
         )
         return row
     }
@@ -668,6 +681,7 @@ private data class LegacyAlbumTrackViewHolder(
     val title: StretchTextView,
     val artist: TextView,
     val duration: TextView,
+    val more: ImageView,
 ) {
     fun bind(
         item: MediaItem,

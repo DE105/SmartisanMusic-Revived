@@ -79,6 +79,9 @@ internal fun LegacyPortAlbumPage(
     hiddenMediaIds: Set<String>,
     onAlbumSelected: (String, String) -> Unit,
     onToggleAlbumSelected: (String) -> Unit,
+    onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
+    onRequestAddToQueue: (List<MediaItem>) -> Unit,
+    onTrackMoreClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -136,6 +139,9 @@ internal fun LegacyPortAlbumPage(
         secondaryContent = { album ->
             LegacyPortAlbumDetailPage(
                 album = album,
+                onRequestAddToPlaylist = onRequestAddToPlaylist,
+                onRequestAddToQueue = onRequestAddToQueue,
+                onTrackMoreClick = onTrackMoreClick,
                 modifier = Modifier.fillMaxSize(),
             )
         },

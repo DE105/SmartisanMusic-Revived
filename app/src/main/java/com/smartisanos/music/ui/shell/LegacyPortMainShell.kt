@@ -95,6 +95,8 @@ import com.smartisanos.music.playback.removeMediaItemsByMediaIds
 import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.resolveExternalAudioMediaStoreIds
 import com.smartisanos.music.resolveExternalAudioArtist
+import com.smartisanos.music.ui.components.LegacyTrackActionItem
+import com.smartisanos.music.ui.components.LegacyTrackActionsOverlay
 import com.smartisanos.music.ui.components.hasAudioPermission
 import com.smartisanos.music.ui.album.AlbumViewMode
 import com.smartisanos.music.ui.album.buildAlbumSummaries
@@ -127,6 +129,11 @@ private sealed interface LegacySearchDrilldownTarget {
     data class Artist(
         val target: LegacyArtistTarget,
     ) : LegacySearchDrilldownTarget
+}
+
+private enum class LegacyTrackActionSource {
+    Library,
+    Playlist,
 }
 
 private val LegacySearchDecelerateEasing = Easing { fraction ->
@@ -195,8 +202,11 @@ private fun LegacyPortMainShellContent(
     var libraryRefreshVersion by remember { mutableStateOf(0) }
     var libraryRefreshing by remember { mutableStateOf(false) }
     var showSongDeleteConfirm by remember { mutableStateOf(false) }
+    var pendingSongDeleteMediaIds by remember { mutableStateOf(emptySet<String>()) }
     var pendingSystemDeleteSongIds by remember { mutableStateOf(emptySet<String>()) }
     var pendingPlaylistPickerMediaItems by remember { mutableStateOf<List<MediaItem>?>(null) }
+    var pendingTrackActionMediaId by remember { mutableStateOf<String?>(null) }
+    var pendingTrackActionSource by remember { mutableStateOf(LegacyTrackActionSource.Library) }
     var showPlaybackPlaylistCreateDialog by remember { mutableStateOf(false) }
     var playbackPlaylistCreateInitialValue by remember { mutableStateOf("") }
     var snapshot by remember(controller) {
@@ -208,6 +218,11 @@ private fun LegacyPortMainShellContent(
         )
     }
     val legacyLibrary = rememberLegacyLibraryMediaState(libraryRefreshVersion)
+    val pendingTrackActionItem = remember(pendingTrackActionMediaId, legacyLibrary.items) {
+        pendingTrackActionMediaId?.let { mediaId ->
+            legacyLibrary.items.firstOrNull { item -> item.mediaId == mediaId }
+        }
+    }
     val artworkRequestKey = snapshot.mediaItem?.artworkRequestKey()
     val artworkBitmap by produceState<Bitmap?>(initialValue = null, artworkRequestKey) {
         value = snapshot.mediaItem?.let { mediaItem ->
@@ -302,6 +317,29 @@ private fun LegacyPortMainShellContent(
         }
     }
 
+    fun showTrackActions(
+        item: MediaItem,
+        source: LegacyTrackActionSource,
+    ) {
+        if (item.mediaId.isBlank()) {
+            return
+        }
+        pendingTrackActionMediaId = item.mediaId
+        pendingTrackActionSource = source
+    }
+
+    fun dismissTrackActions() {
+        pendingTrackActionMediaId = null
+    }
+
+    fun requestSongDeleteConfirmation(mediaIds: Set<String>) {
+        if (mediaIds.isEmpty()) {
+            return
+        }
+        pendingSongDeleteMediaIds = mediaIds
+        showSongDeleteConfirm = true
+    }
+
     fun refreshLegacyLibrary() {
         if (libraryRefreshing) {
             return
@@ -377,6 +415,7 @@ private fun LegacyPortMainShellContent(
             songsEditMode = false
             selectedSongIds = emptySet()
             showSongDeleteConfirm = false
+            pendingSongDeleteMediaIds = emptySet()
         }
         if (currentDestination != MusicDestination.Album) {
             albumEditMode = false
@@ -390,6 +429,7 @@ private fun LegacyPortMainShellContent(
         if (currentDestination != MusicDestination.Playlist) {
             playlistAddModeActive = false
         }
+        dismissTrackActions()
     }
 
     BackHandler(enabled = currentDestination == MusicDestination.Album && selectedAlbumId != null) {
@@ -467,7 +507,7 @@ private fun LegacyPortMainShellContent(
                     },
                     onRequestDeleteSelected = {
                         if (selectedSongIds.isNotEmpty()) {
-                            showSongDeleteConfirm = true
+                            requestSongDeleteConfirmation(selectedSongIds)
                         }
                     },
                     onEnterAlbumEditMode = {
@@ -547,6 +587,8 @@ private fun LegacyPortMainShellContent(
                 libraryRefreshing = libraryRefreshing,
                 playbackSettings = playbackSettings,
                 onRefreshLibrary = ::refreshLegacyLibrary,
+                onRequestAddToPlaylist = ::requestAddToPlaylist,
+                onRequestAddToQueue = ::enqueueMediaItems,
                 onScratchEnabledChange = { enabled ->
                     scope.launch {
                         playbackSettingsStore.setScratchEnabled(enabled)
@@ -564,6 +606,12 @@ private fun LegacyPortMainShellContent(
                 },
                 onMediaIdsHidden = ::reclaimHiddenMediaIds,
                 onRequestDeleteMediaIds = ::requestSystemDeleteMediaIds,
+                onLibraryTrackMoreClick = { item ->
+                    showTrackActions(item, LegacyTrackActionSource.Library)
+                },
+                onPlaylistTrackMoreClick = { item ->
+                    showTrackActions(item, LegacyTrackActionSource.Playlist)
+                },
                 onMoreSettingsPageActiveChanged = { active ->
                     moreSettingsPageActive = active
                 },
@@ -646,6 +694,74 @@ private fun LegacyPortMainShellContent(
                 )
             }
         }
+        val trackActionItems = pendingTrackActionItem?.let { actionItem ->
+            val mediaId = actionItem.mediaId
+            val isFavorite = mediaId in favoriteIds
+            val canPersist = mediaId.isNotBlank() && !actionItem.isExternalAudioLaunchItem()
+            val actions = mutableListOf(
+                LegacyTrackActionItem(
+                    labelRes = R.string.add_to_playlist,
+                    iconRes = R.drawable.more_select_icon_addlist,
+                    pressedIconRes = R.drawable.more_select_icon_addlist_down,
+                    enabled = canPersist,
+                    onClick = {
+                        dismissTrackActions()
+                        requestAddToPlaylist(listOf(actionItem))
+                    },
+                ),
+                LegacyTrackActionItem(
+                    labelRes = R.string.add_to_queue,
+                    iconRes = R.drawable.more_select_icon_addplay,
+                    pressedIconRes = R.drawable.more_select_icon_addplay_down,
+                    onClick = {
+                        dismissTrackActions()
+                        enqueueMediaItems(listOf(actionItem))
+                    },
+                ),
+                LegacyTrackActionItem(
+                    labelRes = if (isFavorite) R.string.cancel_love else R.string.love,
+                    iconRes = if (isFavorite) {
+                        R.drawable.more_select_icon_favorite_cancel
+                    } else {
+                        R.drawable.more_select_icon_favorite_add
+                    },
+                    pressedIconRes = if (isFavorite) {
+                        R.drawable.more_select_icon_favorite_cancel_down
+                    } else {
+                        R.drawable.more_select_icon_favorite_add_down
+                    },
+                    enabled = canPersist,
+                    selected = isFavorite,
+                    onClick = {
+                        dismissTrackActions()
+                        if (canPersist) {
+                            scope.launch {
+                                favoriteRepository.toggle(mediaId)
+                            }
+                        }
+                    },
+                ),
+            )
+            if (pendingTrackActionSource == LegacyTrackActionSource.Library) {
+                actions += LegacyTrackActionItem(
+                    labelRes = R.string.delete,
+                    iconRes = R.drawable.more_select_icon_delete,
+                    onClick = {
+                        dismissTrackActions()
+                        requestSongDeleteConfirmation(setOf(mediaId))
+                    },
+                )
+            }
+            actions
+        }.orEmpty()
+        LegacyTrackActionsOverlay(
+            visible = pendingTrackActionItem != null,
+            actions = trackActionItems,
+            onDismissRequest = ::dismissTrackActions,
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(2.4f),
+        )
         LegacyPortPlaybackOverlay(
             visible = playbackVisible,
             playbackSettings = playbackSettings,
@@ -674,6 +790,11 @@ private fun LegacyPortMainShellContent(
             onDismiss = closeSearchOverlay,
             onOpenPlayback = {
                 playbackVisible = true
+            },
+            onRequestAddToPlaylist = ::requestAddToPlaylist,
+            onRequestAddToQueue = ::enqueueMediaItems,
+            onTrackMoreClick = { item ->
+                showTrackActions(item, LegacyTrackActionSource.Library)
             },
             onDrilldownTargetChanged = { target ->
                 searchDrilldownTarget = target
@@ -759,14 +880,17 @@ private fun LegacyPortMainShellContent(
             LegacySongDeleteConfirmOverlay(
                 onDismiss = {
                     showSongDeleteConfirm = false
+                    pendingSongDeleteMediaIds = emptySet()
                 },
                 onConfirm = {
-                    val mediaIds = selectedSongIds
+                    val mediaIds = pendingSongDeleteMediaIds
                     if (mediaIds.isEmpty()) {
                         showSongDeleteConfirm = false
+                        pendingSongDeleteMediaIds = emptySet()
                         return@LegacySongDeleteConfirmOverlay
                     }
                     showSongDeleteConfirm = false
+                    pendingSongDeleteMediaIds = emptySet()
                     songsEditMode = false
                     selectedSongIds = emptySet()
                     requestSystemDeleteMediaIds(mediaIds)
@@ -858,11 +982,15 @@ private fun LegacyPortTabContent(
     libraryRefreshing: Boolean,
     playbackSettings: PlaybackSettings,
     onRefreshLibrary: () -> Unit,
+    onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
+    onRequestAddToQueue: (List<MediaItem>) -> Unit,
     onScratchEnabledChange: (Boolean) -> Unit,
     onHidePlayerAxisEnabledChange: (Boolean) -> Unit,
     onPopcornSoundEnabledChange: (Boolean) -> Unit,
     onMediaIdsHidden: (Set<String>) -> Unit,
     onRequestDeleteMediaIds: (Set<String>) -> Unit,
+    onLibraryTrackMoreClick: (MediaItem) -> Unit,
+    onPlaylistTrackMoreClick: (MediaItem) -> Unit,
     onMoreSettingsPageActiveChanged: (Boolean) -> Unit,
     onToggleSongSelected: (String) -> Unit,
     onToggleAlbumSelected: (String) -> Unit,
@@ -881,6 +1009,7 @@ private fun LegacyPortTabContent(
             selectedSongIds = selectedSongIds,
             hiddenMediaIds = hiddenMediaIds,
             onToggleSongSelected = onToggleSongSelected,
+            onTrackMoreClick = onLibraryTrackMoreClick,
             modifier = modifier,
         )
         MusicDestination.Album -> LegacyPortAlbumPage(
@@ -893,6 +1022,9 @@ private fun LegacyPortTabContent(
             hiddenMediaIds = hiddenMediaIds,
             onAlbumSelected = onAlbumSelected,
             onToggleAlbumSelected = onToggleAlbumSelected,
+            onRequestAddToPlaylist = onRequestAddToPlaylist,
+            onRequestAddToQueue = onRequestAddToQueue,
+            onTrackMoreClick = onLibraryTrackMoreClick,
             modifier = modifier,
         )
         MusicDestination.Artist -> LegacyPortArtistPage(
@@ -902,12 +1034,16 @@ private fun LegacyPortTabContent(
             albumViewMode = artistAlbumViewMode,
             hiddenMediaIds = hiddenMediaIds,
             onTargetChanged = onArtistTargetChanged,
+            onRequestAddToPlaylist = onRequestAddToPlaylist,
+            onRequestAddToQueue = onRequestAddToQueue,
+            onTrackMoreClick = onLibraryTrackMoreClick,
             modifier = modifier,
         )
         MusicDestination.Playlist -> LegacyPortPlaylistPage(
             mediaItems = mediaItems,
             active = true,
             hiddenMediaIds = hiddenMediaIds,
+            onTrackMoreClick = onPlaylistTrackMoreClick,
             onAddModeActiveChanged = onPlaylistAddModeActiveChanged,
             onSearchClick = onSearchClick,
             modifier = modifier,
@@ -941,6 +1077,9 @@ private fun LegacyPortSearchOverlay(
     onQueryChange: (String) -> Unit,
     onDismiss: () -> Unit,
     onOpenPlayback: () -> Unit,
+    onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
+    onRequestAddToQueue: (List<MediaItem>) -> Unit,
+    onTrackMoreClick: (MediaItem) -> Unit,
     onDrilldownTargetChanged: (LegacySearchDrilldownTarget?) -> Unit,
     onAlbumClick: (String, String) -> Unit,
     onArtistClick: (String, String) -> Unit,
@@ -998,6 +1137,9 @@ private fun LegacyPortSearchOverlay(
                             }
                         }
                     },
+                    onRequestAddToPlaylist = onRequestAddToPlaylist,
+                    onRequestAddToQueue = onRequestAddToQueue,
+                    onTrackMoreClick = onTrackMoreClick,
                     onArtistTargetChanged = { artistTarget ->
                         onDrilldownTargetChanged(
                             artistTarget?.let(LegacySearchDrilldownTarget::Artist),
@@ -1016,6 +1158,9 @@ private fun LegacyPortSearchDrilldownPage(
     mediaItems: List<MediaItem>,
     hiddenMediaIds: Set<String>,
     onBack: () -> Unit,
+    onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
+    onRequestAddToQueue: (List<MediaItem>) -> Unit,
+    onTrackMoreClick: (MediaItem) -> Unit,
     onArtistTargetChanged: (LegacyArtistTarget?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1055,6 +1200,9 @@ private fun LegacyPortSearchDrilldownPage(
                 if (album != null) {
                     LegacyPortAlbumDetailPage(
                         album = album,
+                        onRequestAddToPlaylist = onRequestAddToPlaylist,
+                        onRequestAddToQueue = onRequestAddToQueue,
+                        onTrackMoreClick = onTrackMoreClick,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
@@ -1090,6 +1238,9 @@ private fun LegacyPortSearchDrilldownPage(
                     albumViewMode = AlbumViewMode.List,
                     hiddenMediaIds = emptySet(),
                     onTargetChanged = onArtistTargetChanged,
+                    onRequestAddToPlaylist = onRequestAddToPlaylist,
+                    onRequestAddToQueue = onRequestAddToQueue,
+                    onTrackMoreClick = onTrackMoreClick,
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
@@ -1140,6 +1291,7 @@ private fun LegacyPortSongsPage(
     selectedSongIds: Set<String>,
     hiddenMediaIds: Set<String>,
     onToggleSongSelected: (String) -> Unit,
+    onTrackMoreClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val browser = LocalPlaybackBrowser.current
@@ -1216,6 +1368,11 @@ private fun LegacyPortSongsPage(
             listView.visibility = if (hasSongs || libraryLoaded) View.VISIBLE else View.INVISIBLE
             val adapter = listView.adapter as? LegacySongsAdapter ?: LegacySongsAdapter().also { adapter ->
                 listView.adapter = adapter
+            }
+            adapter.onMoreClick = { item ->
+                if (!editMode) {
+                    onTrackMoreClick(item)
+                }
             }
             val previousEditMode = listView.getTag(R.id.elvitem) as? Boolean
             val animateEditMode = previousEditMode != null && previousEditMode != editMode
@@ -1456,6 +1613,7 @@ internal data class LegacyLibraryMediaState(
 )
 
 private class LegacySongsAdapter : BaseAdapter() {
+    var onMoreClick: (MediaItem) -> Unit = {}
     var items: List<MediaItem> = emptyList()
         private set
     private var rows: List<LegacySongRow> = emptyList()
@@ -1639,7 +1797,14 @@ private class LegacySongsAdapter : BaseAdapter() {
         view.findViewById<CheckBox>(R.id.cb_del)?.isChecked = item.mediaId in selectedMediaIds
         view.findViewById<View>(R.id.iv_right)?.visibility = View.GONE
         view.findViewById<View>(R.id.tv_duration)?.visibility = View.VISIBLE
-        view.findViewById<View>(R.id.img_action_more)?.visibility = View.VISIBLE
+        view.findViewById<View>(R.id.img_action_more)?.apply {
+            visibility = View.VISIBLE
+            isClickable = true
+            isFocusable = false
+            setOnClickListener {
+                onMoreClick(item)
+            }
+        }
         view.findViewById<View>(R.id.relativeLayout1)?.apply {
             val params = layoutParams as? RelativeLayout.LayoutParams ?: return@apply
             params.removeRule(RelativeLayout.LEFT_OF)
