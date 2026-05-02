@@ -1,14 +1,18 @@
 package smartisanos.widget.tabswitcher
 
 import android.content.Context
+import android.graphics.Typeface
+import android.text.TextUtils
 import android.util.AttributeSet
+import android.util.TypedValue
 import android.view.Gravity
-import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.widget.ImageView
-import android.widget.RadioButton
-import android.widget.RadioGroup
+import android.widget.Checkable
+import android.widget.LinearLayout
 import android.widget.RelativeLayout
+import android.widget.TextView
 import com.smartisanos.music.R
 import com.smartisanos.music.ui.navigation.MusicDestination
 
@@ -17,9 +21,8 @@ class TabSwitcher @JvmOverloads constructor(
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0,
 ) : RelativeLayout(context, attrs, defStyleAttr) {
-    private val radioGroup: RadioGroup
-    private val destinationIds = mutableMapOf<MusicDestination, Int>()
-    private val idDestinations = mutableMapOf<Int, MusicDestination>()
+    private val tabContainer: LinearLayout
+    private val destinationViews = mutableMapOf<MusicDestination, BottomTabItemView>()
     private var selectedDestination = MusicDestination.DefaultMain
     private var suppressSelectionCallback = false
     private var onDestinationSelected: ((MusicDestination) -> Unit)? = null
@@ -27,22 +30,14 @@ class TabSwitcher @JvmOverloads constructor(
     init {
         val barHeight = resources.getDimensionPixelSize(R.dimen.smartisan_tabswitch_tabbar_height)
 
-        radioGroup = RadioGroup(context).apply {
-            orientation = RadioGroup.HORIZONTAL
+        tabContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setBackgroundResource(R.drawable.sb_repeat_tabbar_bg)
             weightSum = 5f
-            setOnCheckedChangeListener { _, checkedId ->
-                if (suppressSelectionCallback) {
-                    return@setOnCheckedChangeListener
-                }
-                val destination = idDestinations[checkedId] ?: return@setOnCheckedChangeListener
-                selectedDestination = destination
-                onDestinationSelected?.invoke(destination)
-            }
         }
         addView(
-            radioGroup,
+            tabContainer,
             LayoutParams(
                 LayoutParams.MATCH_PARENT,
                 barHeight,
@@ -83,43 +78,61 @@ class TabSwitcher @JvmOverloads constructor(
     }
 
     fun setCurrentDestination(destination: MusicDestination) {
-        selectedDestination = destination
-        val id = destinationIds[destination] ?: return
-        suppressSelectionCallback = true
-        radioGroup.check(id)
-        suppressSelectionCallback = false
+        selectDestination(destination, notify = false, animate = true)
     }
 
     fun setDestinations(destinations: List<MusicDestination>) {
-        radioGroup.removeAllViews()
-        destinationIds.clear()
-        idDestinations.clear()
+        tabContainer.removeAllViews()
+        destinationViews.clear()
 
         destinations.forEach { destination ->
-            val itemId = View.generateViewId()
-            val button = LayoutInflater.from(context)
-                .inflate(R.layout.sb_tab_item, radioGroup, false) as RadioButton
-            button.id = itemId
-            button.text = destination.label
-            button.setTextColor(context.getColorStateList(R.color.tab_bar_text_color))
-            button.setCompoundDrawablesWithIntrinsicBounds(
-                null,
-                context.getDrawable(destination.tabIconSelectorRes()),
-                null,
-                null,
-            )
-            button.compoundDrawablePadding = resources.getDimensionPixelSize(
-                R.dimen.smartisan_switch_bar_drawablePadding,
-            )
-            button.setOnClickListener {
-                radioGroup.check(itemId)
+            val itemView = BottomTabItemView(context).apply {
+                id = View.generateViewId()
+                setDrawableResource(destination.tabIconSelectorRes())
+                text = destination.label
+                contentDescription = destination.label
+                setTextColor(context.getColorStateList(R.color.tab_bar_text_color))
+                setOnCheckedChangeListener { view, checked ->
+                    if (!checked || suppressSelectionCallback) {
+                        return@setOnCheckedChangeListener
+                    }
+                    val selected = destinationViews.entries
+                        .firstOrNull { it.value == view }
+                        ?.key
+                        ?: return@setOnCheckedChangeListener
+                    selectDestination(selected, notify = true, animate = true)
+                }
             }
-            radioGroup.addView(button)
-            destinationIds[destination] = itemId
-            idDestinations[itemId] = destination
+            tabContainer.addView(
+                itemView,
+                LinearLayout.LayoutParams(
+                    0,
+                    LayoutParams.MATCH_PARENT,
+                    1f,
+                ),
+            )
+            destinationViews[destination] = itemView
         }
 
-        setCurrentDestination(selectedDestination)
+        selectDestination(selectedDestination, notify = false, animate = false)
+    }
+
+    private fun selectDestination(
+        destination: MusicDestination,
+        notify: Boolean,
+        animate: Boolean,
+    ) {
+        val selectedView = destinationViews[destination] ?: return
+        val changed = selectedDestination != destination
+        selectedDestination = destination
+        suppressSelectionCallback = true
+        destinationViews.forEach { (candidate, view) ->
+            view.setChecked(candidate == destination, animate)
+        }
+        suppressSelectionCallback = false
+        if (notify && changed && selectedView.isChecked) {
+            onDestinationSelected?.invoke(destination)
+        }
     }
 
     private fun MusicDestination.tabIconSelectorRes(): Int {
@@ -130,5 +143,170 @@ class TabSwitcher @JvmOverloads constructor(
             MusicDestination.Songs -> R.drawable.tabbar_song_selector
             MusicDestination.More -> R.drawable.tabbar_more_selector
         }
+    }
+}
+
+private class BottomTabItemView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0,
+) : LinearLayout(context, attrs, defStyleAttr), Checkable {
+    private var imageView: ImageView? = null
+    private var textView: TextView? = null
+    private var checked = false
+    private var broadcasting = false
+    private var onCheckedChangeListener: ((BottomTabItemView, Boolean) -> Unit)? = null
+
+    var text: CharSequence = ""
+        set(value) {
+            field = value
+            getTextViewOrCreate().text = value
+        }
+
+    init {
+        gravity = Gravity.CENTER
+        orientation = VERTICAL
+        isClickable = true
+    }
+
+    override fun isChecked(): Boolean = checked
+
+    override fun setChecked(checked: Boolean) {
+        setChecked(checked, animate = true)
+    }
+
+    fun setChecked(checked: Boolean, animate: Boolean) {
+        val changed = this.checked != checked
+        this.checked = checked
+        isSelected = checked
+        isActivated = checked
+        refreshDrawableState()
+        imageView?.refreshDrawableState()
+        textView?.refreshDrawableState()
+        if (changed || !animate) {
+            updateContentScale(animate)
+        }
+        if (!changed || broadcasting) {
+            return
+        }
+        broadcasting = true
+        onCheckedChangeListener?.invoke(this, this.checked)
+        broadcasting = false
+    }
+
+    override fun toggle() {
+        if (!checked) {
+            isChecked = true
+        }
+    }
+
+    override fun performClick(): Boolean {
+        toggle()
+        return super.performClick()
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        val handled = super.onTouchEvent(event)
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> animateContentScale(PressedScale, TouchScaleDurationMs)
+            MotionEvent.ACTION_UP,
+            MotionEvent.ACTION_CANCEL,
+            -> updateContentScale(animate = true)
+        }
+        return handled
+    }
+
+    override fun onCreateDrawableState(extraSpace: Int): IntArray {
+        val state = super.onCreateDrawableState(extraSpace + 1)
+        if (checked) {
+            mergeDrawableStates(state, CheckedStateSet)
+        }
+        return state
+    }
+
+    fun setDrawableResource(drawableRes: Int) {
+        getImageViewOrCreate().setImageResource(drawableRes)
+    }
+
+    fun setTextColor(colorStateList: android.content.res.ColorStateList) {
+        getTextViewOrCreate().setTextColor(colorStateList)
+    }
+
+    fun setOnCheckedChangeListener(listener: ((BottomTabItemView, Boolean) -> Unit)?) {
+        onCheckedChangeListener = listener
+    }
+
+    private fun getImageViewOrCreate(): ImageView {
+        imageView?.let { return it }
+        return ImageView(context).also { view ->
+            imageView = view
+            view.setDuplicateParentStateEnabled(true)
+            view.scaleX = NormalScale
+            view.scaleY = NormalScale
+            addView(view, generateDefaultLayoutParams())
+        }
+    }
+
+    private fun getTextViewOrCreate(): TextView {
+        textView?.let { return it }
+        getImageViewOrCreate()
+        return TextView(context).also { view ->
+            textView = view
+            view.setDuplicateParentStateEnabled(true)
+            view.ellipsize = TextUtils.TruncateAt.END
+            view.gravity = Gravity.CENTER_HORIZONTAL
+            view.setSingleLine()
+            view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
+            view.typeface = Typeface.DEFAULT_BOLD
+            view.scaleX = NormalScale
+            view.scaleY = NormalScale
+            val topMargin = resources.getDimensionPixelSize(
+                R.dimen.smartisan_switch_bar_drawablePadding,
+            )
+            addView(
+                view,
+                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                    this.topMargin = topMargin
+                },
+            )
+        }
+    }
+
+    private fun updateContentScale(animate: Boolean) {
+        val target = if (checked) SelectedScale else NormalScale
+        if (animate) {
+            animateContentScale(target, SelectScaleDurationMs)
+        } else {
+            imageView?.animate()?.cancel()
+            textView?.animate()?.cancel()
+            imageView?.scaleX = target
+            imageView?.scaleY = target
+            textView?.scaleX = target
+            textView?.scaleY = target
+        }
+    }
+
+    private fun animateContentScale(target: Float, durationMs: Long) {
+        imageView?.animate()?.cancel()
+        textView?.animate()?.cancel()
+        imageView?.animate()
+            ?.scaleX(target)
+            ?.scaleY(target)
+            ?.setDuration(durationMs)
+            ?.start()
+        textView?.animate()
+            ?.scaleX(target)
+            ?.scaleY(target)
+            ?.setDuration(durationMs)
+            ?.start()
+    }
+
+    companion object {
+        private val CheckedStateSet = intArrayOf(android.R.attr.state_checked)
+        private const val NormalScale = 0.9f
+        private const val SelectedScale = 1.0f
+        private const val PressedScale = 1.1f
+        private const val TouchScaleDurationMs = 120L
+        private const val SelectScaleDurationMs = 200L
     }
 }
