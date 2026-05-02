@@ -226,6 +226,7 @@
     <dimen name="playback_bar_text_width">143.29999dp</dimen>
     <dimen name="play_list_check_box_margin_left">20.0dp</dimen>
     <dimen name="play_list_check_box_margin_right">20.0dp</dimen>
+    <dimen name="playlist_right_action_width">30.0dp</dimen>
     <dimen name="primary_text_size">17.0sp</dimen>
     <dimen name="quickbar_width">217.5dp</dimen>
     <dimen name="letters_bar_width">40.0dp</dimen>

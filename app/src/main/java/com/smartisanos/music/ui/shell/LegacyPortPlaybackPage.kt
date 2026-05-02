@@ -1,18 +1,13 @@
 package com.smartisanos.music.ui.shell
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Rect
 import android.graphics.Typeface
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
-import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.AbsListView
 import android.widget.BaseAdapter
@@ -65,7 +60,6 @@ import com.smartisanos.music.playback.LocalPlaybackController
 import com.smartisanos.music.ui.playback.PlaybackScreen
 import kotlinx.coroutines.launch
 import smartisanos.widget.TitleBar
-import kotlin.math.abs
 
 @Composable
 internal fun LegacyPortPlaybackPage(
@@ -400,18 +394,6 @@ private data class LegacyPlaybackQueueTrack(
     val mediaItem: MediaItem,
 )
 
-private data class LegacyDragTouch(
-    val track: LegacyPlaybackQueueTrack,
-    val adapterPosition: Int,
-    val child: View,
-)
-
-private data class LegacyDragBitmap(
-    val bitmap: Bitmap,
-    val paddingTop: Int,
-    val paddingBottom: Int,
-)
-
 private data class LegacyPlaybackQueueCallbacks(
     val onItemClick: (Int) -> Unit,
     val onFavoriteCurrentClick: () -> Unit,
@@ -486,31 +468,13 @@ private fun MediaItem.toLegacyPlaybackQueueTrack(
 private class LegacyPlaybackQueueView(context: Context) : FrameLayout(context) {
     private val queueAdapter = LegacyPlaybackQueueAdapter(context)
     private val listView: ListView
-    private val dragInterpolator = android.animation.TimeInterpolator { fraction ->
-        if (fraction < LegacyQueueDragInterpolatorPivot) {
-            2f * fraction * fraction
-        } else {
-            val inverse = fraction - 1f
-            1f - 2f * inverse * inverse
-        }
-    }
+    private val dragController: LegacyListDragController<LegacyPlaybackQueueTrack>
     private var callbacks = LegacyPlaybackQueueCallbacks(
         onItemClick = {},
         onFavoriteCurrentClick = {},
         onClearUpcomingClick = {},
         onMoveRequest = { _, _ -> },
     )
-    private var dragSource: LegacyPlaybackQueueTrack? = null
-    private var dragSourceAdapterPosition = ListView.INVALID_POSITION
-    private var dragTargetAdapterPosition = ListView.INVALID_POSITION
-    private var dragStartRawY = 0f
-    private var dragTouchOffsetY = 0
-    private var dragFloatPaddingTop = 0
-    private var dragRowHeight = 0
-    private var dragFloatView: ImageView? = null
-    private var dragging = false
-    private var finishingDrag = false
-    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
 
     init {
         clipChildren = false
@@ -521,7 +485,7 @@ private class LegacyPlaybackQueueView(context: Context) : FrameLayout(context) {
             clipToPadding = false
             adapter = queueAdapter
             setOnTouchListener { _, event ->
-                handleListTouch(event)
+                dragController.handleListTouch(event)
             }
             setOnItemClickListener { _, _, position, _ ->
                 queueAdapter.trackAt(position)?.let { track ->
@@ -529,6 +493,15 @@ private class LegacyPlaybackQueueView(context: Context) : FrameLayout(context) {
                 }
             }
         }
+        dragController = LegacyListDragController(
+            context = context,
+            hostView = this,
+            listView = listView,
+            adapter = queueAdapter,
+            onMoveCommitted = { source, target, _, _ ->
+                callbacks.onMoveRequest(source.queueIndex, target.queueIndex)
+            },
+        )
     }
 
     fun bind(
@@ -544,329 +517,11 @@ private class LegacyPlaybackQueueView(context: Context) : FrameLayout(context) {
         super.onDetachedFromWindow()
     }
 
-    private fun handleListTouch(event: MotionEvent): Boolean {
-        if (finishingDrag) {
-            return true
-        }
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                val touchedItem = findTouchedDragHandleTrack(event) ?: return false
-                dragSource = touchedItem.track
-                dragSourceAdapterPosition = touchedItem.adapterPosition
-                dragTargetAdapterPosition = touchedItem.adapterPosition
-                dragStartRawY = event.rawY
-                dragging = false
-                beginDragVisual(touchedItem.child, event)
-                listView.parent?.requestDisallowInterceptTouchEvent(true)
-                return true
-            }
-
-            MotionEvent.ACTION_MOVE -> {
-                if (dragSource == null) {
-                    return false
-                }
-                updateDragFloatPosition(event, animate = false)
-                if (abs(event.rawY - dragStartRawY) > touchSlop) {
-                    dragging = true
-                    updateDragTarget(event)
-                }
-                return true
-            }
-
-            MotionEvent.ACTION_UP -> {
-                if (dragSource == null) {
-                    return false
-                }
-                updateDragFloatPosition(event, animate = false)
-                if (dragging) {
-                    updateDragTarget(event)
-                }
-                finishDrag(commitMove = dragging)
-                return true
-            }
-
-            MotionEvent.ACTION_CANCEL -> {
-                if (dragSource == null) {
-                    return false
-                }
-                finishDrag(commitMove = false)
-                return true
-            }
-        }
-        return false
-    }
-
-    private fun findTouchedDragHandleTrack(event: MotionEvent): LegacyDragTouch? {
-        val position = listView.pointToPosition(event.x.toInt(), event.y.toInt())
-        if (position == ListView.INVALID_POSITION) {
-            return null
-        }
-        val track = queueAdapter.reorderableTrackAt(position) ?: return null
-        val child = listView.getChildAt(position - listView.firstVisiblePosition) ?: return null
-        val dragHandle = child.findViewById<View>(R.id.iv_right) ?: return null
-        val hitRect = Rect()
-        dragHandle.getHitRect(hitRect)
-        hitRect.offset(child.left, child.top)
-        hitRect.inset(-touchSlop, -touchSlop)
-        return if (hitRect.contains(event.x.toInt(), event.y.toInt())) {
-            LegacyDragTouch(track, position, child)
-        } else {
-            null
-        }
-    }
-
-    private fun findDropTargetAdapterPosition(event: MotionEvent): Int {
-        val y = event.y.toInt()
-        val adapterPosition = listView.pointToPosition(listView.width / 2, y)
-        if (adapterPosition != ListView.INVALID_POSITION) {
-            queueAdapter.reorderableTrackAt(adapterPosition)?.let { return adapterPosition }
-        }
-        return when {
-            y < firstReorderableChildTop() -> queueAdapter.firstReorderableAdapterPosition()
-            y > lastReorderableChildBottom() -> queueAdapter.lastReorderableAdapterPosition()
-            else -> nearestVisibleReorderableAdapterPosition(y)
-        }
-    }
-
-    private fun beginDragVisual(child: View, event: MotionEvent) {
-        clearDragFloatView()
-        child.isPressed = false
-        val dragBitmap = child.createDragBitmap()
-        val listOffset = listViewOffsetInSelf()
-        dragFloatPaddingTop = dragBitmap.paddingTop
-        dragRowHeight = child.height
-        dragTouchOffsetY = event.y.toInt() - child.top + dragFloatPaddingTop
-        dragFloatView = ImageView(context).apply {
-            setImageBitmap(dragBitmap.bitmap)
-            alpha = LegacyQueueDragFloatAlpha
-            layoutParams = LayoutParams(child.width, dragBitmap.bitmap.height).apply {
-                leftMargin = listOffset.first + child.left
-                topMargin = listOffset.second + child.top - dragFloatPaddingTop
-            }
-        }
-        addView(dragFloatView)
-        child.visibility = View.INVISIBLE
-        updateDragFloatPosition(event, animate = false)
-    }
-
-    private fun updateDragFloatPosition(event: MotionEvent, animate: Boolean) {
-        val floatView = dragFloatView ?: return
-        val listOffset = listViewOffsetInSelf()
-        val minY = listOffset.second - dragFloatPaddingTop
-        val maxY = listOffset.second + listView.height - floatView.height
-        val targetY = (listOffset.second + event.y.toInt() - dragTouchOffsetY).coerceIn(minY, maxY)
-        if (animate) {
-            floatView.animate()
-                .y(targetY.toFloat())
-                .setDuration(LegacyQueueDragSettleDurationMillis)
-                .setInterpolator(dragInterpolator)
-                .start()
-        } else {
-            floatView.y = targetY.toFloat()
-        }
-    }
-
-    private fun updateDragTarget(event: MotionEvent) {
-        val targetPosition = findDropTargetAdapterPosition(event)
-        if (
-            targetPosition == ListView.INVALID_POSITION ||
-            targetPosition == dragTargetAdapterPosition ||
-            queueAdapter.reorderableTrackAt(targetPosition) == null
-        ) {
-            return
-        }
-        dragTargetAdapterPosition = targetPosition
-        animateVisibleRowsForDrag()
-    }
-
-    private fun animateVisibleRowsForDrag() {
-        val sourcePosition = dragSourceAdapterPosition
-        val targetPosition = dragTargetAdapterPosition
-        if (sourcePosition == ListView.INVALID_POSITION || targetPosition == ListView.INVALID_POSITION) {
-            return
-        }
-        val rowHeight = dragRowHeight.takeIf { it > 0 }
-            ?: listView.getChildAt(sourcePosition - listView.firstVisiblePosition)?.height
-            ?: resources.getDimensionPixelSize(R.dimen.listview_item_height)
-        val firstVisible = listView.firstVisiblePosition
-        repeat(listView.childCount) { childIndex ->
-            val child = listView.getChildAt(childIndex)
-            val adapterPosition = firstVisible + childIndex
-            val targetTranslation = when {
-                adapterPosition == sourcePosition -> 0f
-                targetPosition > sourcePosition && adapterPosition in (sourcePosition + 1)..targetPosition -> -rowHeight.toFloat()
-                targetPosition < sourcePosition && adapterPosition in targetPosition until sourcePosition -> rowHeight.toFloat()
-                else -> 0f
-            }
-            if (adapterPosition == sourcePosition) {
-                child.visibility = View.INVISIBLE
-            } else {
-                child.visibility = View.VISIBLE
-            }
-            child.animate()
-                .translationY(targetTranslation)
-                .setDuration(LegacyQueueDragShuffleDurationMillis)
-                .setInterpolator(dragInterpolator)
-                .start()
-        }
-    }
-
-    private fun finishDrag(commitMove: Boolean) {
-        val source = dragSource
-        val targetPosition = dragTargetAdapterPosition
-        val target = queueAdapter.reorderableTrackAt(targetPosition)
-        val shouldMove = commitMove &&
-            source != null &&
-            target != null &&
-            dragSourceAdapterPosition != ListView.INVALID_POSITION &&
-            targetPosition != ListView.INVALID_POSITION &&
-            source.queueIndex != target.queueIndex
-        val settleY = adapterPositionTopInSelf(
-            if (shouldMove) targetPosition else dragSourceAdapterPosition,
-        ) ?: dragFloatView?.y?.toInt()
-        finishingDrag = true
-        val floatView = dragFloatView
-        if (floatView == null) {
-            completeDrag(shouldMove, source, target)
-            return
-        }
-        val animator = floatView.animate()
-            .setDuration(LegacyQueueDragSettleDurationMillis)
-            .setInterpolator(dragInterpolator)
-            .withEndAction {
-                completeDrag(shouldMove, source, target)
-            }
-        if (settleY != null) {
-            animator.y(settleY.toFloat())
-        }
-        animator.start()
-    }
-
-    private fun completeDrag(
-        shouldMove: Boolean,
-        source: LegacyPlaybackQueueTrack?,
-        target: LegacyPlaybackQueueTrack?,
-    ) {
-        clearDragFloatView()
-        resetVisibleRows()
-        val sourcePosition = dragSourceAdapterPosition
-        val targetPosition = dragTargetAdapterPosition
-        resetDrag()
-        if (
-            shouldMove &&
-            source != null &&
-            target != null &&
-            sourcePosition != ListView.INVALID_POSITION &&
-            targetPosition != ListView.INVALID_POSITION
-        ) {
-            queueAdapter.movePreviewRow(sourcePosition, targetPosition)
-            callbacks.onMoveRequest(source.queueIndex, target.queueIndex)
-        }
-    }
-
-    private fun resetVisibleRows() {
-        repeat(listView.childCount) { index ->
-            listView.getChildAt(index).apply {
-                animate().cancel()
-                translationY = 0f
-                visibility = View.VISIBLE
-            }
-        }
-    }
-
-    private fun clearDragFloatView() {
-        dragFloatView?.let { floatView ->
-            floatView.animate().cancel()
-            floatView.setImageDrawable(null)
-            removeView(floatView)
-        }
-        dragFloatView = null
-    }
-
-    private fun adapterPositionTopInSelf(adapterPosition: Int): Int? {
-        if (adapterPosition == ListView.INVALID_POSITION) {
-            return null
-        }
-        val child = listView.getChildAt(adapterPosition - listView.firstVisiblePosition) ?: return null
-        return listViewOffsetInSelf().second + child.top - dragFloatPaddingTop
-    }
-
-    private fun firstReorderableChildTop(): Int {
-        val firstPosition = queueAdapter.firstReorderableAdapterPosition()
-        val child = listView.getChildAt(firstPosition - listView.firstVisiblePosition)
-        return child?.top ?: 0
-    }
-
-    private fun lastReorderableChildBottom(): Int {
-        val lastPosition = queueAdapter.lastReorderableAdapterPosition()
-        val child = listView.getChildAt(lastPosition - listView.firstVisiblePosition)
-        return child?.bottom ?: listView.height
-    }
-
-    private fun nearestVisibleReorderableAdapterPosition(y: Int): Int {
-        var nearestPosition = ListView.INVALID_POSITION
-        var nearestDistance = Int.MAX_VALUE
-        val firstVisible = listView.firstVisiblePosition
-        repeat(listView.childCount) { childIndex ->
-            val adapterPosition = firstVisible + childIndex
-            if (queueAdapter.reorderableTrackAt(adapterPosition) != null) {
-                val child = listView.getChildAt(childIndex)
-                val distance = abs(y - (child.top + child.height / 2))
-                if (distance < nearestDistance) {
-                    nearestDistance = distance
-                    nearestPosition = adapterPosition
-                }
-            }
-        }
-        return nearestPosition
-    }
-
-    private fun listViewOffsetInSelf(): Pair<Int, Int> {
-        val rootLocation = IntArray(2)
-        val listLocation = IntArray(2)
-        getLocationOnScreen(rootLocation)
-        listView.getLocationOnScreen(listLocation)
-        return (listLocation[0] - rootLocation[0]) to (listLocation[1] - rootLocation[1])
-    }
-
-    private fun resetDrag() {
-        dragSource = null
-        dragSourceAdapterPosition = ListView.INVALID_POSITION
-        dragTargetAdapterPosition = ListView.INVALID_POSITION
-        dragging = false
-        dragTouchOffsetY = 0
-        dragFloatPaddingTop = 0
-        dragRowHeight = 0
-        finishingDrag = false
-        listView.parent?.requestDisallowInterceptTouchEvent(false)
-    }
-
-    private fun View.createDragBitmap(): LegacyDragBitmap {
-        val shadowTop = resources.getDrawable(R.drawable.shadow_top, null)
-        val shadowBottom = resources.getDrawable(R.drawable.shadow_bottom, null)
-        val topHeight = shadowTop.intrinsicHeight.coerceAtLeast(0)
-        val bottomHeight = shadowBottom.intrinsicHeight.coerceAtLeast(0)
-        val bitmap = Bitmap.createBitmap(width, topHeight + height + bottomHeight, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        shadowTop.setBounds(0, 0, width, topHeight)
-        shadowTop.draw(canvas)
-        canvas.save()
-        canvas.translate(0f, topHeight.toFloat())
-        draw(canvas)
-        canvas.restore()
-        shadowBottom.setBounds(0, topHeight + height, width, topHeight + height + bottomHeight)
-        shadowBottom.draw(canvas)
-        return LegacyDragBitmap(
-            bitmap = bitmap,
-            paddingTop = topHeight,
-            paddingBottom = bottomHeight,
-        )
-    }
 }
 
 private class LegacyPlaybackQueueAdapter(
     context: Context,
-) : BaseAdapter() {
+) : BaseAdapter(), LegacyListDragAdapter<LegacyPlaybackQueueTrack> {
     private val inflater = LayoutInflater.from(context)
     private val appContext = context.applicationContext
     private val artworkLoader = LegacyAlbumArtworkLoader(context)
@@ -940,11 +595,13 @@ private class LegacyPlaybackQueueAdapter(
         artworkLoader.clear()
     }
 
-    fun reorderableTrackAt(position: Int): LegacyPlaybackQueueTrack? {
+    override fun reorderableItemAt(position: Int): LegacyPlaybackQueueTrack? {
         return (rows.getOrNull(position) as? LegacyPlaybackQueueRow.Track)
             ?.takeIf { it.section == LegacyPlaybackQueueSection.Upcoming }
             ?.track
     }
+
+    fun reorderableTrackAt(position: Int): LegacyPlaybackQueueTrack? = reorderableItemAt(position)
 
     fun trackAt(position: Int): LegacyPlaybackQueueTrack? {
         return (rows.getOrNull(position) as? LegacyPlaybackQueueRow.Track)?.track
@@ -964,23 +621,23 @@ private class LegacyPlaybackQueueAdapter(
             ?.track
     }
 
-    fun firstReorderableAdapterPosition(): Int {
+    override fun firstReorderableAdapterPosition(): Int {
         return rows.indexOfFirst { row ->
             row is LegacyPlaybackQueueRow.Track && row.section == LegacyPlaybackQueueSection.Upcoming
         }.takeIf { it >= 0 } ?: ListView.INVALID_POSITION
     }
 
-    fun lastReorderableAdapterPosition(): Int {
+    override fun lastReorderableAdapterPosition(): Int {
         return rows.indexOfLast { row ->
             row is LegacyPlaybackQueueRow.Track && row.section == LegacyPlaybackQueueSection.Upcoming
         }.takeIf { it >= 0 } ?: ListView.INVALID_POSITION
     }
 
-    fun movePreviewRow(fromPosition: Int, toPosition: Int) {
+    override fun movePreviewRow(fromPosition: Int, toPosition: Int) {
         if (
             fromPosition == toPosition ||
-            reorderableTrackAt(fromPosition) == null ||
-            reorderableTrackAt(toPosition) == null
+            reorderableItemAt(fromPosition) == null ||
+            reorderableItemAt(toPosition) == null
         ) {
             return
         }
@@ -1180,8 +837,4 @@ private class PlaybackCenterTitle(context: Context) : RelativeLayout(context) {
 }
 
 private const val LegacyQueueRevealDurationMillis = 300
-private const val LegacyQueueDragShuffleDurationMillis = 150L
-private const val LegacyQueueDragSettleDurationMillis = 150L
-private const val LegacyQueueDragFloatAlpha = 0.66f
-private const val LegacyQueueDragInterpolatorPivot = 0.5f
 private const val LegacyQueueHistoryLimit = 2

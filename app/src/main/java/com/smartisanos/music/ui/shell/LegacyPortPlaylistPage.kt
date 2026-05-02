@@ -70,8 +70,10 @@ import com.smartisanos.music.data.playlist.UserPlaylistDetail
 import com.smartisanos.music.data.playlist.UserPlaylistSummary
 import com.smartisanos.music.playback.LocalAudioLibrary
 import com.smartisanos.music.playback.LocalPlaybackBrowser
+import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.widgets.CustomCheckBox
 import com.smartisanos.music.ui.widgets.EditableLayout
+import com.smartisanos.music.ui.widgets.EditableListViewItem
 import com.smartisanos.music.ui.widgets.StretchTextView
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -276,6 +278,12 @@ internal fun LegacyPortPlaylistPage(
                                 )
                             }
                         },
+                        onRenamePlaylist = { playlist ->
+                            nameDialogRequest = LegacyPlaylistNameDialogRequest.Rename(
+                                playlistId = playlist.id,
+                                initialName = playlist.name,
+                            )
+                        },
                         onPlaylistClick = { playlist ->
                             if (rootEditMode) {
                                 selectedPlaylistIds = selectedPlaylistIds.toggle(playlist.id)
@@ -303,10 +311,10 @@ internal fun LegacyPortPlaylistPage(
                                 return@LegacyPlaylistDetailPage
                             }
                             val shuffled = detailTracks.shuffled()
-                            browser?.shuffleModeEnabled = true
-                            browser?.setMediaItems(shuffled, 0, 0L)
-                            browser?.prepare()
-                            browser?.play()
+                            browser.replaceQueueAndPlay(
+                                mediaItems = shuffled,
+                                shuffleModeEnabled = true,
+                            )
                         },
                         onDeletePlaylist = {
                             deleteRequest = LegacyPlaylistDeleteRequest.DetailPlaylist
@@ -330,15 +338,18 @@ internal fun LegacyPortPlaylistPage(
                                 emptySet()
                             }
                         },
+                        onReorderTracks = { orderedMediaIds ->
+                            val playlistId = target?.playlistId ?: return@LegacyPlaylistDetailPage
+                            scope.launch {
+                                playlistRepository.reorderVisibleMediaIds(playlistId, orderedMediaIds)
+                            }
+                        },
                         onTrackClick = { item, index ->
                             if (detailEditMode) {
                                 selectedTrackIds = selectedTrackIds.toggle(item.mediaId)
                                 return@LegacyPlaylistDetailPage
                             }
-                            browser?.shuffleModeEnabled = false
-                            browser?.setMediaItems(detailTracks, index, 0L)
-                            browser?.prepare()
-                            browser?.play()
+                            browser.replaceQueueAndPlay(detailTracks, index)
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -547,19 +558,15 @@ private fun TitleBar.setupLegacyPlaylistTitleBar(
     onDetailEnterEdit: () -> Unit,
     onDetailExitEdit: () -> Unit,
 ) {
-    removeAllLeftViews()
-    removeAllRightViews()
     setShadowVisible(false)
     setCenterText(if (target == null) context.getString(R.string.tab_play_list) else detailTitle)
 
     when {
         target == null && rootEditMode -> {
-            addLeftImageView(R.drawable.standard_icon_cancel_selector).apply {
-                setOnClickListener {
-                    onRootExitEdit()
-                }
+            setPlaylistLeftImageView(R.drawable.standard_icon_cancel_selector) {
+                onRootExitEdit()
             }
-            addRightImageView(R.drawable.titlebar_btn_delete_selector).apply {
+            setPlaylistRightImageView(R.drawable.titlebar_btn_delete_selector).apply {
                 isEnabled = rootSelectedCount > 0
                 setOnClickListener {
                     if (rootSelectedCount > 0) {
@@ -569,37 +576,57 @@ private fun TitleBar.setupLegacyPlaylistTitleBar(
             }
         }
         target == null -> {
-            addLeftImageView(R.drawable.standard_icon_multi_select_selector).apply {
-                setOnClickListener {
-                    onRootEnterEdit()
-                }
+            setPlaylistLeftImageView(R.drawable.standard_icon_multi_select_selector) {
+                onRootEnterEdit()
             }
-            addRightImageView(R.drawable.search_btn_selector)
+            setPlaylistRightImageView(R.drawable.search_btn_selector).apply {
+                isEnabled = true
+                setOnClickListener(null)
+            }
         }
         detailEditMode -> {
-            addLeftImageView(R.drawable.standard_icon_cancel_selector).apply {
-                setOnClickListener {
-                    onDetailExitEdit()
-                }
+            setPlaylistLeftImageView(R.drawable.standard_icon_cancel_selector) {
+                onDetailExitEdit()
             }
-            addRightImageView(R.drawable.standard_icon_hignlight_confirm_selector).apply {
+            setPlaylistRightImageView(R.drawable.standard_icon_hignlight_confirm_selector).apply {
+                isEnabled = true
                 setOnClickListener {
                     onDetailExitEdit()
                 }
             }
         }
         else -> {
-            addLeftImageView(R.drawable.standard_icon_back_selector).apply {
-                setOnClickListener {
-                    onDetailBack()
-                }
+            setPlaylistLeftImageView(R.drawable.standard_icon_back_selector) {
+                onDetailBack()
             }
-            addRightImageView(R.drawable.standard_icon_multi_select_selector).apply {
+            setPlaylistRightImageView(R.drawable.standard_icon_multi_select_selector).apply {
+                isEnabled = true
                 setOnClickListener {
                     onDetailEnterEdit()
                 }
             }
         }
+    }
+}
+
+private fun TitleBar.setPlaylistLeftImageView(
+    resId: Int,
+    onClick: () -> Unit,
+): ImageView {
+    return ((getLeftViewByIndex(0) as? ImageView) ?: addLeftImageView(resId)).apply {
+        visibility = View.VISIBLE
+        isEnabled = true
+        setImageResource(resId)
+        setOnClickListener {
+            onClick()
+        }
+    }
+}
+
+private fun TitleBar.setPlaylistRightImageView(resId: Int): ImageView {
+    return ((getRightViewByIndex(0) as? ImageView) ?: addRightImageView(resId)).apply {
+        visibility = View.VISIBLE
+        setImageResource(resId)
     }
 }
 
@@ -622,6 +649,7 @@ private fun LegacyPlaylistRootPage(
     editMode: Boolean,
     selectedPlaylistIds: Set<String>,
     onCreatePlaylist: () -> Unit,
+    onRenamePlaylist: (UserPlaylistSummary) -> Unit,
     onPlaylistClick: (UserPlaylistSummary) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -637,6 +665,7 @@ private fun LegacyPlaylistRootPage(
                 editMode = editMode,
                 selectedPlaylistIds = selectedPlaylistIds,
                 onCreatePlaylist = onCreatePlaylist,
+                onRenamePlaylist = onRenamePlaylist,
                 onPlaylistClick = onPlaylistClick,
             )
         },
@@ -657,6 +686,7 @@ private fun LegacyPlaylistDetailPage(
     onEditModeChange: (Boolean) -> Unit,
     onAddOrRemoveClick: () -> Unit,
     onToggleAll: (Boolean) -> Unit,
+    onReorderTracks: (List<String>) -> Unit,
     onTrackClick: (MediaItem, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -679,6 +709,7 @@ private fun LegacyPlaylistDetailPage(
                 onEditModeChange = onEditModeChange,
                 onAddOrRemoveClick = onAddOrRemoveClick,
                 onToggleAll = onToggleAll,
+                onReorderTracks = onReorderTracks,
                 onTrackClick = onTrackClick,
             )
             root.bindPlayback(browser)
@@ -728,6 +759,8 @@ private fun LegacyPlaylistAddSongsPage(
 private class LegacyPlaylistRootView(context: Context) : FrameLayout(context) {
     private val addRow = LinearLayout(context)
     private val listView = ListView(context)
+    private var boundEditMode: Boolean? = null
+    private var pendingEditAnimationMode: Boolean? = null
     private val blankView = LegacyPlaylistBlankView(
         context = context,
         iconRes = R.drawable.blank_playlist,
@@ -799,6 +832,7 @@ private class LegacyPlaylistRootView(context: Context) : FrameLayout(context) {
         editMode: Boolean,
         selectedPlaylistIds: Set<String>,
         onCreatePlaylist: () -> Unit,
+        onRenamePlaylist: (UserPlaylistSummary) -> Unit,
         onPlaylistClick: (UserPlaylistSummary) -> Unit,
     ) {
         addRow.alpha = if (editMode) 0.35f else 1f
@@ -817,13 +851,35 @@ private class LegacyPlaylistRootView(context: Context) : FrameLayout(context) {
             ?: LegacyPlaylistRootAdapter().also { adapter ->
                 listView.adapter = adapter
             }
-        val changed = adapter.updateItems(
+        adapter.onRenamePlaylist = onRenamePlaylist
+        val previousEditMode = boundEditMode
+        val animateEditMode = previousEditMode != null && previousEditMode != editMode
+        if (animateEditMode) {
+            adapter.forceStaticEditMode(previousEditMode)
+        }
+        boundEditMode = editMode
+        val contentChanged = adapter.updateItems(
             nextItems = playlists,
             nextEditMode = editMode,
             nextSelectedIds = selectedPlaylistIds,
         )
-        if (changed) {
+        if (animateEditMode) {
+            pendingEditAnimationMode = editMode
+            animateVisibleRowsWhenReady(
+                adapter = adapter,
+                editMode = editMode,
+            )
+        } else if (contentChanged) {
+            pendingEditAnimationMode = null
             listView.scheduleLayoutAnimation()
+        } else if (pendingEditAnimationMode == editMode) {
+            // 原版 ModeChanger 会直接驱动当前可见行；等待 post 动画执行前不要静态覆盖起点。
+        } else {
+            adapter.clearForcedStaticEditMode()
+            adapter.updateVisibleRows(
+                listView = listView,
+                animateEditMode = false,
+            )
         }
         listView.setOnItemClickListener { _, _, position, _ ->
             if (position >= adapter.count) {
@@ -832,12 +888,49 @@ private class LegacyPlaylistRootView(context: Context) : FrameLayout(context) {
             onPlaylistClick(adapter.itemAt(position) ?: return@setOnItemClickListener)
         }
     }
+
+    private fun animateVisibleRowsWhenReady(
+        adapter: LegacyPlaylistRootAdapter,
+        editMode: Boolean,
+        attempt: Int = 0,
+    ) {
+        listView.post {
+            if (boundEditMode != editMode || pendingEditAnimationMode != editMode) {
+                return@post
+            }
+            if (listView.childCount == 0 && attempt < 4) {
+                animateVisibleRowsWhenReady(
+                    adapter = adapter,
+                    editMode = editMode,
+                    attempt = attempt + 1,
+                )
+                return@post
+            }
+            pendingEditAnimationMode = null
+            adapter.clearForcedStaticEditMode()
+            adapter.updateVisibleRows(
+                listView = listView,
+                animateEditMode = true,
+            )
+        }
+    }
 }
 
 private class LegacyPlaylistDetailRootView(context: Context) : LinearLayout(context) {
     private val header = LegacyPlaylistDetailHeader(context)
     private val listFrame = FrameLayout(context)
     val listView = ListView(context)
+    private val trackAdapter = LegacyPlaylistTrackAdapter()
+    private var onReorderTracksCallback: (List<String>) -> Unit = {}
+    private val dragController = LegacyListDragController(
+        context = context,
+        hostView = listFrame,
+        listView = listView,
+        adapter = trackAdapter,
+        onMoveCommitted = { _, _, _, _ ->
+            onReorderTracksCallback(trackAdapter.orderedSongMediaIds())
+        },
+    )
     private val blankView = LegacyPlaylistBlankView(
         context = context,
         iconRes = R.drawable.blank_song,
@@ -858,6 +951,10 @@ private class LegacyPlaylistDetailRootView(context: Context) : LinearLayout(cont
             setBackgroundResource(R.drawable.account_background)
             isVerticalScrollBarEnabled = false
             layoutAnimation = AnimationUtils.loadLayoutAnimation(context, R.anim.list_anim_layout)
+            adapter = trackAdapter
+            setOnTouchListener { _, event ->
+                dragController.handleListTouch(event)
+            }
         }
         listFrame.addView(listView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         listFrame.addView(
@@ -881,8 +978,10 @@ private class LegacyPlaylistDetailRootView(context: Context) : LinearLayout(cont
         onEditModeChange: (Boolean) -> Unit,
         onAddOrRemoveClick: () -> Unit,
         onToggleAll: (Boolean) -> Unit,
+        onReorderTracks: (List<String>) -> Unit,
         onTrackClick: (MediaItem, Int) -> Unit,
     ) {
+        onReorderTracksCallback = onReorderTracks
         header.bind(
             trackCount = tracks.size,
             selectedCount = selectedTrackIds.size,
@@ -894,11 +993,10 @@ private class LegacyPlaylistDetailRootView(context: Context) : LinearLayout(cont
             onToggleAll = onToggleAll,
         )
         setEmptyVisible(tracks.isEmpty())
-        val adapter = listView.adapter as? LegacyPlaylistTrackAdapter
-            ?: LegacyPlaylistTrackAdapter().also { adapter ->
-                listView.adapter = adapter
-            }
-        val changed = adapter.updateItems(
+        val previousEditMode = listView.getTag(R.id.elvitem) as? Boolean
+        val animateEditMode = previousEditMode != null && previousEditMode != editMode
+        listView.setTag(R.id.elvitem, editMode)
+        val changed = trackAdapter.updateItems(
             nextItems = tracks,
             nextCurrentMediaId = currentMediaId,
             nextCurrentIsPlaying = currentIsPlaying,
@@ -910,16 +1008,15 @@ private class LegacyPlaylistDetailRootView(context: Context) : LinearLayout(cont
         if (changed) {
             listView.scheduleLayoutAnimation()
         } else {
-            adapter.updateVisibleRows(listView)
+            trackAdapter.updateVisibleRows(listView, animateEditMode)
         }
         listView.setOnItemClickListener { _, _, position, _ ->
-            val item = adapter.itemAt(position) ?: return@setOnItemClickListener
+            val item = trackAdapter.itemAt(position) ?: return@setOnItemClickListener
             onTrackClick(item, position)
         }
     }
 
     fun bindPlayback(player: Player?) {
-        val adapter = listView.adapter as? LegacyPlaylistTrackAdapter ?: return
         if (listView.getTag(R.id.list) !== player) {
             (listView.getTag(R.id.text) as? Player.Listener)?.let { oldListener ->
                 (listView.getTag(R.id.list) as? Player)?.removeListener(oldListener)
@@ -927,11 +1024,11 @@ private class LegacyPlaylistDetailRootView(context: Context) : LinearLayout(cont
             if (player != null) {
                 val listener = object : Player.Listener {
                     override fun onEvents(player: Player, events: Player.Events) {
-                        adapter.setPlaybackState(
+                        trackAdapter.setPlaybackState(
                             nextCurrentMediaId = player.currentMediaItem?.mediaId,
                             nextCurrentIsPlaying = player.isPlaying,
                         )
-                        adapter.updateVisiblePlaybackState(listView)
+                        trackAdapter.updateVisiblePlaybackState(listView)
                     }
                 }
                 player.addListener(listener)
@@ -1042,7 +1139,7 @@ private class LegacyPlaylistAddSongsRootView(context: Context) : LinearLayout(co
         if (changed) {
             listView.scheduleLayoutAnimation()
         } else {
-            adapter.updateVisibleRows(listView)
+            adapter.updateVisibleRows(listView, animateEditMode = false)
         }
         if (selectedSortIndex != lastSortIndex) {
             listView.setSelection(0)
@@ -1111,6 +1208,7 @@ private class LegacyPlaylistDetailHeader(context: Context) : FrameLayout(context
     private val addOrRemoveButton = LinearLayout(context)
     private val addOrRemoveIcon = ImageView(context)
     private val addOrRemoveText = TextView(context)
+    private var lastEditMode: Boolean? = null
 
     init {
         setBackgroundColor(Color.WHITE)
@@ -1179,8 +1277,13 @@ private class LegacyPlaylistDetailHeader(context: Context) : FrameLayout(context
         onAddOrRemoveClick: () -> Unit,
         onToggleAll: (Boolean) -> Unit,
     ) {
-        normalHeader.visibility = if (editMode) View.GONE else View.VISIBLE
-        editHeader.visibility = if (editMode) View.VISIBLE else View.GONE
+        val animateMode = lastEditMode != null && lastEditMode != editMode
+        lastEditMode = editMode
+        if (animateMode) {
+            animateHeaderMode(editMode)
+        } else {
+            setHeaderMode(editMode)
+        }
         if (!editMode) {
             normalHeader.getChildAt(0).setOnClickListener { onShuffle() }
             normalHeader.getChildAt(1).setOnClickListener { onDeletePlaylist() }
@@ -1204,27 +1307,105 @@ private class LegacyPlaylistDetailHeader(context: Context) : FrameLayout(context
         addOrRemoveText.setPadding(0, 0, dp(10), 0)
         addOrRemoveButton.setOnClickListener { onAddOrRemoveClick() }
     }
+
+    private fun setHeaderMode(editMode: Boolean) {
+        normalHeader.animate().cancel()
+        editHeader.animate().cancel()
+        normalHeader.visibility = if (editMode) View.GONE else View.VISIBLE
+        normalHeader.alpha = if (editMode) 0f else 1f
+        editHeader.visibility = if (editMode) View.VISIBLE else View.GONE
+        editHeader.alpha = if (editMode) 1f else 0f
+    }
+
+    private fun animateHeaderMode(editMode: Boolean) {
+        normalHeader.animate().cancel()
+        editHeader.animate().cancel()
+        if (editMode) {
+            normalHeader.visibility = View.VISIBLE
+            normalHeader.alpha = 1f
+            editHeader.visibility = View.VISIBLE
+            editHeader.alpha = 0f
+            normalHeader.animate()
+                .alpha(0f)
+                .setDuration(140L)
+                .withEndAction {
+                    normalHeader.visibility = View.GONE
+                }
+                .start()
+            editHeader.animate()
+                .alpha(1f)
+                .setDuration(200L)
+                .start()
+        } else {
+            normalHeader.visibility = View.VISIBLE
+            normalHeader.alpha = 0f
+            editHeader.visibility = View.VISIBLE
+            editHeader.alpha = 1f
+            editHeader.animate()
+                .alpha(0f)
+                .setDuration(140L)
+                .withEndAction {
+                    editHeader.visibility = View.GONE
+                }
+                .start()
+            normalHeader.animate()
+                .alpha(1f)
+                .setDuration(200L)
+                .start()
+        }
+    }
 }
 
 private class LegacyPlaylistRootAdapter : BaseAdapter() {
     private var items: List<UserPlaylistSummary> = emptyList()
     private var editMode = false
+    private var forcedStaticEditMode: Boolean? = null
     private var selectedIds: Set<String> = emptySet()
+    var onRenamePlaylist: (UserPlaylistSummary) -> Unit = {}
+
+    fun forceStaticEditMode(mode: Boolean) {
+        forcedStaticEditMode = mode
+    }
+
+    fun clearForcedStaticEditMode() {
+        forcedStaticEditMode = null
+    }
 
     fun updateItems(
         nextItems: List<UserPlaylistSummary>,
         nextEditMode: Boolean,
         nextSelectedIds: Set<String>,
     ): Boolean {
-        val changed = items != nextItems || editMode != nextEditMode || selectedIds != nextSelectedIds
-        if (!changed) {
+        val contentChanged = items != nextItems
+        val editModeChanged = editMode != nextEditMode
+        val selectionChanged = selectedIds != nextSelectedIds
+        if (!contentChanged && !editModeChanged && !selectionChanged) {
             return false
         }
         items = nextItems
         editMode = nextEditMode
         selectedIds = nextSelectedIds
-        notifyDataSetChanged()
-        return true
+        if (contentChanged) {
+            notifyDataSetChanged()
+        }
+        return contentChanged
+    }
+
+    fun updateVisibleRows(
+        listView: ListView,
+        animateEditMode: Boolean,
+    ) {
+        for (childIndex in 0 until listView.childCount) {
+            val position = listView.firstVisiblePosition + childIndex
+            val item = itemAt(position) ?: continue
+            val child = listView.getChildAt(childIndex) ?: continue
+            bindRow(
+                view = child,
+                item = item,
+                visualEditMode = editMode,
+                animateEditMode = animateEditMode,
+            )
+        }
     }
 
     fun itemAt(position: Int): UserPlaylistSummary? = items.getOrNull(position)
@@ -1239,27 +1420,45 @@ private class LegacyPlaylistRootAdapter : BaseAdapter() {
         val view = convertView ?: LayoutInflater.from(parent.context)
             .inflate(R.layout.item_listview, parent, false)
         val item = items[position]
+        bindRow(
+            view = view,
+            item = item,
+            visualEditMode = forcedStaticEditMode ?: editMode,
+            animateEditMode = false,
+        )
+        return view
+    }
+
+    private fun bindRow(
+        view: View,
+        item: UserPlaylistSummary,
+        visualEditMode: Boolean,
+        animateEditMode: Boolean,
+    ) {
         view.findViewById<TextView>(R.id.listview_item_line_one)?.apply {
             text = item.name
             setTextColor(PlaylistPrimaryTextColor)
         }
+        val context = view.context
         view.findViewById<TextView>(R.id.listview_item_line_two)?.apply {
-            text = parent.context.resources.getQuantityString(
+            text = context.resources.getQuantityString(
                 R.plurals.legacy_playlist_song_count,
                 item.songCount,
                 item.songCount,
             )
             setTextColor(PlaylistSecondaryTextColor)
         }
-        view.findViewById<View>(R.id.arrow)?.visibility = if (editMode) View.GONE else View.VISIBLE
-        view.findViewById<View>(R.id.iv_right_view)?.visibility = View.GONE
+        view.findViewById<View>(R.id.iv_right_view)?.setOnClickListener {
+            if (editMode) {
+                onRenamePlaylist(item)
+            }
+        }
         view.findViewById<CheckBox>(R.id.cb_del)?.isChecked = item.id in selectedIds
         (view as? EditableLayout)?.bindLegacyEditState(
-            enabled = editMode,
+            enabled = visualEditMode,
             checked = item.id in selectedIds,
-            animate = false,
+            animate = animateEditMode,
         )
-        return view
     }
 }
 
@@ -1272,7 +1471,7 @@ private sealed class LegacyPlaylistSongRow {
     ) : LegacyPlaylistSongRow()
 }
 
-private class LegacyPlaylistTrackAdapter : BaseAdapter() {
+private class LegacyPlaylistTrackAdapter : BaseAdapter(), LegacyListDragAdapter<MediaItem> {
     private var items: List<MediaItem> = emptyList()
     private var rows: List<LegacyPlaylistSongRow> = emptyList()
     private var currentMediaId: String? = null
@@ -1309,8 +1508,8 @@ private class LegacyPlaylistTrackAdapter : BaseAdapter() {
         sectioned = nextSectioned
         if (contentChanged) {
             rows = buildPlaylistSongRows(nextItems, nextSectioned)
+            notifyDataSetChanged()
         }
-        notifyDataSetChanged()
         return contentChanged
     }
 
@@ -1323,10 +1522,13 @@ private class LegacyPlaylistTrackAdapter : BaseAdapter() {
     }
 
     fun updateVisiblePlaybackState(listView: ListView) {
-        updateVisibleRows(listView)
+        updateVisibleRows(listView, animateEditMode = false)
     }
 
-    fun updateVisibleRows(listView: ListView) {
+    fun updateVisibleRows(
+        listView: ListView,
+        animateEditMode: Boolean,
+    ) {
         for (childIndex in 0 until listView.childCount) {
             val position = listView.firstVisiblePosition + childIndex
             val item = itemAt(position)
@@ -1341,7 +1543,7 @@ private class LegacyPlaylistTrackAdapter : BaseAdapter() {
                 enabled = editMode,
                 checked = item.mediaId in selectedMediaIds,
                 selectionOnly = selectionOnlyMode,
-                animate = false,
+                animate = animateEditMode,
             )
         }
     }
@@ -1351,6 +1553,55 @@ private class LegacyPlaylistTrackAdapter : BaseAdapter() {
     fun positionForLetter(letter: String): Int {
         return rows.indexOfFirst { row ->
             row is LegacyPlaylistSongRow.Header && row.letter == letter
+        }
+    }
+
+    fun mediaIdAt(position: Int): String? = itemAt(position)?.mediaId
+
+    override fun reorderableItemAt(position: Int): MediaItem? {
+        if (!editMode || selectionOnlyMode) {
+            return null
+        }
+        return itemAt(position)
+    }
+
+    override fun firstReorderableAdapterPosition(): Int {
+        return rows.indexOfFirst { row ->
+            row is LegacyPlaylistSongRow.Song
+        }.takeIf { it >= 0 } ?: ListView.INVALID_POSITION
+    }
+
+    override fun lastReorderableAdapterPosition(): Int {
+        return rows.indexOfLast { row ->
+            row is LegacyPlaylistSongRow.Song
+        }.takeIf { it >= 0 } ?: ListView.INVALID_POSITION
+    }
+
+    override fun movePreviewRow(
+        fromPosition: Int,
+        toPosition: Int,
+    ) {
+        if (fromPosition == toPosition) {
+            return
+        }
+        val mutableRows = rows.toMutableList()
+        val fromRow = mutableRows.getOrNull(fromPosition) as? LegacyPlaylistSongRow.Song
+            ?: return
+        if (mutableRows.getOrNull(toPosition) !is LegacyPlaylistSongRow.Song) {
+            return
+        }
+        mutableRows.removeAt(fromPosition)
+        mutableRows.add(toPosition.coerceIn(0, mutableRows.size), fromRow)
+        rows = mutableRows
+        items = mutableRows.mapNotNull { row ->
+            (row as? LegacyPlaylistSongRow.Song)?.item
+        }
+        notifyDataSetChanged()
+    }
+
+    fun orderedSongMediaIds(): List<String> {
+        return rows.mapNotNull { row ->
+            (row as? LegacyPlaylistSongRow.Song)?.item?.mediaId
         }
     }
 
@@ -1399,6 +1650,8 @@ private class LegacyPlaylistTrackAdapter : BaseAdapter() {
     ): View {
         val view = convertView ?: LayoutInflater.from(parent.context)
             .inflate(R.layout.item_track_list, parent, false)
+        view.alpha = 1f
+        view.translationY = 0f
         val title = item.mediaMetadata.displayTitle?.toString()
             ?: item.mediaMetadata.title?.toString()
             ?: parent.context.getString(R.string.unknown_song_title)
@@ -1454,6 +1707,15 @@ private fun bindPlaylistTrackEditState(
     selectionOnly: Boolean,
     animate: Boolean,
 ) {
+    (view as? EditableListViewItem)?.let { itemView ->
+        itemView.bindLegacyPlaylistEditState(
+            enabled = enabled,
+            checked = checked,
+            selectionOnly = selectionOnly,
+            animate = animate,
+        )
+        return
+    }
     val checkbox = view.findViewById<CheckBox>(R.id.cb_del) ?: return
     val content = view.findViewById<View>(R.id.relativeLayout1) ?: return
     val drag = view.findViewById<View>(R.id.iv_right)

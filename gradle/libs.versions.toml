@@ -12,6 +12,7 @@ navigationCompose = "2.9.8"
 media3 = "1.10.0"
 datastore = "1.2.1"
 room = "2.8.4"
+dynamicanimation = "1.1.0"
 ksp = "2.3.7"
 
 [libraries]
@@ -39,6 +40,7 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+androidx-dynamicanimation = { group = "androidx.dynamicanimation", name = "dynamicanimation", version.ref = "dynamicanimation" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

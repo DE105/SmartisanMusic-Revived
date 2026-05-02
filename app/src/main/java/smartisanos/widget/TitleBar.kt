@@ -5,11 +5,14 @@ import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.RelativeLayout
 import android.widget.TextView
+import androidx.dynamicanimation.animation.SpringAnimation
+import androidx.dynamicanimation.animation.SpringForce
 import com.smartisanos.music.R
 
 class TitleBar @JvmOverloads constructor(
@@ -171,6 +174,7 @@ class TitleBar @JvmOverloads constructor(
             scaleType = ImageView.ScaleType.CENTER
             isClickable = true
             isFocusable = true
+            setOnTouchListener(TitleBarIconScaleTouchListener(this))
         }
     }
 
@@ -253,5 +257,42 @@ class TitleBar @JvmOverloads constructor(
             removeView(view)
         }
         sideViews.clear()
+    }
+
+    private class TitleBarIconScaleTouchListener(
+        view: View,
+    ) : View.OnTouchListener {
+        private val scaleXAnimation = SpringAnimation(view, SpringAnimation.SCALE_X)
+        private val scaleYAnimation = SpringAnimation(view, SpringAnimation.SCALE_Y)
+        private var endScale = 1f
+
+        override fun onTouch(view: View, event: MotionEvent): Boolean {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> playScale(TitleBarIconPressedScale)
+                MotionEvent.ACTION_MOVE -> playScale(if (view.isPressed) TitleBarIconPressedScale else 1f)
+                MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_CANCEL,
+                    -> playScale(1f)
+            }
+            return false
+        }
+
+        private fun playScale(targetScale: Float) {
+            if (endScale == targetScale) {
+                return
+            }
+            endScale = targetScale
+            val spring = SpringForce(targetScale)
+                .setDampingRatio(TitleBarIconDampingRatio)
+                .setStiffness(TitleBarIconStiffness)
+            scaleXAnimation.setSpring(spring).start()
+            scaleYAnimation.setSpring(spring).start()
+        }
+    }
+
+    private companion object {
+        private const val TitleBarIconPressedScale = 1.33f
+        private const val TitleBarIconDampingRatio = 0.55f
+        private const val TitleBarIconStiffness = 800f
     }
 }

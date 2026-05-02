@@ -182,7 +182,36 @@ class PlaylistRepository private constructor(
             playlistDao.getPlaylistIdsContainingMediaIds(normalizedMediaIds)
                 .sumOf { playlistId ->
                     removeMediaIdsFromPlaylistLocked(playlistId, normalizedMediaIds)
-                }
+            }
+        }
+    }
+
+    suspend fun reorderVisibleMediaIds(
+        playlistId: String,
+        orderedVisibleMediaIds: List<String>,
+    ): Boolean {
+        val normalizedMediaIds = normalizeMediaIds(orderedVisibleMediaIds)
+        if (normalizedMediaIds.isEmpty()) {
+            return false
+        }
+
+        return database.withTransaction {
+            val playlist = playlistDao.getPlaylist(playlistId) ?: return@withTransaction false
+            val entries = playlistDao.getPlaylistEntries(playlistId)
+            val sortedEntries = entries.sortedBy(PlaylistEntryEntity::sortOrder)
+            val reorderedEntries = reorderVisiblePlaylistEntries(
+                playlistId = playlist.playlistId,
+                entries = sortedEntries,
+                orderedVisibleMediaIds = normalizedMediaIds,
+            )
+            if (reorderedEntries.map(PlaylistEntryEntity::mediaId) == sortedEntries.map(PlaylistEntryEntity::mediaId)) {
+                return@withTransaction false
+            }
+
+            playlistDao.clearPlaylistEntries(playlist.playlistId)
+            playlistDao.insertPlaylistEntries(reorderedEntries)
+            playlistDao.touchPlaylist(playlist.playlistId, System.currentTimeMillis())
+            true
         }
     }
 
@@ -247,4 +276,38 @@ internal fun compactPlaylistEntriesAfterRemoval(
             )
         }
         .toList()
+}
+
+internal fun reorderVisiblePlaylistEntries(
+    playlistId: String,
+    entries: List<PlaylistEntryEntity>,
+    orderedVisibleMediaIds: List<String>,
+): List<PlaylistEntryEntity> {
+    val sortedEntries = entries.sortedBy(PlaylistEntryEntity::sortOrder)
+    val entriesByMediaId = sortedEntries.associateBy(PlaylistEntryEntity::mediaId)
+    val orderedExistingMediaIds = orderedVisibleMediaIds
+        .filter(entriesByMediaId::containsKey)
+        .distinct()
+    if (orderedExistingMediaIds.isEmpty()) {
+        return sortedEntries.mapIndexed { index, entry ->
+            entry.copy(
+                playlistId = playlistId,
+                sortOrder = index,
+            )
+        }
+    }
+
+    val orderedVisibleSet = orderedExistingMediaIds.toSet()
+    val replacementIterator = orderedExistingMediaIds.iterator()
+    return sortedEntries.mapIndexed { index, entry ->
+        val reorderedEntry = if (entry.mediaId in orderedVisibleSet && replacementIterator.hasNext()) {
+            entriesByMediaId.getValue(replacementIterator.next())
+        } else {
+            entry
+        }
+        reorderedEntry.copy(
+            playlistId = playlistId,
+            sortOrder = index,
+        )
+    }
 }
