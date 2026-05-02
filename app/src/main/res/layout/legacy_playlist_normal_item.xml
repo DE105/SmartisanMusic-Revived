@@ -17,6 +17,7 @@
         android:id="@id/cover_zone"
         android:layout_width="@dimen/listview_item_image_width"
         android:layout_height="@dimen/listview_item_image_height"
+        android:layout_centerVertical="true"
         android:layout_toRightOf="@id/cb_del"
         android:paddingLeft="@dimen/common_padding_left"
         android:paddingTop="@dimen/album_listview_item_padding"
