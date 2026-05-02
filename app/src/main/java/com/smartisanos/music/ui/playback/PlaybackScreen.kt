@@ -206,8 +206,9 @@ private const val NeedleLiftShadowRotationOffsetDegrees = 4f
 private const val PlaybackAlbumArtDiameterRatio = 405f / 1080f
 private const val PlaybackTurntableAxisDiameterRatio = 62f / 1080f
 private const val PlaybackTurntableAxisSourceDiameterPx = 60
-private val PlaybackSeekBarHeight = 41.dp
-private val PlaybackSeekBarSideWidth = 51.3.dp
+private val PlaybackContentHorizontalPadding = 16.dp
+private val PlaybackSeekBarHeight = 48.dp
+private val PlaybackSeekTimeWidth = 44.dp
 private val PlaybackSeekTrackHeight = 8.dp
 private val PlaybackSeekThumbWidth = 22.3.dp
 private val PlaybackSeekThumbHeight = 41.dp
@@ -785,8 +786,7 @@ fun PlaybackScreen(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(PlaybackPageBackground)
-            .consumePlaybackTouchFallthrough(),
+            .background(PlaybackPageBackground),
     ) {
         val density = LocalDensity.current
         val topInset = with(density) {
@@ -796,9 +796,18 @@ fun PlaybackScreen(
             WindowInsets.safeDrawing.getBottom(this).toDp()
         }
         val turntableWidth = maxWidth
-        val bottomControlsWidth = minOf(maxWidth - 8.dp, OriginalTurntableBaseWidthDp.dp)
+        val bottomControlsWidth = minOf(
+            (maxWidth - PlaybackContentHorizontalPadding - PlaybackContentHorizontalPadding)
+                .coerceAtLeast(0.dp),
+            OriginalTurntableBaseWidthDp.dp,
+        )
         val scale = turntableWidth.value / OriginalTurntableBaseWidthDp
 
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .consumePlaybackTouchFallthrough(),
+        )
         Column(
             modifier = Modifier.fillMaxSize(),
         ) {
@@ -1311,16 +1320,15 @@ private fun PlaybackTimeSeekBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(PlaybackSeekBarHeight),
+                .height(PlaybackSeekBarHeight)
+                .padding(horizontal = PlaybackContentHorizontalPadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = formatPlaybackTime(shownPosition),
                 style = PlaybackTimeStyle.copy(textAlign = TextAlign.Start),
                 maxLines = 1,
-                modifier = Modifier
-                    .width(PlaybackSeekBarSideWidth)
-                    .padding(start = 6.dp),
+                modifier = Modifier.width(PlaybackSeekTimeWidth),
             )
             Box(
                 modifier = Modifier
@@ -1397,9 +1405,7 @@ private fun PlaybackTimeSeekBar(
                 text = "-${formatPlaybackTime((duration - shownPosition).coerceAtLeast(0L))}",
                 style = PlaybackTimeStyle.copy(textAlign = TextAlign.End),
                 maxLines = 1,
-                modifier = Modifier
-                    .width(PlaybackSeekBarSideWidth)
-                    .padding(end = 6.dp),
+                modifier = Modifier.width(PlaybackSeekTimeWidth),
             )
         }
         Box(
@@ -2382,6 +2388,7 @@ internal fun PlaybackVolumeBar(
             SeekBar(context).apply {
                 max = 100
                 splitTrack = false
+                contentDescription = context.getString(R.string.volume)
                 progressDrawable = ContextCompat.getDrawable(context, R.drawable.volume_seekbar_progress)
                 thumb = ContextCompat.getDrawable(context, R.drawable.playing_control_volume)
                 thumbOffset = thumbOffsetPx
