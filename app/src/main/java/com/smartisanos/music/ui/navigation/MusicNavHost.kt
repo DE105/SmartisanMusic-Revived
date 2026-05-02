@@ -21,7 +21,6 @@ import com.smartisanos.music.ui.songs.SongsScreen
 fun MusicNavHost(
     navController: NavHostController,
     modifier: Modifier = Modifier,
-    startDestination: String = MusicDestination.DefaultMain.route,
     libraryRefreshVersion: Int = 0,
     albumViewMode: AlbumViewMode = AlbumViewMode.Tile,
     selectedAlbumId: String? = null,
@@ -55,7 +54,7 @@ fun MusicNavHost(
 ) {
     NavHost(
         navController = navController,
-        startDestination = MusicDestination.fromRouteOrDefault(startDestination).route,
+        startDestination = MusicDestination.Playlist.route,
         modifier = modifier,
         enterTransition = {
             fadeIn()

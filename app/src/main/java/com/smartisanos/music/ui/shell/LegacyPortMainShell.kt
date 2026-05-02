@@ -191,7 +191,7 @@ private fun LegacyPortMainShellContent(
     var searchVisible by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var searchDrilldownTarget by remember { mutableStateOf<LegacySearchDrilldownTarget?>(null) }
-    var currentDestination by remember { mutableStateOf(MusicDestination.Songs) }
+    var currentDestination by remember { mutableStateOf(MusicDestination.Playlist) }
     var playlistAddModeActive by remember { mutableStateOf(false) }
     var moreSettingsPageActive by remember { mutableStateOf(false) }
     var songsEditMode by remember { mutableStateOf(false) }
@@ -1004,69 +1004,82 @@ private fun LegacyPortTabContent(
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    when (destination) {
-        MusicDestination.Songs -> LegacyPortSongsPage(
-            mediaItems = mediaItems,
-            libraryLoaded = libraryLoaded,
-            active = true,
-            editMode = songsEditMode,
-            selectedSongIds = selectedSongIds,
-            hiddenMediaIds = hiddenMediaIds,
-            onToggleSongSelected = onToggleSongSelected,
-            onTrackMoreClick = onLibraryTrackMoreClick,
-            modifier = modifier,
-        )
-        MusicDestination.Album -> LegacyPortAlbumPage(
-            mediaItems = mediaItems,
-            active = true,
-            viewMode = albumViewMode,
-            editMode = albumEditMode,
-            selectedAlbumId = selectedAlbumId,
-            selectedAlbumIds = selectedAlbumIds,
-            hiddenMediaIds = hiddenMediaIds,
-            onAlbumSelected = onAlbumSelected,
-            onToggleAlbumSelected = onToggleAlbumSelected,
-            onRequestAddToPlaylist = onRequestAddToPlaylist,
-            onRequestAddToQueue = onRequestAddToQueue,
-            onTrackMoreClick = onLibraryTrackMoreClick,
-            modifier = modifier,
-        )
-        MusicDestination.Artist -> LegacyPortArtistPage(
-            mediaItems = mediaItems,
-            active = true,
-            selectedTarget = selectedArtistTarget,
-            albumViewMode = artistAlbumViewMode,
-            hiddenMediaIds = hiddenMediaIds,
-            onTargetChanged = onArtistTargetChanged,
-            onRequestAddToPlaylist = onRequestAddToPlaylist,
-            onRequestAddToQueue = onRequestAddToQueue,
-            onTrackMoreClick = onLibraryTrackMoreClick,
-            modifier = modifier,
-        )
-        MusicDestination.Playlist -> LegacyPortPlaylistPage(
-            mediaItems = mediaItems,
-            active = true,
-            hiddenMediaIds = hiddenMediaIds,
-            onTrackMoreClick = onPlaylistTrackMoreClick,
-            onAddModeActiveChanged = onPlaylistAddModeActiveChanged,
-            onSearchClick = onSearchClick,
-            modifier = modifier,
-        )
-        MusicDestination.More -> LegacyPortMorePage(
-            active = true,
-            playbackSettings = playbackSettings,
-            libraryRefreshVersion = libraryRefreshVersion,
-            libraryRefreshing = libraryRefreshing,
-            onRefreshLibrary = onRefreshLibrary,
-            onScratchEnabledChange = onScratchEnabledChange,
-            onHidePlayerAxisEnabledChange = onHidePlayerAxisEnabledChange,
-            onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,
-            onMediaIdsHidden = onMediaIdsHidden,
-            onRequestDeleteMediaIds = onRequestDeleteMediaIds,
-            onSettingsPageActiveChanged = onMoreSettingsPageActiveChanged,
-            onSearchClick = onSearchClick,
-            modifier = modifier,
-        )
+    var songsPageMounted by remember { mutableStateOf(destination == MusicDestination.Songs) }
+    LaunchedEffect(destination) {
+        if (destination == MusicDestination.Songs) {
+            songsPageMounted = true
+        }
+    }
+
+    Box(modifier = modifier) {
+        if (songsPageMounted) {
+            LegacyPortSongsPage(
+                mediaItems = mediaItems,
+                libraryLoaded = libraryLoaded,
+                active = destination == MusicDestination.Songs,
+                editMode = songsEditMode,
+                selectedSongIds = selectedSongIds,
+                hiddenMediaIds = hiddenMediaIds,
+                onToggleSongSelected = onToggleSongSelected,
+                onTrackMoreClick = onLibraryTrackMoreClick,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        when (destination) {
+            MusicDestination.Songs -> Unit
+            MusicDestination.Album -> LegacyPortAlbumPage(
+                mediaItems = mediaItems,
+                active = true,
+                viewMode = albumViewMode,
+                editMode = albumEditMode,
+                selectedAlbumId = selectedAlbumId,
+                selectedAlbumIds = selectedAlbumIds,
+                hiddenMediaIds = hiddenMediaIds,
+                onAlbumSelected = onAlbumSelected,
+                onToggleAlbumSelected = onToggleAlbumSelected,
+                onRequestAddToPlaylist = onRequestAddToPlaylist,
+                onRequestAddToQueue = onRequestAddToQueue,
+                onTrackMoreClick = onLibraryTrackMoreClick,
+                modifier = Modifier.fillMaxSize(),
+            )
+            MusicDestination.Artist -> LegacyPortArtistPage(
+                mediaItems = mediaItems,
+                active = true,
+                selectedTarget = selectedArtistTarget,
+                albumViewMode = artistAlbumViewMode,
+                hiddenMediaIds = hiddenMediaIds,
+                onTargetChanged = onArtistTargetChanged,
+                onRequestAddToPlaylist = onRequestAddToPlaylist,
+                onRequestAddToQueue = onRequestAddToQueue,
+                onTrackMoreClick = onLibraryTrackMoreClick,
+                modifier = Modifier.fillMaxSize(),
+            )
+            MusicDestination.Playlist -> LegacyPortPlaylistPage(
+                mediaItems = mediaItems,
+                active = true,
+                hiddenMediaIds = hiddenMediaIds,
+                onTrackMoreClick = onPlaylistTrackMoreClick,
+                onAddModeActiveChanged = onPlaylistAddModeActiveChanged,
+                onSearchClick = onSearchClick,
+                modifier = Modifier.fillMaxSize(),
+            )
+            MusicDestination.More -> LegacyPortMorePage(
+                active = true,
+                playbackSettings = playbackSettings,
+                libraryRefreshVersion = libraryRefreshVersion,
+                libraryRefreshing = libraryRefreshing,
+                onRefreshLibrary = onRefreshLibrary,
+                onScratchEnabledChange = onScratchEnabledChange,
+                onHidePlayerAxisEnabledChange = onHidePlayerAxisEnabledChange,
+                onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,
+                onMediaIdsHidden = onMediaIdsHidden,
+                onRequestDeleteMediaIds = onRequestDeleteMediaIds,
+                onSettingsPageActiveChanged = onMoreSettingsPageActiveChanged,
+                onSearchClick = onSearchClick,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 
@@ -1575,7 +1588,10 @@ private fun MediaItem.legacySortTitle(): String {
 }
 
 private fun MediaItem.legacySortKey(): String {
-    return LegacyTitleNormalizer.normalize(legacySortTitle())
+    return mediaMetadata.extras
+        ?.getString(LocalAudioLibrary.TitleSortKeyExtraKey)
+        ?.takeIf { it.isNotBlank() }
+        ?: LegacyTitleNormalizer.normalize(legacySortTitle())
 }
 
 private fun MediaItem.legacySortBucket(): String {
@@ -1588,7 +1604,14 @@ private fun MediaItem.legacySortBucket(): String {
 }
 
 private fun MediaItem.legacySectionLetter(): String {
-    val firstLetter = legacySortKey().firstOrNull { char ->
+    return mediaMetadata.extras
+        ?.getString(LocalAudioLibrary.TitleSectionExtraKey)
+        ?.takeIf { it.isNotBlank() }
+        ?: legacySortKey().legacySectionLetterFromSortKey()
+}
+
+private fun String.legacySectionLetterFromSortKey(): String {
+    val firstLetter = firstOrNull { char ->
         char.isLetterOrDigit()
     } ?: return "#"
     val upper = firstLetter.uppercaseChar()

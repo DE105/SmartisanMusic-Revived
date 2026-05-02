@@ -2,6 +2,7 @@ package com.smartisanos.music.playback
 
 import android.content.ContentUris
 import android.content.Context
+import android.icu.text.Transliterator
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Bundle
@@ -12,6 +13,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import com.smartisanos.music.R
 import java.io.File
+import java.text.Normalizer
 import java.util.concurrent.CountDownLatch
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -90,9 +92,13 @@ class LocalAudioLibrary(
                     val displayName = cursor.getString(displayNameColumn)?.takeIf { it.isNotBlank() }
                     val mimeType = cursor.getString(mimeTypeColumn)?.takeIf { it.isNotBlank() }
                     val audioQualityBadge = resolveAudioQualityBadge(displayName, mimeType)
+                    val titleSortKey = LegacyLibraryTitleNormalizer.normalize(title)
+                    val titleSection = titleSortKey.legacyLibraryTitleSection()
                     val mediaUri = ContentUris.withAppendedId(audioCollection(), id)
 
                     val extras = Bundle().apply {
+                        putString(TitleSortKeyExtraKey, titleSortKey)
+                        putString(TitleSectionExtraKey, titleSection)
                         if (!relativePath.isNullOrBlank()) {
                             putString(RelativePathExtraKey, relativePath)
                         }
@@ -185,6 +191,8 @@ class LocalAudioLibrary(
         const val RelativePathExtraKey = "com.smartisanos.music.extra.RELATIVE_PATH"
         const val DateAddedExtraKey = "com.smartisanos.music.extra.DATE_ADDED"
         const val GenerationAddedExtraKey = "com.smartisanos.music.extra.GENERATION_ADDED"
+        const val TitleSortKeyExtraKey = "com.smartisanos.music.extra.TITLE_SORT_KEY"
+        const val TitleSectionExtraKey = "com.smartisanos.music.extra.TITLE_SECTION"
         const val AudioQualityBadgeExtraKey = "com.smartisanos.music.extra.AUDIO_QUALITY_BADGE"
         const val AudioQualityBadgeFlac = "flac"
         const val AudioQualityBadgeApe = "ape"
@@ -572,6 +580,35 @@ class LocalAudioLibrary(
             AudioQualityBadgeAlac -> "audio/alac"
             else -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
         }
+    }
+}
+
+private object LegacyLibraryTitleNormalizer {
+    private val hanToLatin = runCatching {
+        Transliterator.getInstance("Han-Latin; Latin-ASCII")
+    }.getOrNull()
+    private val combiningMarks = "\\p{Mn}+".toRegex()
+
+    @Synchronized
+    fun normalize(title: String): String {
+        val trimmed = title.trim()
+        val transliterated = hanToLatin?.transliterate(trimmed) ?: trimmed
+        return Normalizer.normalize(transliterated, Normalizer.Form.NFD)
+            .replace(combiningMarks, "")
+            .lowercase(Locale.ROOT)
+            .trim()
+    }
+}
+
+private fun String.legacyLibraryTitleSection(): String {
+    val firstLetter = firstOrNull { char ->
+        char.isLetterOrDigit()
+    } ?: return "#"
+    val upper = firstLetter.uppercaseChar()
+    return if (upper in 'A'..'Z') {
+        upper.toString()
+    } else {
+        "#"
     }
 }
 

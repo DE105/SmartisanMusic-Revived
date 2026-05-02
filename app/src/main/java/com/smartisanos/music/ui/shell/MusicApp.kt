@@ -59,7 +59,6 @@ import com.smartisanos.music.data.favorite.FavoriteSongsRepository
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.data.playlist.PlaylistCreateResult
 import com.smartisanos.music.data.playlist.PlaylistRepository
-import com.smartisanos.music.data.settings.MusicAppSettingsStore
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.data.settings.PlaybackSettingsStore
 import com.smartisanos.music.playback.LocalAudioLibrary
@@ -93,7 +92,6 @@ import com.smartisanos.music.isExternalAudioLaunchItem
 import com.smartisanos.music.resolveExternalAudioMediaStoreIds
 import com.smartisanos.music.resolveExternalAudioArtist
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -106,6 +104,11 @@ private val PlaybackOverlayEasing = Easing { fraction ->
     1f - (1f - fraction) * (1f - fraction)
 }
 
+private fun musicDestinationFromRouteOrPlaylist(route: String?): MusicDestination {
+    return MusicDestination.entries.firstOrNull { it.route == route }
+        ?: MusicDestination.Playlist
+}
+
 @Composable
 fun MusicApp(
     playbackLaunchRequest: Int = 0,
@@ -113,42 +116,11 @@ fun MusicApp(
     onExternalAudioLaunchConsumed: (Int) -> Unit = {},
 ) {
     val context = LocalContext.current
-    val appSettingsStore = remember(context.applicationContext) {
-        MusicAppSettingsStore(context.applicationContext)
-    }
-    var initialMainDestinationRoute by rememberSaveable {
-        androidx.compose.runtime.mutableStateOf<String?>(null)
-    }
-    var initialMainDestinationLoaded by rememberSaveable {
-        androidx.compose.runtime.mutableStateOf(false)
-    }
-
-    LaunchedEffect(appSettingsStore) {
-        if (!initialMainDestinationLoaded) {
-            initialMainDestinationRoute = runCatching {
-                appSettingsStore.lastMainDestinationRoute.first()
-            }.getOrNull()
-            initialMainDestinationLoaded = true
-        }
-    }
-
-    if (!initialMainDestinationLoaded) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(ShellBackground),
-        )
-        return
-    }
-
-    val startDestination = remember(initialMainDestinationRoute) {
-        MusicDestination.fromRouteOrDefault(initialMainDestinationRoute)
-    }
     val lifecycleOwner = LocalLifecycleOwner.current
     val navController = rememberNavController()
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = currentBackStackEntry?.destination?.route ?: startDestination.route
-    val currentDestination = MusicDestination.fromRouteOrDefault(currentRoute)
+    val currentRoute = currentBackStackEntry?.destination?.route ?: MusicDestination.Playlist.route
+    val currentDestination = musicDestinationFromRouteOrPlaylist(currentRoute)
     val crossTextureBrush = rememberCrossTextureBrush()
 
     ProvidePlaybackController {
@@ -162,7 +134,7 @@ fun MusicApp(
         var searchCoveredByDetail by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
         var searchQuery by rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
         val searchVisibilityState = remember { MutableTransitionState(false) }
-        var searchOriginRoute by rememberSaveable { androidx.compose.runtime.mutableStateOf(startDestination.route) }
+        var searchOriginRoute by rememberSaveable { androidx.compose.runtime.mutableStateOf(MusicDestination.Playlist.route) }
         var albumViewMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(AlbumViewMode.Tile) }
         var selectedAlbumId by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
         var selectedAlbumTitle by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
@@ -215,11 +187,6 @@ fun MusicApp(
                 launchSingleTop = true
                 restoreState = true
             }
-            appScope.launch {
-                runCatching {
-                    appSettingsStore.setLastMainDestinationRoute(destination.route)
-                }
-            }
         }
 
         val closeAlbumDetail = {
@@ -228,7 +195,7 @@ fun MusicApp(
             if (searchCoveredByDetail) {
                 searchVisible = true
                 searchCoveredByDetail = false
-                navigateToDestination(MusicDestination.fromRouteOrDefault(searchOriginRoute))
+                navigateToDestination(musicDestinationFromRouteOrPlaylist(searchOriginRoute))
             }
         }
         val closeArtistDetail = {
@@ -237,7 +204,7 @@ fun MusicApp(
             if (searchCoveredByDetail) {
                 searchVisible = true
                 searchCoveredByDetail = false
-                navigateToDestination(MusicDestination.fromRouteOrDefault(searchOriginRoute))
+                navigateToDestination(musicDestinationFromRouteOrPlaylist(searchOriginRoute))
             }
         }
         val closeSongsEdit = {
@@ -428,7 +395,13 @@ fun MusicApp(
                     SmartisanBottomBar(
                         currentRoute = currentRoute,
                         onDestinationSelected = { destination ->
-                            navigateToDestination(destination)
+                            navController.navigate(destination.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         },
                     )
                 }
@@ -699,7 +672,6 @@ fun MusicApp(
                     ) {
                         MusicNavHost(
                             navController = navController,
-                            startDestination = startDestination.route,
                             libraryRefreshVersion = libraryRefreshVersion,
                             albumViewMode = albumViewMode,
                             selectedAlbumId = selectedAlbumId,

@@ -39,16 +39,4 @@ enum class MusicDestination(
         iconRes = R.drawable.tabbar_more,
         selectedIconRes = R.drawable.tabbar_more_down,
     );
-
-    companion object {
-        val DefaultMain = Songs
-
-        fun fromRoute(route: String?): MusicDestination? {
-            return entries.firstOrNull { it.route == route }
-        }
-
-        fun fromRouteOrDefault(route: String?): MusicDestination {
-            return fromRoute(route) ?: DefaultMain
-        }
-    }
 }

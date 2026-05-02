@@ -23,7 +23,7 @@ class TabSwitcher @JvmOverloads constructor(
 ) : RelativeLayout(context, attrs, defStyleAttr) {
     private val tabContainer: LinearLayout
     private val destinationViews = mutableMapOf<MusicDestination, BottomTabItemView>()
-    private var selectedDestination = MusicDestination.DefaultMain
+    private var selectedDestination = MusicDestination.Playlist
     private var suppressSelectionCallback = false
     private var onDestinationSelected: ((MusicDestination) -> Unit)? = null
 
