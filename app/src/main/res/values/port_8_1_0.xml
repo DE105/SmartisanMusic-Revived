@@ -195,6 +195,7 @@
     <dimen name="listview_items_textview_width">270.0dp</dimen>
     <dimen name="list_item_left_right_margin">12.0dp</dimen>
     <dimen name="list_item_min_height">60.0dp</dimen>
+    <dimen name="list_item_vertical_gap">14.0dp</dimen>
     <dimen name="mid_container_summary_margin">2.0dp</dimen>
     <dimen name="mid_container_top_bottom_padding">6.0dp</dimen>
     <dimen name="nav_divider_height">0.6700001dp</dimen>

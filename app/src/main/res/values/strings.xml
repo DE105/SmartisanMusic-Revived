@@ -132,6 +132,7 @@
     <string name="lyrics">歌词</string>
     <string name="always_on">常亮</string>
     <string name="player_axis_enabled">隐藏唱机中轴</string>
+    <string name="player_axis_and_needle_enabled">隐藏唱轴和唱针</string>
     <string name="popcorn_sound">唱盘爆豆音</string>
     <string name="popcorn_sound_tips">播放时会模仿真实唱片磨损，产生一种类似雨点的“爆豆音”杂声</string>
     <string name="playback_more_primary_line">暂无内嵌歌词</string>

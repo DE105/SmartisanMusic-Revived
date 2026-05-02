@@ -151,6 +151,7 @@ private fun LegacyPortMainShellContent(
     var playbackVisible by remember { mutableStateOf(false) }
     var currentDestination by remember { mutableStateOf(MusicDestination.Songs) }
     var playlistAddModeActive by remember { mutableStateOf(false) }
+    var moreSettingsPageActive by remember { mutableStateOf(false) }
     var songsEditMode by remember { mutableStateOf(false) }
     var selectedSongIds by remember { mutableStateOf(emptySet<String>()) }
     var albumViewMode by remember { mutableStateOf(AlbumViewMode.List) }
@@ -346,6 +347,13 @@ private fun LegacyPortMainShellContent(
     }
 
     val realTabContentBottomMargin = dimensionResource(R.dimen.realtabcontent_margin_bottom) - 6.dp
+    val hideBottomChrome = currentDestination == MusicDestination.More && moreSettingsPageActive
+
+    LaunchedEffect(currentDestination) {
+        if (currentDestination != MusicDestination.More) {
+            moreSettingsPageActive = false
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         AndroidView(
@@ -359,7 +367,7 @@ private fun LegacyPortMainShellContent(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = realTabContentBottomMargin),
+                .padding(bottom = if (hideBottomChrome) 0.dp else realTabContentBottomMargin),
         ) {
             val titleContentHeight = dimensionResource(R.dimen.title_bar_height)
             val titleAreaHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + titleContentHeight
@@ -463,9 +471,28 @@ private fun LegacyPortMainShellContent(
                 hiddenMediaIds = libraryExclusions.hiddenMediaIds,
                 libraryRefreshVersion = libraryRefreshVersion,
                 libraryRefreshing = libraryRefreshing,
+                playbackSettings = playbackSettings,
                 onRefreshLibrary = ::refreshLegacyLibrary,
+                onScratchEnabledChange = { enabled ->
+                    scope.launch {
+                        playbackSettingsStore.setScratchEnabled(enabled)
+                    }
+                },
+                onHidePlayerAxisEnabledChange = { enabled ->
+                    scope.launch {
+                        playbackSettingsStore.setHidePlayerAxisEnabled(enabled)
+                    }
+                },
+                onPopcornSoundEnabledChange = { enabled ->
+                    scope.launch {
+                        playbackSettingsStore.setPopcornSoundEnabled(enabled)
+                    }
+                },
                 onMediaIdsHidden = ::reclaimHiddenMediaIds,
                 onRequestDeleteMediaIds = ::requestSystemDeleteMediaIds,
+                onMoreSettingsPageActiveChanged = { active ->
+                    moreSettingsPageActive = active
+                },
                 onToggleSongSelected = { mediaId ->
                     selectedSongIds = if (mediaId in selectedSongIds) {
                         selectedSongIds - mediaId
@@ -497,50 +524,52 @@ private fun LegacyPortMainShellContent(
                     .weight(1f),
             )
         }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter),
-        ) {
-            LegacyPortPlaybackBar(
-                snapshot = snapshot,
-                favoriteIds = favoriteIds,
-                artworkBitmap = artworkBitmap,
-                onOpenPlayback = {
-                    playbackVisible = true
-                },
-                onToggleFavorite = { mediaItem ->
-                    if (mediaItem.isExternalAudioLaunchItem()) {
-                        return@LegacyPortPlaybackBar
-                    }
-                    val mediaId = mediaItem.mediaId.takeIf(String::isNotBlank) ?: return@LegacyPortPlaybackBar
-                    scope.launch {
-                        favoriteRepository.toggle(mediaId)
-                    }
-                },
-                onPrevious = {
-                    controller?.seekToPrevious()
-                },
-                onPlayPause = {
-                    if (controller?.isPlaying == true) {
-                        controller.pause()
-                    } else {
-                        controller?.play()
-                    }
-                },
-                onNext = {
-                    controller?.seekToNext()
-                },
+        if (!hideBottomChrome) {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(67.dp),
-            )
-            LegacyPortBottomBar(
-                currentDestination = if (playlistAddModeActive) MusicDestination.Songs else currentDestination,
-                onDestinationSelected = { destination ->
-                    currentDestination = destination
-                },
-            )
+                    .align(Alignment.BottomCenter),
+            ) {
+                LegacyPortPlaybackBar(
+                    snapshot = snapshot,
+                    favoriteIds = favoriteIds,
+                    artworkBitmap = artworkBitmap,
+                    onOpenPlayback = {
+                        playbackVisible = true
+                    },
+                    onToggleFavorite = { mediaItem ->
+                        if (mediaItem.isExternalAudioLaunchItem()) {
+                            return@LegacyPortPlaybackBar
+                        }
+                        val mediaId = mediaItem.mediaId.takeIf(String::isNotBlank) ?: return@LegacyPortPlaybackBar
+                        scope.launch {
+                            favoriteRepository.toggle(mediaId)
+                        }
+                    },
+                    onPrevious = {
+                        controller?.seekToPrevious()
+                    },
+                    onPlayPause = {
+                        if (controller?.isPlaying == true) {
+                            controller.pause()
+                        } else {
+                            controller?.play()
+                        }
+                    },
+                    onNext = {
+                        controller?.seekToNext()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(67.dp),
+                )
+                LegacyPortBottomBar(
+                    currentDestination = if (playlistAddModeActive) MusicDestination.Songs else currentDestination,
+                    onDestinationSelected = { destination ->
+                        currentDestination = destination
+                    },
+                )
+            }
         }
         LegacyPortPlaybackOverlay(
             visible = playbackVisible,
@@ -656,9 +685,14 @@ private fun LegacyPortTabContent(
     hiddenMediaIds: Set<String>,
     libraryRefreshVersion: Int,
     libraryRefreshing: Boolean,
+    playbackSettings: PlaybackSettings,
     onRefreshLibrary: () -> Unit,
+    onScratchEnabledChange: (Boolean) -> Unit,
+    onHidePlayerAxisEnabledChange: (Boolean) -> Unit,
+    onPopcornSoundEnabledChange: (Boolean) -> Unit,
     onMediaIdsHidden: (Set<String>) -> Unit,
     onRequestDeleteMediaIds: (Set<String>) -> Unit,
+    onMoreSettingsPageActiveChanged: (Boolean) -> Unit,
     onToggleSongSelected: (String) -> Unit,
     onToggleAlbumSelected: (String) -> Unit,
     onAlbumSelected: (String, String) -> Unit,
@@ -707,11 +741,16 @@ private fun LegacyPortTabContent(
         )
         MusicDestination.More -> LegacyPortMorePage(
             active = true,
+            playbackSettings = playbackSettings,
             libraryRefreshVersion = libraryRefreshVersion,
             libraryRefreshing = libraryRefreshing,
             onRefreshLibrary = onRefreshLibrary,
+            onScratchEnabledChange = onScratchEnabledChange,
+            onHidePlayerAxisEnabledChange = onHidePlayerAxisEnabledChange,
+            onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,
             onMediaIdsHidden = onMediaIdsHidden,
             onRequestDeleteMediaIds = onRequestDeleteMediaIds,
+            onSettingsPageActiveChanged = onMoreSettingsPageActiveChanged,
             modifier = modifier,
         )
     }

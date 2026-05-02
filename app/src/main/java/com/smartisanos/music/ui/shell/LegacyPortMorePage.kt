@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,6 +49,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
+import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.data.library.LibraryExclusions
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.playback.LocalAudioLibrary
@@ -61,6 +63,7 @@ import com.smartisanos.music.ui.folder.mediaIdsInDirectory
 import com.smartisanos.music.ui.widgets.EditableLayout
 import com.smartisanos.music.ui.widgets.StretchTextView
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import smartisanos.app.MenuDialog
@@ -80,6 +83,7 @@ private val FolderSecondaryTextColor = Color.rgb(0xa4, 0xa7, 0xac)
 
 private enum class LegacyMoreSecondaryTarget {
     Folder,
+    Settings,
 }
 
 private enum class LegacyMoreRootEntry(
@@ -112,23 +116,49 @@ private data class LegacyFolderTarget(
 @Composable
 internal fun LegacyPortMorePage(
     active: Boolean,
+    playbackSettings: PlaybackSettings,
     libraryRefreshVersion: Int,
     libraryRefreshing: Boolean,
     onRefreshLibrary: () -> Unit,
+    onScratchEnabledChange: (Boolean) -> Unit,
+    onHidePlayerAxisEnabledChange: (Boolean) -> Unit,
+    onPopcornSoundEnabledChange: (Boolean) -> Unit,
     onMediaIdsHidden: (Set<String>) -> Unit,
     onRequestDeleteMediaIds: (Set<String>) -> Unit,
+    onSettingsPageActiveChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var secondaryTarget by remember { mutableStateOf<LegacyMoreSecondaryTarget?>(null) }
+
+    LaunchedEffect(active, secondaryTarget) {
+        when {
+            active && secondaryTarget == LegacyMoreSecondaryTarget.Settings -> onSettingsPageActiveChanged(true)
+            secondaryTarget == null -> {
+                delay(300L)
+                onSettingsPageActiveChanged(false)
+            }
+            else -> onSettingsPageActiveChanged(false)
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            onSettingsPageActiveChanged(false)
+        }
+    }
 
     LegacyPortPageStackTransition(
         secondaryKey = secondaryTarget,
         modifier = modifier.fillMaxSize(),
         label = "legacy more page stack",
+        axis = LegacyPortPageStackAxis.VerticalPush,
         primaryContent = {
             LegacyMoreRootPage(
                 active = active && secondaryTarget == null,
                 libraryRefreshing = libraryRefreshing,
+                onSettingsClick = {
+                    onSettingsPageActiveChanged(true)
+                    secondaryTarget = LegacyMoreSecondaryTarget.Settings
+                },
                 onFolderClick = {
                     secondaryTarget = LegacyMoreSecondaryTarget.Folder
                 },
@@ -139,13 +169,24 @@ internal fun LegacyPortMorePage(
         secondaryContent = { target ->
             when (target) {
                 LegacyMoreSecondaryTarget.Folder -> LegacyPortFolderPage(
-                    active = active && secondaryTarget == LegacyMoreSecondaryTarget.Folder,
+                    active = active,
                     libraryRefreshVersion = libraryRefreshVersion,
                     onClose = {
                         secondaryTarget = null
                     },
                     onMediaIdsHidden = onMediaIdsHidden,
                     onRequestDeleteMediaIds = onRequestDeleteMediaIds,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                LegacyMoreSecondaryTarget.Settings -> LegacyPortSettingsPage(
+                    active = active,
+                    playbackSettings = playbackSettings,
+                    onClose = {
+                        secondaryTarget = null
+                    },
+                    onScratchEnabledChange = onScratchEnabledChange,
+                    onHidePlayerAxisEnabledChange = onHidePlayerAxisEnabledChange,
+                    onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -157,6 +198,7 @@ internal fun LegacyPortMorePage(
 private fun LegacyMoreRootPage(
     active: Boolean,
     libraryRefreshing: Boolean,
+    onSettingsClick: () -> Unit,
     onFolderClick: () -> Unit,
     onRefreshLibrary: () -> Unit,
     modifier: Modifier = Modifier,
@@ -167,7 +209,7 @@ private fun LegacyMoreRootPage(
             .background(ComposeColor.White),
     ) {
         LegacyPortSmartisanTitleBar(modifier = Modifier.fillMaxWidth()) { titleBar ->
-            titleBar.setupLegacyMoreRootTitleBar()
+            titleBar.setupLegacyMoreRootTitleBar(onSettingsClick = onSettingsClick)
         }
         LegacyMoreRootList(
             active = active,
@@ -181,12 +223,18 @@ private fun LegacyMoreRootPage(
     }
 }
 
-private fun TitleBar.setupLegacyMoreRootTitleBar() {
+private fun TitleBar.setupLegacyMoreRootTitleBar(
+    onSettingsClick: () -> Unit,
+) {
     removeAllLeftViews()
     removeAllRightViews()
     setShadowVisible(false)
     setCenterText(R.string.tab_more)
-    addLeftImageView(R.drawable.standard_icon_settings_selector)
+    addLeftImageView(R.drawable.standard_icon_settings_selector).apply {
+        setOnClickListener {
+            onSettingsClick()
+        }
+    }
     addRightImageView(R.drawable.search_btn_selector)
 }
 

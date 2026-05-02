@@ -7,7 +7,9 @@ import androidx.compose.animation.core.animateInt
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,12 +31,21 @@ private const val LegacyPageStackSlideMillis = 300
 private val LegacyPageStackEasing = Easing { fraction ->
     ((cos((fraction + 1f) * Math.PI) / 2.0) + 0.5).toFloat()
 }
+private val LegacyPageStackDecelerateEasing = Easing { fraction ->
+    1f - ((1f - fraction) * (1f - fraction))
+}
+
+internal enum class LegacyPortPageStackAxis {
+    Horizontal,
+    VerticalPush,
+}
 
 @Composable
 internal fun <T : Any> LegacyPortPageStackTransition(
     secondaryKey: T?,
     modifier: Modifier = Modifier,
     label: String = "legacy page stack transition",
+    axis: LegacyPortPageStackAxis = LegacyPortPageStackAxis.Horizontal,
     primaryContent: @Composable () -> Unit,
     secondaryContent: @Composable (T) -> Unit,
 ) {
@@ -73,7 +84,7 @@ internal fun <T : Any> LegacyPortPageStackTransition(
             },
             label = "$label primary offset",
         ) { showingSecondary ->
-            if (showingSecondary) -widthPx else 0
+            if (axis == LegacyPortPageStackAxis.Horizontal && showingSecondary) -widthPx else 0
         }
 
         Box(
@@ -91,20 +102,40 @@ internal fun <T : Any> LegacyPortPageStackTransition(
                 modifier = Modifier
                     .fillMaxSize()
                     .zIndex(1f),
-                enter = slideInHorizontally(
-                    animationSpec = tween(
-                        durationMillis = LegacyPageStackSlideMillis,
-                        easing = LegacyPageStackEasing,
-                    ),
-                    initialOffsetX = { it },
-                ),
-                exit = slideOutHorizontally(
-                    animationSpec = tween(
-                        durationMillis = LegacyPageStackSlideMillis,
-                        easing = LegacyPageStackEasing,
-                    ),
-                    targetOffsetX = { it },
-                ),
+                enter = if (axis == LegacyPortPageStackAxis.VerticalPush) {
+                    slideInVertically(
+                        animationSpec = tween(
+                            durationMillis = LegacyPageStackSlideMillis,
+                            easing = LegacyPageStackDecelerateEasing,
+                        ),
+                        initialOffsetY = { it },
+                    )
+                } else {
+                    slideInHorizontally(
+                        animationSpec = tween(
+                            durationMillis = LegacyPageStackSlideMillis,
+                            easing = LegacyPageStackEasing,
+                        ),
+                        initialOffsetX = { it },
+                    )
+                },
+                exit = if (axis == LegacyPortPageStackAxis.VerticalPush) {
+                    slideOutVertically(
+                        animationSpec = tween(
+                            durationMillis = LegacyPageStackSlideMillis,
+                            easing = LegacyPageStackDecelerateEasing,
+                        ),
+                        targetOffsetY = { it },
+                    )
+                } else {
+                    slideOutHorizontally(
+                        animationSpec = tween(
+                            durationMillis = LegacyPageStackSlideMillis,
+                            easing = LegacyPageStackEasing,
+                        ),
+                        targetOffsetX = { it },
+                    )
+                },
             ) {
                 secondaryContent(contentKey)
             }
