@@ -11,6 +11,7 @@ import android.icu.text.Transliterator
 import android.provider.MediaStore
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AnimationUtils
@@ -21,6 +22,7 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.ListView
 import android.widget.RelativeLayout
+import android.widget.RatingBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -103,6 +105,7 @@ import com.smartisanos.music.ui.album.buildAlbumSummaries
 import com.smartisanos.music.ui.navigation.MusicDestination
 import com.smartisanos.music.ui.playlist.PlaylistNameDialog
 import com.smartisanos.music.ui.search.GlobalSearchScreen
+import com.smartisanos.music.ui.widgets.EditableLayout
 import com.smartisanos.music.ui.widgets.EditableListViewItem
 import com.smartisanos.music.ui.widgets.StretchTextView
 import smartisanos.app.MenuDialog
@@ -110,6 +113,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.Normalizer
+import java.util.Calendar
 import java.util.Locale
 import smartisanos.widget.ActionButtonGroup
 import smartisanos.widget.TitleBar
@@ -1320,7 +1324,6 @@ private fun LegacyPortSongsPage(
                     selector = viewContext.getDrawable(R.drawable.listview_selector)
                     cacheColorHint = Color.TRANSPARENT
                     setBackgroundColor(Color.TRANSPARENT)
-                    layoutAnimation = AnimationUtils.loadLayoutAnimation(viewContext, R.anim.list_anim_layout)
                 }
             }
         },
@@ -1365,6 +1368,7 @@ private fun LegacyPortSongsPage(
                 }
             }
             val listView = root.findViewById<ListView>(R.id.list) ?: return@AndroidView
+            val sortDisplayMode = selectedSortIndex.toLegacySongsSortDisplayMode()
             listView.visibility = if (hasSongs || libraryLoaded) View.VISIBLE else View.INVISIBLE
             val adapter = listView.adapter as? LegacySongsAdapter ?: LegacySongsAdapter().also { adapter ->
                 listView.adapter = adapter
@@ -1381,11 +1385,14 @@ private fun LegacyPortSongsPage(
                 nextItems = sortedSongs,
                 nextCurrentMediaId = browser?.currentMediaItem?.mediaId,
                 nextCurrentIsPlaying = browser?.isPlaying == true,
-                nextSectioned = selectedSortIndex == 0,
+                nextDisplayMode = sortDisplayMode,
+                nextSectionMode = sortDisplayMode.toSectionMode(),
                 nextEditMode = editMode,
                 nextSelectedMediaIds = selectedSongIds,
             )
-            if (!listContentChanged) {
+            if (listContentChanged) {
+                listView.setSelection(0)
+            } else {
                 adapter.updateVisibleSongRows(
                     listView = listView,
                     animateEditMode = animateEditMode,
@@ -1452,7 +1459,7 @@ private fun ActionButtonGroup.setupLegacySongsSortHeader(
     selectedSortIndex: Int,
     onSortSelected: (Int) -> Unit,
 ) {
-    setActionButtonGroupBackground(R.drawable.secondary_bar)
+    setActionButtonGroupBackgroundColor(Color.WHITE)
     getLeftActionButton().visibility = View.GONE
     val sidePadding = resources.getDimensionPixelSize(R.dimen.button_group_left_right_padding)
     setActionButtonGroupSidePadding(sidePadding, sidePadding)
@@ -1469,8 +1476,20 @@ private fun ActionButtonGroup.setupLegacySongsSortHeader(
         getButton(index).apply {
             setButtonText(index, labels[index])
             gravity = android.view.Gravity.CENTER
-            setOnClickListener {
+            fun selectSort() {
+                setButtonActivated(index)
                 onSortSelected(index)
+            }
+            setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN && !isActivated) {
+                    selectSort()
+                }
+                false
+            }
+            setOnClickListener {
+                if (!isActivated) {
+                    selectSort()
+                }
             }
         }
     }
@@ -1486,7 +1505,66 @@ private fun List<MediaItem>.sortedForLegacySort(sortIndex: Int): List<MediaItem>
                 item.legacySortKey()
             },
         )
+        1 -> sortedWith(
+            compareByDescending<MediaItem> { item ->
+                item.legacyRating()
+            }.thenBy { item ->
+                item.legacySortKey()
+            }.thenBy { item ->
+                item.mediaId
+            },
+        )
+        2 -> sortedWith(
+            compareByDescending<MediaItem> { item ->
+                item.legacyPlayCount()
+            }.thenBy { item ->
+                item.legacySortKey()
+            }.thenBy { item ->
+                item.mediaId
+            },
+        )
+        3 -> sortedWith(
+            compareByDescending<MediaItem> { item ->
+                item.legacyGenerationAdded()
+            }.thenBy { item ->
+                item.legacySortKey()
+            }.thenBy { item ->
+                item.mediaId
+            },
+        )
         else -> this
+    }
+}
+
+private enum class LegacySongsSortDisplayMode {
+    Name,
+    Score,
+    PlayCount,
+    AddedTime,
+}
+
+private enum class LegacySongsSectionMode {
+    None,
+    Name,
+    Score,
+    AddedTime,
+}
+
+private fun Int.toLegacySongsSortDisplayMode(): LegacySongsSortDisplayMode {
+    return when (this) {
+        1 -> LegacySongsSortDisplayMode.Score
+        2 -> LegacySongsSortDisplayMode.PlayCount
+        3 -> LegacySongsSortDisplayMode.AddedTime
+        else -> LegacySongsSortDisplayMode.Name
+    }
+}
+
+private fun LegacySongsSortDisplayMode.toSectionMode(): LegacySongsSectionMode {
+    return when (this) {
+        LegacySongsSortDisplayMode.Name -> LegacySongsSectionMode.Name
+        LegacySongsSortDisplayMode.Score -> LegacySongsSectionMode.Score
+        LegacySongsSortDisplayMode.PlayCount -> LegacySongsSectionMode.None
+        LegacySongsSortDisplayMode.AddedTime -> LegacySongsSectionMode.AddedTime
     }
 }
 
@@ -1518,6 +1596,42 @@ private fun MediaItem.legacySectionLetter(): String {
         upper.toString()
     } else {
         "#"
+    }
+}
+
+private const val LegacyAddedTimeBucketToday = 1
+private const val LegacyAddedTimeBucketLastWeek = 2
+private const val LegacyAddedTimeBucketLastMonth = 3
+private const val LegacyAddedTimeBucketOlder = 4
+private const val LegacyDayMillis = 24L * 60L * 60L * 1000L
+
+private fun MediaItem.legacyRating(): Long {
+    return mediaMetadata.extras?.getLong("star", 0L) ?: 0L
+}
+
+private fun MediaItem.legacyPlayCount(): Long {
+    return mediaMetadata.extras?.getLong("play_count", 0L) ?: 0L
+}
+
+private fun MediaItem.legacyGenerationAdded(): Long {
+    return mediaMetadata.extras?.getLong(LocalAudioLibrary.GenerationAddedExtraKey, 0L) ?: 0L
+}
+
+private fun MediaItem.legacyAddedTimeBucket(): Int {
+    val addedAtMillis = (mediaMetadata.extras?.getLong(LocalAudioLibrary.DateAddedExtraKey, 0L) ?: 0L) * 1000L
+    val todayStart = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+    val weekStart = todayStart - 7L * LegacyDayMillis
+    val monthStart = todayStart - 30L * LegacyDayMillis
+    return when {
+        addedAtMillis > todayStart -> LegacyAddedTimeBucketToday
+        addedAtMillis > weekStart -> LegacyAddedTimeBucketLastWeek
+        addedAtMillis > monthStart -> LegacyAddedTimeBucketLastMonth
+        else -> LegacyAddedTimeBucketOlder
     }
 }
 
@@ -1619,7 +1733,8 @@ private class LegacySongsAdapter : BaseAdapter() {
     private var rows: List<LegacySongRow> = emptyList()
     private var currentMediaId: String? = null
     private var currentIsPlaying: Boolean = false
-    private var sectioned: Boolean = false
+    private var displayMode: LegacySongsSortDisplayMode = LegacySongsSortDisplayMode.Name
+    private var sectionMode: LegacySongsSectionMode = LegacySongsSectionMode.Name
     private var editMode: Boolean = false
     private var selectedMediaIds: Set<String> = emptySet()
 
@@ -1627,12 +1742,14 @@ private class LegacySongsAdapter : BaseAdapter() {
         nextItems: List<MediaItem>,
         nextCurrentMediaId: String?,
         nextCurrentIsPlaying: Boolean,
-        nextSectioned: Boolean,
+        nextDisplayMode: LegacySongsSortDisplayMode,
+        nextSectionMode: LegacySongsSectionMode,
         nextEditMode: Boolean,
         nextSelectedMediaIds: Set<String>,
     ): Boolean {
         val contentChanged = items != nextItems ||
-            sectioned != nextSectioned
+            displayMode != nextDisplayMode ||
+            sectionMode != nextSectionMode
         val playbackChanged = currentMediaId != nextCurrentMediaId ||
             currentIsPlaying != nextCurrentIsPlaying
         val editModeChanged = editMode != nextEditMode
@@ -1644,11 +1761,12 @@ private class LegacySongsAdapter : BaseAdapter() {
         items = nextItems
         currentMediaId = nextCurrentMediaId
         currentIsPlaying = nextCurrentIsPlaying
-        sectioned = nextSectioned
+        displayMode = nextDisplayMode
+        sectionMode = nextSectionMode
         editMode = nextEditMode
         selectedMediaIds = nextSelectedMediaIds
         if (contentChanged) {
-            rows = buildLegacySongRows(nextItems, nextSectioned)
+            rows = buildLegacySongRows(nextItems, nextSectionMode)
             notifyDataSetChanged()
         }
         return contentChanged
@@ -1687,11 +1805,7 @@ private class LegacySongsAdapter : BaseAdapter() {
             } else {
                 titleView.setShowingPlayImage(false)
             }
-            (child as? EditableListViewItem)?.bindLegacyEditState(
-                enabled = editMode,
-                checked = mediaItem.mediaId in selectedMediaIds,
-                animate = animateEditMode,
-            )
+            child.bindLegacySongEditState(mediaItem, animateEditMode)
         }
     }
 
@@ -1701,7 +1815,7 @@ private class LegacySongsAdapter : BaseAdapter() {
 
     fun positionForLetter(letter: String): Int {
         return rows.indexOfFirst { row ->
-            row is LegacySongRow.Header && row.letter == letter
+            row is LegacySongRow.Header && row.key == LegacySongHeaderKey.Name(letter)
         }
     }
 
@@ -1711,12 +1825,17 @@ private class LegacySongsAdapter : BaseAdapter() {
 
     override fun getItemId(position: Int): Long = position.toLong()
 
-    override fun getViewTypeCount(): Int = 2
+    override fun getViewTypeCount(): Int = 5
 
     override fun getItemViewType(position: Int): Int {
         return when (rows[position]) {
             is LegacySongRow.Header -> 0
-            is LegacySongRow.Song -> 1
+            is LegacySongRow.Song -> when (displayMode) {
+                LegacySongsSortDisplayMode.Name -> 1
+                LegacySongsSortDisplayMode.Score -> 2
+                LegacySongsSortDisplayMode.PlayCount -> 3
+                LegacySongsSortDisplayMode.AddedTime -> 4
+            }
         }
     }
 
@@ -1739,7 +1858,7 @@ private class LegacySongsAdapter : BaseAdapter() {
         val view = convertView ?: LayoutInflater.from(parent.context)
             .inflate(R.layout.smartlist_header, parent, false)
         view.setBackgroundResource(R.drawable.smartlist_header_bg)
-        view.findViewById<TextView>(R.id.text)?.text = row.letter
+        view.findViewById<TextView>(R.id.text)?.text = row.key.title(parent.context)
         return view
     }
 
@@ -1749,7 +1868,7 @@ private class LegacySongsAdapter : BaseAdapter() {
         parent: ViewGroup,
     ): View {
         val view = convertView ?: LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_track_list, parent, false)
+            .inflate(displayMode.layoutRes, parent, false)
         val metadata = item.mediaMetadata
         val selected = item.mediaId == currentMediaId
         val title = metadata.displayTitle?.toString()
@@ -1760,7 +1879,7 @@ private class LegacySongsAdapter : BaseAdapter() {
             ?: parent.context.getString(R.string.unknown_artist)
         val album = metadata.albumTitle?.toString()
             ?.takeIf(String::isNotBlank)
-        val subtitle = if (album.isNullOrBlank()) {
+        val subtitle = if (displayMode == LegacySongsSortDisplayMode.Score || album.isNullOrBlank()) {
             artist
         } else {
             "$artist - $album"
@@ -1784,7 +1903,11 @@ private class LegacySongsAdapter : BaseAdapter() {
             text = subtitle
             setTextColor(LegacySecondaryTextColor)
         }
-        view.findViewById<TextView>(R.id.tv_duration)?.text = metadata.durationMs?.formatDuration().orEmpty()
+        view.findViewById<TextView>(R.id.tv_play_count)?.text = item.legacyPlayCount().toString()
+        view.findViewById<RatingBar>(R.id.rb_score)?.apply {
+            visibility = View.VISIBLE
+            progress = item.legacyRating().toInt()
+        }
         view.findViewById<ImageView>(R.id.mime_type)?.apply {
             val badgeRes = item.legacyQualityBadgeRes()
             if (badgeRes != null) {
@@ -1796,7 +1919,6 @@ private class LegacySongsAdapter : BaseAdapter() {
         }
         view.findViewById<CheckBox>(R.id.cb_del)?.isChecked = item.mediaId in selectedMediaIds
         view.findViewById<View>(R.id.iv_right)?.visibility = View.GONE
-        view.findViewById<View>(R.id.tv_duration)?.visibility = View.VISIBLE
         view.findViewById<View>(R.id.img_action_more)?.apply {
             visibility = View.VISIBLE
             isClickable = true
@@ -1805,39 +1927,30 @@ private class LegacySongsAdapter : BaseAdapter() {
                 onMoreClick(item)
             }
         }
-        view.findViewById<View>(R.id.relativeLayout1)?.apply {
-            val params = layoutParams as? RelativeLayout.LayoutParams ?: return@apply
-            params.removeRule(RelativeLayout.LEFT_OF)
-            params.removeRule(RelativeLayout.RIGHT_OF)
-            params.removeRule(RelativeLayout.ALIGN_PARENT_LEFT)
-            params.removeRule(RelativeLayout.ALIGN_PARENT_RIGHT)
-            params.addRule(RelativeLayout.ALIGN_PARENT_LEFT)
-            params.addRule(RelativeLayout.ALIGN_PARENT_RIGHT)
-            params.leftMargin = resources.getDimensionPixelSize(R.dimen.listview_items_margin_left)
-            params.rightMargin = resources.getDimensionPixelSize(R.dimen.letters_bar_width)
-            layoutParams = params
-        }
-        (view as? EditableListViewItem)?.bindLegacyEditState(
-            enabled = editMode,
-            checked = item.mediaId in selectedMediaIds,
-            animate = false,
-        )
+        view.bindLegacySongEditState(item, animate = false)
         return view
     }
 
-    private fun Long.formatDuration(): String {
-        if (this <= 0L) {
-            return ""
-        }
-        val totalSeconds = this / 1000L
-        val minutes = totalSeconds / 60L
-        val seconds = totalSeconds % 60L
-        return "%d:%02d".format(minutes, seconds)
+    private fun View.bindLegacySongEditState(
+        item: MediaItem,
+        animate: Boolean,
+    ) {
+        val checked = item.mediaId in selectedMediaIds
+        (this as? EditableListViewItem)?.bindLegacyEditState(
+            enabled = editMode,
+            checked = checked,
+            animate = animate,
+        )
+        (this as? EditableLayout)?.bindLegacyEditState(
+            enabled = editMode,
+            checked = checked,
+            animate = animate,
+        )
     }
 }
 
 private sealed class LegacySongRow {
-    data class Header(val letter: String) : LegacySongRow()
+    data class Header(val key: LegacySongHeaderKey) : LegacySongRow()
 
     data class Song(
         val mediaItem: MediaItem,
@@ -1845,27 +1958,63 @@ private sealed class LegacySongRow {
     ) : LegacySongRow()
 }
 
+private sealed class LegacySongHeaderKey {
+    data class Name(val letter: String) : LegacySongHeaderKey()
+    data class Score(val score: Long) : LegacySongHeaderKey()
+    data class AddedTime(val bucket: Int) : LegacySongHeaderKey()
+
+    fun title(context: android.content.Context): String {
+        return when (this) {
+            is Name -> letter
+            is Score -> if (score > 0L) {
+                context.getString(R.string.song_score_header, score)
+            } else {
+                context.getString(R.string.nostar)
+            }
+            is AddedTime -> when (bucket) {
+                LegacyAddedTimeBucketToday -> context.getString(R.string.section_today)
+                LegacyAddedTimeBucketLastWeek -> context.getString(R.string.section_day_before)
+                LegacyAddedTimeBucketLastMonth -> context.getString(R.string.section_week_before)
+                else -> context.getString(R.string.section_month_before)
+            }
+        }
+    }
+}
+
 private fun buildLegacySongRows(
     mediaItems: List<MediaItem>,
-    sectioned: Boolean,
+    sectionMode: LegacySongsSectionMode,
 ): List<LegacySongRow> {
-    if (!sectioned) {
+    if (sectionMode == LegacySongsSectionMode.None) {
         return mediaItems.mapIndexed { index, mediaItem ->
             LegacySongRow.Song(mediaItem, index)
         }
     }
     val rows = mutableListOf<LegacySongRow>()
-    var previousLetter: String? = null
+    var previousKey: LegacySongHeaderKey? = null
     mediaItems.forEachIndexed { index, mediaItem ->
-        val letter = mediaItem.legacySectionLetter()
-        if (letter != previousLetter) {
-            rows += LegacySongRow.Header(letter)
-            previousLetter = letter
+        val key = when (sectionMode) {
+            LegacySongsSectionMode.Name -> LegacySongHeaderKey.Name(mediaItem.legacySectionLetter())
+            LegacySongsSectionMode.Score -> LegacySongHeaderKey.Score(mediaItem.legacyRating())
+            LegacySongsSectionMode.AddedTime -> LegacySongHeaderKey.AddedTime(mediaItem.legacyAddedTimeBucket())
+            LegacySongsSectionMode.None -> null
+        }
+        if (key != null && key != previousKey) {
+            rows += LegacySongRow.Header(key)
+            previousKey = key
         }
         rows += LegacySongRow.Song(mediaItem, index)
     }
     return rows
 }
+
+private val LegacySongsSortDisplayMode.layoutRes: Int
+    get() = when (this) {
+        LegacySongsSortDisplayMode.Name -> R.layout.item_sort_by_name_layout
+        LegacySongsSortDisplayMode.Score -> R.layout.item_sort_by_score_layout
+        LegacySongsSortDisplayMode.PlayCount -> R.layout.item_sort_by_play_count
+        LegacySongsSortDisplayMode.AddedTime -> R.layout.item_sort_by_time_layout
+    }
 
 private class LegacyPlaylistAdapter : BaseAdapter() {
     private var items: List<UserPlaylistSummary> = emptyList()

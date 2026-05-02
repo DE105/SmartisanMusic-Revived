@@ -107,7 +107,9 @@
     <id name="subtitle" />
     <id name="tab_switch" />
     <id name="text" />
+    <id name="textwidth" />
     <id name="track_name" />
+    <id name="tv_play_count" />
     <id name="tv_duration" />
     <id name="tv_album_name" />
     <id name="tv_count" />
@@ -290,6 +292,7 @@
     <dimen name="fake_song_playing_zone_layout">105.0dp</dimen>
     <dimen name="now_playing_header_height">20.0dp</dimen>
     <dimen name="playback_listview_dividerHeight">2.0px</dimen>
+    <dimen name="quick_context_line_height">30.0dp</dimen>
     <dimen name="queue_rating_bar_height">40.0dp</dimen>
     <dimen name="radio_category_header_text_size">13.5sp</dimen>
     <dimen name="tabbar_padding_left">11.0dp</dimen>
@@ -336,6 +339,12 @@
     <string name="sort_by_song_play_time">播放次数</string>
     <string name="sort_by_song_score">评分</string>
     <string name="sort_by_song_update_time">添加时间</string>
+    <string name="nostar">无评分</string>
+    <string name="section_today">今天</string>
+    <string name="section_day_before">一天前</string>
+    <string name="section_week_before">一周前</string>
+    <string name="section_month_before">一月前</string>
+    <string name="song_score_header">%1$d 星评分</string>
     <string name="tab_more">更多</string>
 
     <integer name="item_flip">30</integer>

@@ -64,6 +64,7 @@ class LocalAudioLibrary(
                 val trackColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
                 val yearColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
                 val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+                val generationAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.GENERATION_ADDED)
                 val relativePathColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.RELATIVE_PATH)
                 val displayNameColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
                 val mimeTypeColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE)
@@ -84,6 +85,7 @@ class LocalAudioLibrary(
                     val trackNumber = cursor.getInt(trackColumn).takeIf { it > 0 }
                     val year = cursor.getInt(yearColumn).takeIf { it > 0 }
                     val dateAddedSeconds = cursor.getLong(dateAddedColumn).takeIf { it > 0L }
+                    val generationAdded = cursor.getLong(generationAddedColumn).takeIf { it > 0L }
                     val relativePath = cursor.getString(relativePathColumn)?.takeIf { it.isNotBlank() }
                     val displayName = cursor.getString(displayNameColumn)?.takeIf { it.isNotBlank() }
                     val mimeType = cursor.getString(mimeTypeColumn)?.takeIf { it.isNotBlank() }
@@ -99,6 +101,9 @@ class LocalAudioLibrary(
                         }
                         if (dateAddedSeconds != null) {
                             putLong(DateAddedExtraKey, dateAddedSeconds)
+                        }
+                        if (generationAdded != null) {
+                            putLong(GenerationAddedExtraKey, generationAdded)
                         }
                         if (!audioQualityBadge.isNullOrBlank()) {
                             putString(AudioQualityBadgeExtraKey, audioQualityBadge)
@@ -179,6 +184,7 @@ class LocalAudioLibrary(
         const val AlbumIdExtraKey = "com.smartisanos.music.extra.ALBUM_ID"
         const val RelativePathExtraKey = "com.smartisanos.music.extra.RELATIVE_PATH"
         const val DateAddedExtraKey = "com.smartisanos.music.extra.DATE_ADDED"
+        const val GenerationAddedExtraKey = "com.smartisanos.music.extra.GENERATION_ADDED"
         const val AudioQualityBadgeExtraKey = "com.smartisanos.music.extra.AUDIO_QUALITY_BADGE"
         const val AudioQualityBadgeFlac = "flac"
         const val AudioQualityBadgeApe = "ape"
@@ -330,6 +336,7 @@ class LocalAudioLibrary(
             MediaStore.Audio.Media.TRACK,
             MediaStore.Audio.Media.YEAR,
             MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.GENERATION_ADDED,
             MediaStore.MediaColumns.RELATIVE_PATH,
             MediaStore.MediaColumns.DISPLAY_NAME,
             MediaStore.MediaColumns.MIME_TYPE,
@@ -344,7 +351,7 @@ class LocalAudioLibrary(
     }
 
     private fun audioSortOrder(): String {
-        return "${MediaStore.Audio.Media.DATE_ADDED} DESC"
+        return "${MediaStore.Audio.Media.GENERATION_ADDED} DESC"
     }
 
     private fun queryIndexedAudioSnapshot(): IndexedAudioSnapshot {
