@@ -27,6 +27,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -87,12 +92,15 @@ import com.smartisanos.music.playback.invalidateLibrary
 import com.smartisanos.music.playback.loadArtworkBitmap
 import com.smartisanos.music.playback.refreshLibrary
 import com.smartisanos.music.playback.removeMediaItemsByMediaIds
+import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.resolveExternalAudioMediaStoreIds
 import com.smartisanos.music.resolveExternalAudioArtist
 import com.smartisanos.music.ui.components.hasAudioPermission
 import com.smartisanos.music.ui.album.AlbumViewMode
+import com.smartisanos.music.ui.album.buildAlbumSummaries
 import com.smartisanos.music.ui.navigation.MusicDestination
 import com.smartisanos.music.ui.playlist.PlaylistNameDialog
+import com.smartisanos.music.ui.search.GlobalSearchScreen
 import com.smartisanos.music.ui.widgets.EditableListViewItem
 import com.smartisanos.music.ui.widgets.StretchTextView
 import smartisanos.app.MenuDialog
@@ -106,6 +114,24 @@ import smartisanos.widget.TitleBar
 import smartisanos.widget.letters.QuickBarEx
 import smartisanos.widget.tabswitcher.TabSwitcher
 import kotlin.random.Random
+
+private const val LegacySearchTransitionDurationMillis = 300
+private const val LegacySearchExitOffsetMultiplier = 1.09f
+
+private sealed interface LegacySearchDrilldownTarget {
+    data class Album(
+        val albumId: String,
+        val albumTitle: String,
+    ) : LegacySearchDrilldownTarget
+
+    data class Artist(
+        val target: LegacyArtistTarget,
+    ) : LegacySearchDrilldownTarget
+}
+
+private val LegacySearchDecelerateEasing = Easing { fraction ->
+    1f - (1f - fraction) * (1f - fraction)
+}
 
 @Composable
 fun LegacyPortMainShell(
@@ -151,6 +177,9 @@ private fun LegacyPortMainShellContent(
     val playbackSettings by playbackSettingsStore.settings.collectAsState(initial = PlaybackSettings())
     val playlists by playlistRepository.playlists.collectAsState(initial = emptyList())
     var playbackVisible by remember { mutableStateOf(false) }
+    var searchVisible by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchDrilldownTarget by remember { mutableStateOf<LegacySearchDrilldownTarget?>(null) }
     var currentDestination by remember { mutableStateOf(MusicDestination.Songs) }
     var playlistAddModeActive by remember { mutableStateOf(false) }
     var moreSettingsPageActive by remember { mutableStateOf(false) }
@@ -184,6 +213,24 @@ private fun LegacyPortMainShellContent(
         value = snapshot.mediaItem?.let { mediaItem ->
             loadLegacyArtworkBitmap(context.applicationContext, mediaItem)
         }
+    }
+    val openSearchOverlay = {
+        searchQuery = ""
+        searchDrilldownTarget = null
+        searchVisible = true
+    }
+    val closeSearchOverlay = {
+        searchVisible = false
+        searchDrilldownTarget = null
+    }
+
+    fun closeAlbumDetail() {
+        selectedAlbumId = null
+        selectedAlbumTitle = null
+    }
+
+    fun closeArtistDetail() {
+        selectedArtistTarget = selectedArtistTarget?.parentTarget()
     }
 
     DisposableEffect(controller) {
@@ -346,12 +393,11 @@ private fun LegacyPortMainShellContent(
     }
 
     BackHandler(enabled = currentDestination == MusicDestination.Album && selectedAlbumId != null) {
-        selectedAlbumId = null
-        selectedAlbumTitle = null
+        closeAlbumDetail()
     }
 
     BackHandler(enabled = currentDestination == MusicDestination.Artist && selectedArtistTarget != null) {
-        selectedArtistTarget = selectedArtistTarget?.parentTarget()
+        closeArtistDetail()
     }
 
     LaunchedEffect(externalAudioLaunchRequest, controller) {
@@ -440,11 +486,10 @@ private fun LegacyPortMainShellContent(
                         }
                     },
                     onAlbumDetailBack = {
-                        selectedAlbumId = null
-                        selectedAlbumTitle = null
+                        closeAlbumDetail()
                     },
                     onArtistBack = {
-                        selectedArtistTarget = selectedArtistTarget?.parentTarget()
+                        closeArtistDetail()
                     },
                     onToggleArtistAlbumViewMode = {
                         artistAlbumViewMode = if (artistAlbumViewMode == AlbumViewMode.List) {
@@ -453,6 +498,7 @@ private fun LegacyPortMainShellContent(
                             AlbumViewMode.List
                         }
                     },
+                    onSearchClick = openSearchOverlay,
                     modifier = titleModifier,
                 )
             }
@@ -547,6 +593,7 @@ private fun LegacyPortMainShellContent(
                 onPlaylistAddModeActiveChanged = { active ->
                     playlistAddModeActive = active
                 },
+                onSearchClick = openSearchOverlay,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
@@ -612,7 +659,42 @@ private fun LegacyPortMainShellContent(
             onCollapse = {
                 playbackVisible = false
             },
-            modifier = Modifier.zIndex(1f),
+            modifier = Modifier.zIndex(3f),
+        )
+        LegacyPortSearchOverlay(
+            visible = searchVisible,
+            query = searchQuery,
+            mediaItems = legacyLibrary.items,
+            hiddenMediaIds = libraryExclusions.hiddenMediaIds,
+            drilldownTarget = searchDrilldownTarget,
+            libraryRefreshVersion = libraryRefreshVersion,
+            onQueryChange = { value ->
+                searchQuery = value
+            },
+            onDismiss = closeSearchOverlay,
+            onOpenPlayback = {
+                playbackVisible = true
+            },
+            onDrilldownTargetChanged = { target ->
+                searchDrilldownTarget = target
+            },
+            onAlbumClick = { albumId, albumTitle ->
+                searchDrilldownTarget = LegacySearchDrilldownTarget.Album(
+                    albumId = albumId,
+                    albumTitle = albumTitle,
+                )
+            },
+            onArtistClick = { artistId, artistName ->
+                searchDrilldownTarget = LegacySearchDrilldownTarget.Artist(
+                    target = LegacyArtistTarget.Albums(
+                        artistId = artistId,
+                        artistName = artistName,
+                    ),
+                )
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(2f),
         )
         LegacyPlaybackPlaylistPickerOverlay(
             visible = pendingPlaylistPickerMediaItems != null && !showPlaybackPlaylistCreateDialog,
@@ -787,6 +869,7 @@ private fun LegacyPortTabContent(
     onAlbumSelected: (String, String) -> Unit,
     onArtistTargetChanged: (LegacyArtistTarget?) -> Unit,
     onPlaylistAddModeActiveChanged: (Boolean) -> Unit,
+    onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (destination) {
@@ -826,6 +909,7 @@ private fun LegacyPortTabContent(
             active = true,
             hiddenMediaIds = hiddenMediaIds,
             onAddModeActiveChanged = onPlaylistAddModeActiveChanged,
+            onSearchClick = onSearchClick,
             modifier = modifier,
         )
         MusicDestination.More -> LegacyPortMorePage(
@@ -840,9 +924,211 @@ private fun LegacyPortTabContent(
             onMediaIdsHidden = onMediaIdsHidden,
             onRequestDeleteMediaIds = onRequestDeleteMediaIds,
             onSettingsPageActiveChanged = onMoreSettingsPageActiveChanged,
+            onSearchClick = onSearchClick,
             modifier = modifier,
         )
     }
+}
+
+@Composable
+private fun LegacyPortSearchOverlay(
+    visible: Boolean,
+    query: String,
+    mediaItems: List<MediaItem>,
+    hiddenMediaIds: Set<String>,
+    drilldownTarget: LegacySearchDrilldownTarget?,
+    libraryRefreshVersion: Int,
+    onQueryChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onOpenPlayback: () -> Unit,
+    onDrilldownTargetChanged: (LegacySearchDrilldownTarget?) -> Unit,
+    onAlbumClick: (String, String) -> Unit,
+    onArtistClick: (String, String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier.fillMaxSize(),
+        enter = slideInVertically(
+            animationSpec = tween(
+                durationMillis = LegacySearchTransitionDurationMillis,
+                easing = LegacySearchDecelerateEasing,
+            ),
+            initialOffsetY = { fullHeight -> fullHeight },
+        ),
+        exit = slideOutVertically(
+            animationSpec = tween(
+                durationMillis = LegacySearchTransitionDurationMillis,
+                easing = LegacySearchDecelerateEasing,
+            ),
+            targetOffsetY = { fullHeight ->
+                (fullHeight * LegacySearchExitOffsetMultiplier).toInt()
+            },
+        ),
+    ) {
+        LegacyPortPageStackTransition(
+            secondaryKey = drilldownTarget,
+            modifier = Modifier.fillMaxSize(),
+            label = "legacy search detail transition",
+            primaryContent = {
+                GlobalSearchScreen(
+                    query = query,
+                    libraryRefreshVersion = libraryRefreshVersion,
+                    onQueryChange = onQueryChange,
+                    onDismiss = onDismiss,
+                    onOpenPlayback = onOpenPlayback,
+                    onAlbumClick = onAlbumClick,
+                    onArtistClick = onArtistClick,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            },
+            secondaryContent = { target ->
+                LegacyPortSearchDrilldownPage(
+                    target = target,
+                    mediaItems = mediaItems,
+                    hiddenMediaIds = hiddenMediaIds,
+                    onBack = {
+                        when (target) {
+                            is LegacySearchDrilldownTarget.Album -> onDrilldownTargetChanged(null)
+                            is LegacySearchDrilldownTarget.Artist -> {
+                                val parentTarget = target.target.parentTarget()
+                                onDrilldownTargetChanged(
+                                    parentTarget?.let(LegacySearchDrilldownTarget::Artist),
+                                )
+                            }
+                        }
+                    },
+                    onArtistTargetChanged = { artistTarget ->
+                        onDrilldownTargetChanged(
+                            artistTarget?.let(LegacySearchDrilldownTarget::Artist),
+                        )
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            },
+        )
+    }
+}
+
+@Composable
+private fun LegacyPortSearchDrilldownPage(
+    target: LegacySearchDrilldownTarget,
+    mediaItems: List<MediaItem>,
+    hiddenMediaIds: Set<String>,
+    onBack: () -> Unit,
+    onArtistTargetChanged: (LegacyArtistTarget?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BackHandler(onBack = onBack)
+
+    val context = LocalContext.current
+    val visibleSongs = remember(mediaItems, hiddenMediaIds) {
+        mediaItems.filterNot { mediaItem -> mediaItem.mediaId in hiddenMediaIds }
+    }
+    val albums = remember(visibleSongs, context) {
+        buildAlbumSummaries(
+            mediaItems = visibleSongs,
+            unknownAlbumTitle = context.getString(R.string.unknown_album),
+            multipleArtistsTitle = context.getString(R.string.many_artist),
+        )
+    }
+    val titleContentHeight = dimensionResource(R.dimen.title_bar_height)
+    val titleAreaHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + titleContentHeight
+
+    Column(
+        modifier = modifier.background(ComposeColor.White),
+    ) {
+        when (target) {
+            is LegacySearchDrilldownTarget.Album -> {
+                val album = remember(albums, target.albumId) {
+                    albums.firstOrNull { album -> album.id == target.albumId }
+                }
+                LegacyPortSearchDetailTitleBar(
+                    destination = MusicDestination.Album,
+                    albumDetailTitle = album?.title ?: target.albumTitle,
+                    artistTarget = null,
+                    onBack = onBack,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(titleAreaHeight),
+                )
+                if (album != null) {
+                    LegacyPortAlbumDetailPage(
+                        album = album,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .background(ComposeColor.White),
+                    )
+                }
+            }
+            is LegacySearchDrilldownTarget.Artist -> {
+                LegacyPortArtistTitleStack(
+                    selectedTarget = target.target,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(titleAreaHeight),
+                ) { artistTarget, titleModifier ->
+                    LegacyPortSearchDetailTitleBar(
+                        destination = MusicDestination.Artist,
+                        albumDetailTitle = null,
+                        artistTarget = artistTarget,
+                        onBack = onBack,
+                        modifier = titleModifier,
+                    )
+                }
+                LegacyPortArtistPage(
+                    mediaItems = visibleSongs,
+                    active = true,
+                    selectedTarget = target.target,
+                    albumViewMode = AlbumViewMode.List,
+                    hiddenMediaIds = emptySet(),
+                    onTargetChanged = onArtistTargetChanged,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegacyPortSearchDetailTitleBar(
+    destination: MusicDestination,
+    albumDetailTitle: String?,
+    artistTarget: LegacyArtistTarget?,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LegacyPortTitleBar(
+        destination = destination,
+        songsEditMode = false,
+        selectedSongCount = 0,
+        albumEditMode = false,
+        selectedAlbumCount = 0,
+        albumDetailTitle = albumDetailTitle,
+        albumViewMode = AlbumViewMode.List,
+        artistTarget = artistTarget,
+        artistAlbumViewMode = AlbumViewMode.List,
+        onEnterSongsEditMode = {},
+        onExitSongsEditMode = {},
+        onRequestDeleteSelected = {},
+        onEnterAlbumEditMode = {},
+        onExitAlbumEditMode = {},
+        onToggleAlbumViewMode = {},
+        onAlbumDetailBack = onBack,
+        onArtistBack = onBack,
+        onToggleArtistAlbumViewMode = {},
+        onSearchClick = {},
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -909,10 +1195,7 @@ private fun LegacyPortSongsPage(
                     if (!playActionsEnabled || sortedSongs.isEmpty()) {
                         return@setOnClickListener
                     }
-                    browser?.shuffleModeEnabled = false
-                    browser?.setMediaItems(sortedSongs, 0, 0L)
-                    browser?.prepare()
-                    browser?.play()
+                    browser.replaceQueueAndPlay(sortedSongs)
                 }
             }
             root.findViewById<View>(R.id.bt_shuffle)?.apply {
@@ -922,10 +1205,11 @@ private fun LegacyPortSongsPage(
                         return@setOnClickListener
                     }
                     val startIndex = Random.nextInt(sortedSongs.size)
-                    browser?.shuffleModeEnabled = true
-                    browser?.setMediaItems(sortedSongs, startIndex, 0L)
-                    browser?.prepare()
-                    browser?.play()
+                    browser.replaceQueueAndPlay(
+                        mediaItems = sortedSongs,
+                        startIndex = startIndex,
+                        shuffleModeEnabled = true,
+                    )
                 }
             }
             val listView = root.findViewById<ListView>(R.id.list) ?: return@AndroidView
@@ -1001,9 +1285,7 @@ private fun LegacyPortSongsPage(
                 val songIndex = adapter.songIndexAt(position) ?: return@setOnItemClickListener
                 adapter.setPlaybackState(item.mediaId, true)
                 adapter.updateVisiblePlaybackState(listView)
-                browser?.setMediaItems(adapter.items, songIndex, 0L)
-                browser?.prepare()
-                browser?.play()
+                browser.replaceQueueAndPlay(adapter.items, songIndex)
             }
         },
     )
@@ -1500,6 +1782,7 @@ private fun LegacyPortTitleBar(
     onAlbumDetailBack: () -> Unit,
     onArtistBack: () -> Unit,
     onToggleArtistAlbumViewMode: () -> Unit,
+    onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LegacyPortSmartisanTitleBar(modifier = modifier) { titleBar ->
@@ -1522,6 +1805,7 @@ private fun LegacyPortTitleBar(
             onAlbumDetailBack = onAlbumDetailBack,
             onArtistBack = onArtistBack,
             onToggleArtistAlbumViewMode = onToggleArtistAlbumViewMode,
+            onSearchClick = onSearchClick,
         )
     }
 }
@@ -1545,6 +1829,7 @@ private fun TitleBar.setupLegacyMainTitleBar(
     onAlbumDetailBack: () -> Unit,
     onArtistBack: () -> Unit,
     onToggleArtistAlbumViewMode: () -> Unit,
+    onSearchClick: () -> Unit,
 ) {
     removeAllLeftViews()
     removeAllRightViews()
@@ -1612,11 +1897,19 @@ private fun TitleBar.setupLegacyMainTitleBar(
     when (destination) {
         MusicDestination.More -> {
             addLeftImageView(R.drawable.standard_icon_settings_selector)
-            addRightImageView(R.drawable.search_btn_selector)
+            addRightImageView(R.drawable.search_btn_selector).apply {
+                setOnClickListener {
+                    onSearchClick()
+                }
+            }
         }
         MusicDestination.Artist -> {
             addLeftImageView(R.drawable.standard_icon_multi_select_selector).visibility = View.INVISIBLE
-            addRightImageView(R.drawable.search_btn_selector)
+            addRightImageView(R.drawable.search_btn_selector).apply {
+                setOnClickListener {
+                    onSearchClick()
+                }
+            }
         }
         else -> {
             addLeftImageView(R.drawable.standard_icon_multi_select_selector).apply {
@@ -1632,7 +1925,11 @@ private fun TitleBar.setupLegacyMainTitleBar(
                     }
                 }
             }
-            addRightImageView(R.drawable.search_btn_selector)
+            addRightImageView(R.drawable.search_btn_selector).apply {
+                setOnClickListener {
+                    onSearchClick()
+                }
+            }
             if (destination == MusicDestination.Album) {
                 val switchButton = CheckBox(context, null).apply {
                     setButtonDrawable(R.drawable.album_switch_selector)

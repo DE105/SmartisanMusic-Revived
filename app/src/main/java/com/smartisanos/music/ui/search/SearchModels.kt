@@ -7,13 +7,6 @@ import com.smartisanos.music.ui.artist.ArtistSummary
 import com.smartisanos.music.ui.artist.buildArtistSummaries
 import java.util.Locale
 
-enum class SearchTab {
-    All,
-    Songs,
-    Albums,
-    Artists,
-}
-
 internal data class SearchResults(
     val query: String,
     val songs: List<MediaItem>,

@@ -84,6 +84,7 @@ import com.smartisanos.music.data.playlist.UserPlaylistDetail
 import com.smartisanos.music.data.playlist.UserPlaylistSummary
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.await
+import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.components.SecondaryPageTransition
 import com.smartisanos.music.ui.components.SmartisanBlankState
 import com.smartisanos.music.ui.components.SmartisanConfirmDialog
@@ -592,9 +593,9 @@ fun PlaylistScreen(
                             onShufflePlay = {
                                 val shuffledTracks = detailTracks.shuffled()
                                 if (shuffledTracks.isNotEmpty()) {
-                                    playbackBrowser?.setMediaItems(shuffledTracks, 0, 0L)
-                                    playbackBrowser?.prepare()
-                                    playbackBrowser?.play()
+                                    playbackBrowser.replaceQueueAndPlay(
+                                        mediaItems = shuffledTracks,
+                                    )
                                 }
                             },
                             onDeletePlaylist = {
@@ -612,9 +613,7 @@ fun PlaylistScreen(
                                     selectedTrackIdsInEdit = selectedTrackIdsInEdit.toggle(item.mediaId)
                                 } else {
                                     val targetTracks = detailTracks
-                                    playbackBrowser?.setMediaItems(targetTracks, index, 0L)
-                                    playbackBrowser?.prepare()
-                                    playbackBrowser?.play()
+                                    playbackBrowser.replaceQueueAndPlay(targetTracks, index)
                                 }
                             },
                             onTrackLongClick = { item ->
@@ -638,9 +637,7 @@ fun PlaylistScreen(
                                 selectedSongIdsForAdd = selectedSongIdsForAdd.toggle(item.mediaId)
                             },
                             onSongPlayPreview = { index ->
-                                playbackBrowser?.setMediaItems(addSongsCandidates, index, 0L)
-                                playbackBrowser?.prepare()
-                                playbackBrowser?.play()
+                                playbackBrowser.replaceQueueAndPlay(addSongsCandidates, index)
                             },
                         )
                     },

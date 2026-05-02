@@ -1,5 +1,6 @@
 package com.smartisanos.music.ui.search
 
+import android.util.Size
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -42,14 +43,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -74,34 +69,34 @@ import com.smartisanos.music.R
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.data.search.SearchHistoryStore
 import com.smartisanos.music.playback.LocalPlaybackBrowser
+import com.smartisanos.music.playback.artworkRequestKey
 import com.smartisanos.music.playback.await
+import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.album.AlbumSummary
 import com.smartisanos.music.ui.artist.ArtistSummary
 import com.smartisanos.music.ui.components.GlobalPlaybackBar
 import com.smartisanos.music.ui.components.SmartisanDrawableBackground
 import com.smartisanos.music.ui.components.hasAudioPermission
-import com.smartisanos.music.ui.components.loadArtwork
+import com.smartisanos.music.ui.components.loadArtworkThumbnail
 import kotlinx.coroutines.launch
 
 private val SearchPageBackground = Color.White
-private val SearchFieldHintColor = Color(0x66000000)
 private val SearchFieldTextColor = Color(0xCC000000)
-private val SearchSectionTitleColor = Color(0x99000000)
+private val SearchSectionTitleColor = Color(0x66000000)
 private val SearchDividerColor = Color(0xFFE9E9E9)
-private val SearchTabTextColor = Color(0x99000000)
-private val SearchTabSelectedTextColor = Color.White
 private val SearchSongTitleColor = Color(0xCC000000)
 private val SearchSongPlayingColor = Color(0xFFE64040)
+private val SearchResultHighlightColor = Color(0xFFC14352)
 private val SearchSubtitleColor = Color(0x66000000)
 private val SearchEmptyTextColor = Color(0xFFDBDBDB)
 
 private val SearchFieldTextStyle = TextStyle(
-    fontSize = 13.sp,
+    fontSize = 15.sp,
     color = SearchFieldTextColor,
 )
 private val SearchSectionTitleStyle = TextStyle(
     fontSize = 15.sp,
-    color = SearchSectionTitleColor,
+    color = SearchSongTitleColor,
 )
 private val SearchPrimaryTextStyle = TextStyle(
     fontSize = 16.sp,
@@ -114,35 +109,37 @@ private val SearchSecondaryTextStyle = TextStyle(
 )
 
 private val SearchTopBarHeight = 50.dp
-private val SearchFieldHeight = 30.dp
-private val SearchCancelButtonWidth = 50.dp
-private val SearchCancelButtonHeight = SearchFieldHeight - 1.dp
-private val SearchCancelButtonCorner = 4.dp
-private val SearchClearButtonSize = 33.dp
-private val SearchClearIconSize = 32.dp
-private val SearchTextStartPadding = 33.dp
+private val SearchFieldHeight = 32.dp
+private val SearchTopBarItemSpacing = 12.dp
+private val SearchCancelButtonSize = 36.dp
+private val SearchCancelIconSize = 36.dp
+private val SearchClearButtonSize = 30.dp
+private val SearchClearIconSize = 30.dp
+private val SearchFieldInnerEdgePadding = 6.dp
+private val SearchLeftIconWidth = 24.dp
+private val SearchLeftIconHeight = 30.dp
+private val SearchTextStartPadding = 36.dp
 private val SearchHistoryTopPadding = 19.dp
 private val SearchSectionHorizontalPadding = 21.dp
 private val SearchHistoryRowSpacing = 10.dp
 private val SearchHistoryChipHeight = 30.dp
-private val SearchTabBarHeight = 48.dp
-private val SearchTabGroupHeight = 34.dp
-private val SearchTabGroupHorizontalPadding = 6.dp
-private val SearchResultRowHeight = 61.dp
-private val SearchResultArtworkFrameWidth = 62.dp
-private val SearchResultArtworkSize = 50.dp
+private val SearchSectionHeaderHeight = 45.dp
+private val SearchSectionHeaderStartPadding = 11.dp
+private val SearchResultRowHeight = 60.dp
+private val SearchResultArtworkFrameWidth = 48.dp
+private val SearchResultArtworkSize = 38.dp
+private val SearchResultActionWidth = 34.dp
 private val SearchPlaybackBarReservedHeight = 67.dp
 private val SearchTopHorizontalPadding = 6.dp
 private val SearchNoResultTopPadding = 85.dp
 private val SearchNoResultArtworkSize = 140.dp
+private val SearchArtworkDecodeSize = Size(128, 128)
 
 @Composable
 fun GlobalSearchScreen(
     query: String,
-    selectedTab: SearchTab,
     libraryRefreshVersion: Int = 0,
     onQueryChange: (String) -> Unit,
-    onTabChange: (SearchTab) -> Unit,
     onDismiss: () -> Unit,
     onOpenPlayback: () -> Unit,
     onAlbumClick: (String, String) -> Unit,
@@ -175,6 +172,12 @@ fun GlobalSearchScreen(
             keyboardController?.hide()
             focusManager.clearFocus(force = true)
             onDismiss()
+        },
+    )
+    val clearSearchInputFocus by rememberUpdatedState(
+        newValue = {
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
         },
     )
 
@@ -249,6 +252,10 @@ fun GlobalSearchScreen(
             .background(SearchPageBackground)
             .imePadding(),
     ) {
+        SmartisanDrawableBackground(
+            drawableRes = R.drawable.account_background,
+            modifier = Modifier.matchParentSize(),
+        )
         Column(
             modifier = Modifier.fillMaxSize(),
         ) {
@@ -272,7 +279,6 @@ fun GlobalSearchScreen(
                         .fillMaxWidth()
                         .weight(1f),
                     onHistoryClick = { entry ->
-                        onTabChange(SearchTab.All)
                         onQueryChange(entry)
                         scope.launch {
                             historyStore.record(entry)
@@ -287,19 +293,15 @@ fun GlobalSearchScreen(
             } else {
                 SearchResultsPage(
                     results = results,
-                    selectedTab = selectedTab,
                     currentMediaId = currentMediaId,
                     showPlaybackBar = showPlaybackBar,
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    onTabChange = onTabChange,
                     onSongClick = { item ->
-                        val targetIndex = songs.indexOfFirst { song -> song.mediaId == item.mediaId }
+                        val targetIndex = results.songs.indexOfFirst { song -> song.mediaId == item.mediaId }
                         if (targetIndex >= 0) {
-                            playbackBrowser?.setMediaItems(songs, targetIndex, 0L)
-                            playbackBrowser?.prepare()
-                            playbackBrowser?.play()
+                            playbackBrowser.replaceQueueAndPlay(results.songs, targetIndex)
                             scope.launch {
                                 historyStore.record(query)
                             }
@@ -309,14 +311,14 @@ fun GlobalSearchScreen(
                         scope.launch {
                             historyStore.record(query)
                         }
-                        dismissSearch()
+                        clearSearchInputFocus()
                         onAlbumClick(album.id, album.title)
                     },
                     onArtistClick = { artist ->
                         scope.launch {
                             historyStore.record(query)
                         }
-                        dismissSearch()
+                        clearSearchInputFocus()
                         onArtistClick(artist.id, artist.name)
                     },
                 )
@@ -350,7 +352,7 @@ private fun SearchTopBar(
             .height(SearchTopBarHeight + topInset),
     ) {
         SmartisanDrawableBackground(
-            drawableRes = R.drawable.list_item,
+            drawableRes = R.drawable.search_bar_background,
             modifier = Modifier.matchParentSize(),
         )
         Row(
@@ -359,7 +361,7 @@ private fun SearchTopBar(
                 .padding(top = topInset)
                 .padding(horizontal = SearchTopHorizontalPadding),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(SearchTopHorizontalPadding),
+            horizontalArrangement = Arrangement.spacedBy(SearchTopBarItemSpacing),
         ) {
             SearchField(
                 value = query,
@@ -393,8 +395,8 @@ private fun SearchField(
         onValueChange = onValueChange,
         singleLine = true,
         textStyle = SearchFieldTextStyle,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { onSearch() }),
         modifier = modifier
             .height(SearchFieldHeight)
             .focusRequester(focusRequester),
@@ -406,8 +408,17 @@ private fun SearchField(
                     .fillMaxSize(),
             ) {
                 SmartisanDrawableBackground(
-                    drawableRes = R.drawable.search_bar_field_bg,
+                    drawableRes = R.drawable.search_field,
                     modifier = Modifier.matchParentSize(),
+                )
+                Image(
+                    painter = painterResource(R.drawable.search_bar_left_icon),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = SearchFieldInnerEdgePadding)
+                        .width(SearchLeftIconWidth)
+                        .height(SearchLeftIconHeight),
                 )
                 Box(
                     modifier = Modifier
@@ -418,12 +429,6 @@ private fun SearchField(
                         ),
                     contentAlignment = Alignment.CenterStart,
                 ) {
-                    if (value.isEmpty()) {
-                        Text(
-                            text = stringResource(R.string.search_hint),
-                            style = SearchFieldTextStyle.copy(color = SearchFieldHintColor),
-                        )
-                    }
                     innerTextField()
                 }
                 if (value.isNotEmpty()) {
@@ -440,7 +445,11 @@ private fun SearchField(
                     ) {
                         Image(
                             painter = painterResource(
-                                if (clearPressed) R.drawable.clear_text_down else R.drawable.clear_text
+                                if (clearPressed) {
+                                    R.drawable.text_clear_btn_pressed
+                                } else {
+                                    R.drawable.text_clear_btn
+                                },
                             ),
                             contentDescription = stringResource(R.string.clear_search_text),
                             modifier = Modifier.size(SearchClearIconSize),
@@ -459,9 +468,7 @@ private fun SearchCancelButton(onDismiss: () -> Unit) {
 
     Box(
         modifier = Modifier
-            .width(SearchCancelButtonWidth)
-            .height(SearchCancelButtonHeight)
-            .smartisanSearchCancelBackground(pressed)
+            .size(SearchCancelButtonSize)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -469,41 +476,16 @@ private fun SearchCancelButton(onDismiss: () -> Unit) {
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = stringResource(R.string.cancel),
-            style = TextStyle(fontSize = 14.sp, color = if (pressed) Color(0xFF4E4E4E) else Color(0xFF666666)),
-            maxLines = 1,
-            overflow = TextOverflow.Clip,
-        )
-    }
-}
-
-private fun Modifier.smartisanSearchCancelBackground(pressed: Boolean): Modifier = drawWithCache {
-    val radiusPx = SearchCancelButtonCorner.toPx()
-    val strokeWidth = 1.dp.toPx()
-    val halfStroke = strokeWidth / 2f
-    val normalBrush = Brush.verticalGradient(
-        0.0f to Color(0xFFFFFFFF),
-        0.52f to Color(0xFFF9F9F9),
-        1.0f to Color(0xFFF0F0F0),
-    )
-    val pressedBrush = Brush.verticalGradient(
-        0.0f to Color(0xFFE6E6E6),
-        1.0f to Color(0xFFF4F4F4),
-    )
-
-    onDrawBehind {
-        drawRoundRect(
-            brush = if (pressed) pressedBrush else normalBrush,
-            size = size,
-            cornerRadius = CornerRadius(radiusPx, radiusPx),
-        )
-        drawRoundRect(
-            color = if (pressed) Color(0xFFD6D6D6) else Color(0xFFDCDCDC),
-            topLeft = Offset(halfStroke, halfStroke),
-            size = Size(size.width - strokeWidth, size.height - strokeWidth),
-            cornerRadius = CornerRadius(radiusPx - halfStroke, radiusPx - halfStroke),
-            style = Stroke(strokeWidth),
+        Image(
+            painter = painterResource(
+                if (pressed) {
+                    R.drawable.standard_icon_cancel_pressed
+                } else {
+                    R.drawable.standard_icon_cancel
+                },
+            ),
+            contentDescription = stringResource(R.string.cancel),
+            modifier = Modifier.size(SearchCancelIconSize),
         )
     }
 }
@@ -517,55 +499,63 @@ private fun SearchHistoryPage(
 ) {
     if (history.isEmpty()) {
         Box(
-            modifier = modifier
-                .fillMaxSize()
-                .background(Color.White),
-        )
+            modifier = modifier.fillMaxSize(),
+        ) {
+            SmartisanDrawableBackground(
+                drawableRes = R.drawable.account_background,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
         return
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.White)
-            .padding(
-                start = SearchSectionHorizontalPadding,
-                top = SearchHistoryTopPadding,
-                end = 20.dp,
-            ),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+    Box(modifier = modifier.fillMaxSize()) {
+        SmartisanDrawableBackground(
+            drawableRes = R.drawable.account_background,
+            modifier = Modifier.matchParentSize(),
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    start = SearchSectionHorizontalPadding,
+                    top = SearchHistoryTopPadding,
+                    end = 20.dp,
+                ),
         ) {
-            Text(
-                text = stringResource(R.string.search_history),
-                style = SearchSectionTitleStyle,
-                modifier = Modifier.padding(start = 7.dp),
-            )
-            Image(
-                painter = painterResource(R.drawable.search_clear),
-                contentDescription = stringResource(R.string.clear_history),
-                modifier = Modifier
-                    .size(20.dp)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onClearHistory,
-                    ),
-            )
-        }
-        FlowRow(
-            modifier = Modifier.padding(top = 7.dp),
-            horizontalArrangement = Arrangement.spacedBy(SearchHistoryRowSpacing),
-            verticalArrangement = Arrangement.spacedBy(SearchHistoryRowSpacing),
-        ) {
-            history.forEach { entry ->
-                SearchHistoryChip(
-                    text = entry,
-                    onClick = { onHistoryClick(entry) },
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = stringResource(R.string.search_history),
+                    style = SearchSectionTitleStyle,
+                    modifier = Modifier.padding(start = 7.dp),
                 )
+                Image(
+                    painter = painterResource(R.drawable.search_clear),
+                    contentDescription = stringResource(R.string.clear_history),
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onClearHistory,
+                        ),
+                )
+            }
+            FlowRow(
+                modifier = Modifier.padding(top = 7.dp),
+                horizontalArrangement = Arrangement.spacedBy(SearchHistoryRowSpacing),
+                verticalArrangement = Arrangement.spacedBy(SearchHistoryRowSpacing),
+            ) {
+                history.forEach { entry ->
+                    SearchHistoryChip(
+                        text = entry,
+                        onClick = { onHistoryClick(entry) },
+                    )
+                }
             }
         }
     }
@@ -574,65 +564,40 @@ private fun SearchHistoryPage(
 @Composable
 private fun SearchResultsPage(
     results: SearchResults,
-    selectedTab: SearchTab,
     currentMediaId: String?,
     showPlaybackBar: Boolean,
-    onTabChange: (SearchTab) -> Unit,
     onSongClick: (MediaItem) -> Unit,
     onAlbumClick: (AlbumSummary) -> Unit,
     onArtistClick: (ArtistSummary) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.White),
-    ) {
-        SearchTabRow(
-            selectedTab = selectedTab,
-            onTabChange = onTabChange,
+    Box(modifier = modifier.fillMaxSize()) {
+        SmartisanDrawableBackground(
+            drawableRes = R.drawable.account_background,
+            modifier = Modifier.matchParentSize(),
         )
         if (!results.hasResults) {
             SearchNoResultState(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxSize(),
             )
-            return
-        }
-
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentPadding = PaddingValues(
-                bottom = if (showPlaybackBar) SearchPlaybackBarReservedHeight + 16.dp else 16.dp,
-            ),
-        ) {
-            when (selectedTab) {
-                SearchTab.All -> {
-                    appendSongResults(
-                        songs = results.songs,
-                        currentMediaId = currentMediaId,
-                        onSongClick = onSongClick,
-                    )
-                    appendAlbumResults(
-                        albums = results.albums,
-                        onAlbumClick = onAlbumClick,
-                    )
-                    appendArtistResults(
-                        artists = results.artists,
-                        onArtistClick = onArtistClick,
-                    )
-                }
-                SearchTab.Songs -> appendSongResults(
-                    songs = results.songs,
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(
+                    bottom = if (showPlaybackBar) SearchPlaybackBarReservedHeight + 16.dp else 16.dp,
+                ),
+            ) {
+                appendSuggestedResults(
+                    songs = results.songs.take(2),
                     currentMediaId = currentMediaId,
                     onSongClick = onSongClick,
                 )
-                SearchTab.Albums -> appendAlbumResults(
+                appendAlbumResults(
                     albums = results.albums,
                     onAlbumClick = onAlbumClick,
                 )
-                SearchTab.Artists -> appendArtistResults(
+                appendArtistResults(
                     artists = results.artists,
                     onArtistClick = onArtistClick,
                 )
@@ -641,16 +606,16 @@ private fun SearchResultsPage(
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.appendSongResults(
+private fun androidx.compose.foundation.lazy.LazyListScope.appendSuggestedResults(
     songs: List<MediaItem>,
     currentMediaId: String?,
     onSongClick: (MediaItem) -> Unit,
 ) {
     if (songs.isEmpty()) return
-    item(key = "songs-header") { SearchSectionHeader(title = R.string.search_tab_songs) }
+    item(key = "suggested-header") { SearchSectionHeader(title = R.string.suggestion) }
     items(
         items = songs,
-        key = { item -> "song-${item.mediaId}" },
+        key = { item -> "suggested-${item.mediaId}" },
     ) { item ->
         SearchSongRow(
             mediaItem = item,
@@ -674,6 +639,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.appendAlbumResults(
             title = album.title,
             subtitle = album.artist,
             representative = album.representative,
+            titleColor = SearchResultHighlightColor,
+            subtitleColor = SearchResultHighlightColor,
             onClick = { onAlbumClick(album) },
         )
     }
@@ -697,88 +664,9 @@ private fun androidx.compose.foundation.lazy.LazyListScope.appendArtistResults(
                 artist.trackCount,
             ),
             representative = artist.representative,
+            titleColor = SearchResultHighlightColor,
             onClick = { onArtistClick(artist) },
         )
-    }
-}
-
-@Composable
-private fun SearchTabRow(
-    selectedTab: SearchTab,
-    onTabChange: (SearchTab) -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(SearchTabBarHeight),
-    ) {
-        SmartisanDrawableBackground(
-            drawableRes = R.drawable.list_item,
-            modifier = Modifier.matchParentSize(),
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(SearchTabGroupHeight)
-                .padding(horizontal = SearchTabGroupHorizontalPadding)
-                .align(Alignment.Center),
-        ) {
-            SearchTab.entries.forEachIndexed { index, tab ->
-                val interactionSource = remember { MutableInteractionSource() }
-                val pressed by interactionSource.collectIsPressedAsState()
-                val selected = tab == selectedTab
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(SearchTabGroupHeight)
-                        .clickable(
-                            interactionSource = interactionSource,
-                            indication = null,
-                        ) {
-                            onTabChange(tab)
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    SmartisanDrawableBackground(
-                        drawableRes = searchTabBackgroundRes(
-                            index = index,
-                            selected = selected || pressed,
-                        ),
-                        modifier = Modifier.matchParentSize(),
-                    )
-                    Text(
-                        text = when (tab) {
-                            SearchTab.All -> stringResource(R.string.search_tab_all)
-                            SearchTab.Songs -> stringResource(R.string.search_tab_songs)
-                            SearchTab.Albums -> stringResource(R.string.search_tab_albums)
-                            SearchTab.Artists -> stringResource(R.string.search_tab_artists)
-                        },
-                        style = TextStyle(
-                            fontSize = 13.sp,
-                            color = if (selected || pressed) SearchTabSelectedTextColor else SearchTabTextColor,
-                        ),
-                    )
-                }
-            }
-        }
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(SearchDividerColor),
-        )
-    }
-}
-
-private fun searchTabBackgroundRes(index: Int, selected: Boolean): Int {
-    return when {
-        index == 0 && selected -> R.drawable.search_tab_left_bg_down
-        index == 0 -> R.drawable.search_tab_left_bg
-        index == SearchTab.entries.lastIndex && selected -> R.drawable.search_tab_right_bg_down
-        index == SearchTab.entries.lastIndex -> R.drawable.search_tab_right_bg
-        selected -> R.drawable.search_tab_middle_bg_down
-        else -> R.drawable.search_tab_middle_bg
     }
 }
 
@@ -787,18 +675,18 @@ private fun SearchSectionHeader(title: Int) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(SearchTabBarHeight),
+            .height(SearchSectionHeaderHeight),
     ) {
         SmartisanDrawableBackground(
-            drawableRes = R.drawable.list_item,
+            drawableRes = R.drawable.home_recommend_title_noline_bg,
             modifier = Modifier.matchParentSize(),
         )
         Text(
             text = stringResource(title),
-            style = TextStyle(fontSize = 14.sp, color = SearchSectionTitleColor),
+            style = TextStyle(fontSize = 15.sp, color = SearchSectionTitleColor),
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .padding(start = 16.dp),
+                .padding(start = SearchSectionHeaderStartPadding),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -837,6 +725,7 @@ private fun SearchEntityRow(
     representative: MediaItem,
     onClick: () -> Unit,
     titleColor: Color = SearchSongTitleColor,
+    subtitleColor: Color = SearchSubtitleColor,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -852,13 +741,13 @@ private fun SearchEntityRow(
             ),
     ) {
         SmartisanDrawableBackground(
-            drawableRes = if (pressed) R.drawable.list_item_shadow else R.drawable.list_item_bg,
+            drawableRes = if (pressed) R.drawable.list_item_bgwithoutphoto_down else android.R.color.white,
             modifier = Modifier.matchParentSize(),
         )
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(end = 12.dp),
+                .padding(end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -876,7 +765,7 @@ private fun SearchEntityRow(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 12.dp),
+                    .padding(start = 12.dp, end = 10.dp),
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(
@@ -887,10 +776,28 @@ private fun SearchEntityRow(
                 )
                 Text(
                     text = subtitle,
-                    style = SearchSecondaryTextStyle,
+                    style = SearchSecondaryTextStyle.copy(color = subtitleColor),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .width(SearchResultActionWidth)
+                    .height(SearchResultRowHeight),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Image(
+                    painter = painterResource(
+                        if (pressed) {
+                            R.drawable.btn_more_white
+                        } else {
+                            R.drawable.btn_more
+                        },
+                    ),
+                    contentDescription = null,
+                    modifier = Modifier.size(30.dp),
                 )
             }
         }
@@ -969,8 +876,12 @@ private fun SearchArtwork(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val artwork by produceState<ImageBitmap?>(initialValue = null, key1 = mediaItem.mediaId) {
-        value = loadArtwork(context, mediaItem)
+    val artworkRequestKey = mediaItem.artworkRequestKey()
+    val artwork by produceState<ImageBitmap?>(
+        initialValue = null,
+        artworkRequestKey,
+    ) {
+        value = loadArtworkThumbnail(context, mediaItem, SearchArtworkDecodeSize)
     }
 
     if (artwork != null) {

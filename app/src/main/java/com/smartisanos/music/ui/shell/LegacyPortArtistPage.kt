@@ -41,6 +41,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
 import com.smartisanos.music.playback.LocalPlaybackBrowser
+import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.album.AlbumSummary
 import com.smartisanos.music.ui.album.AlbumViewMode
 import com.smartisanos.music.ui.album.buildAlbumSummaries
@@ -847,10 +848,11 @@ private fun LegacyPortArtistAllSongsPage(
                 onShuffle = {
                     if (sortedSongs.isNotEmpty()) {
                         val startIndex = Random.nextInt(sortedSongs.size)
-                        browser?.shuffleModeEnabled = true
-                        browser?.setMediaItems(sortedSongs, startIndex, 0L)
-                        browser?.prepare()
-                        browser?.play()
+                        browser.replaceQueueAndPlay(
+                            mediaItems = sortedSongs,
+                            startIndex = startIndex,
+                            shuffleModeEnabled = true,
+                        )
                     }
                 },
             )
@@ -874,10 +876,7 @@ private fun LegacyPortArtistAllSongsPage(
                 if (trackIndex < 0 || trackIndex >= sortedSongs.size) {
                     return@setOnItemClickListener
                 }
-                browser?.shuffleModeEnabled = false
-                browser?.setMediaItems(sortedSongs, trackIndex, 0L)
-                browser?.prepare()
-                browser?.play()
+                browser.replaceQueueAndPlay(sortedSongs, trackIndex)
             }
         },
     )

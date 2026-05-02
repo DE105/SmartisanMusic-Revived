@@ -123,6 +123,7 @@ internal fun LegacyPortPlaylistPage(
     active: Boolean,
     hiddenMediaIds: Set<String>,
     onAddModeActiveChanged: (Boolean) -> Unit,
+    onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -254,6 +255,7 @@ internal fun LegacyPortPlaylistPage(
                     addMode = false
                 }
             },
+            onSearchClick = onSearchClick,
             modifier = Modifier.fillMaxWidth(),
         )
         Box(
@@ -490,6 +492,7 @@ private fun LegacyPlaylistTitleArea(
     onDetailEnterEdit: () -> Unit,
     onDetailExitEdit: () -> Unit,
     onAddModeConfirm: () -> Unit,
+    onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (addMode && target != null) {
@@ -540,6 +543,7 @@ private fun LegacyPlaylistTitleArea(
                 onDetailBack = onDetailBack,
                 onDetailEnterEdit = onDetailEnterEdit,
                 onDetailExitEdit = onDetailExitEdit,
+                onSearchClick = onSearchClick,
             )
         }
     }
@@ -557,6 +561,7 @@ private fun TitleBar.setupLegacyPlaylistTitleBar(
     onDetailBack: () -> Unit,
     onDetailEnterEdit: () -> Unit,
     onDetailExitEdit: () -> Unit,
+    onSearchClick: () -> Unit,
 ) {
     setShadowVisible(false)
     setCenterText(if (target == null) context.getString(R.string.tab_play_list) else detailTitle)
@@ -581,7 +586,9 @@ private fun TitleBar.setupLegacyPlaylistTitleBar(
             }
             setPlaylistRightImageView(R.drawable.search_btn_selector).apply {
                 isEnabled = true
-                setOnClickListener(null)
+                setOnClickListener {
+                    onSearchClick()
+                }
             }
         }
         detailEditMode -> {

@@ -83,6 +83,7 @@
     <string name="search_hint">搜索关键字</string>
     <string name="clear_search_text">清空搜索内容</string>
     <string name="search_history">搜索历史</string>
+    <string name="suggestion">建议结果</string>
     <string name="clear_history">清空历史</string>
     <string name="search_tab_all">全部</string>
     <string name="search_tab_songs">歌曲</string>

@@ -54,6 +54,7 @@ import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.playback.LocalAudioLibrary
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.await
+import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.components.SmartisanBlankState
 import com.smartisanos.music.ui.components.audioPermission
 import com.smartisanos.music.ui.components.hasAudioPermission
@@ -208,9 +209,7 @@ fun SongsScreen(
                         onEditSelectionChanged(selectedMediaIds.toggle(item.mediaId))
                     } else {
                         currentMediaId = item.mediaId
-                        playbackBrowser?.setMediaItems(songs, index, 0L)
-                        playbackBrowser?.prepare()
-                        playbackBrowser?.play()
+                        playbackBrowser.replaceQueueAndPlay(songs, index)
                     }
                 },
                 onLongClick = {

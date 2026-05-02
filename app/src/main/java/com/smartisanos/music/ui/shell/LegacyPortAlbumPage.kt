@@ -37,6 +37,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
 import com.smartisanos.music.playback.LocalPlaybackBrowser
+import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.album.AlbumSummary
 import com.smartisanos.music.ui.album.AlbumViewMode
 import com.smartisanos.music.ui.album.buildAlbumSummaries
@@ -171,10 +172,10 @@ private fun LegacyPortAlbumOverviewPage(
                     if (albumSongs.isEmpty()) {
                         return@play
                     }
-                    playbackBrowser.shuffleModeEnabled = shuffle
-                    playbackBrowser.setMediaItems(albumSongs, 0, 0L)
-                    playbackBrowser.prepare()
-                    playbackBrowser.play()
+                    playbackBrowser.replaceQueueAndPlay(
+                        mediaItems = albumSongs,
+                        shuffleModeEnabled = shuffle,
+                    )
                 },
             )
 

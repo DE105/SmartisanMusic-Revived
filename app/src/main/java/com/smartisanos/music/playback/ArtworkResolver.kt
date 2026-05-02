@@ -1,11 +1,13 @@
 package com.smartisanos.music.playback
 
+import android.content.ContentUris
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
 import android.util.Size
 import androidx.media3.common.MediaItem
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +53,7 @@ internal fun loadArtworkBitmapSync(
         ?: loadArtworkUriBitmap(context, metadata.artworkUri, size)
         ?: loadTrackArtworkBitmap(context, mediaItem.mediaId, size)
         ?: loadAlbumArtworkBitmap(context, metadata.extras, size)
+        ?: loadMediaStoreAudioArtworkBitmap(context, mediaItem.mediaId, size)
         ?: loadMediaThumbnail(context, mediaItem.localConfiguration?.uri, size)
         ?: loadEmbeddedPicture(context, mediaItem.localConfiguration?.uri, size)
 }
@@ -94,6 +97,24 @@ private fun loadAlbumArtworkBitmap(
 ): Bitmap? {
     val albumId = extras.albumId() ?: return null
     return loadArtworkUriBitmap(context, LocalAudioLibrary.albumArtworkUri(albumId), size)
+}
+
+private fun loadMediaStoreAudioArtworkBitmap(
+    context: Context,
+    mediaId: String,
+    size: Size,
+): Bitmap? {
+    val mediaUri = audioMediaUri(mediaId) ?: return null
+    return loadMediaThumbnail(context, mediaUri, size)
+        ?: loadEmbeddedPicture(context, mediaUri, size)
+}
+
+private fun audioMediaUri(mediaId: String): Uri? {
+    val numericMediaId = mediaId.toLongOrNull() ?: return null
+    return ContentUris.withAppendedId(
+        MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL),
+        numericMediaId,
+    )
 }
 
 private fun loadMediaThumbnail(

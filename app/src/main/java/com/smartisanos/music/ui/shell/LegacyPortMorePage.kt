@@ -54,6 +54,7 @@ import com.smartisanos.music.data.library.LibraryExclusions
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.playback.LocalAudioLibrary
 import com.smartisanos.music.playback.LocalPlaybackBrowser
+import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.components.hasAudioPermission
 import com.smartisanos.music.ui.folder.DirectoryEntry
 import com.smartisanos.music.ui.folder.buildDirectoryEntries
@@ -122,6 +123,7 @@ internal fun LegacyPortMorePage(
     onMediaIdsHidden: (Set<String>) -> Unit,
     onRequestDeleteMediaIds: (Set<String>) -> Unit,
     onSettingsPageActiveChanged: (Boolean) -> Unit,
+    onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var secondaryTarget by remember { mutableStateOf<LegacyMoreSecondaryTarget?>(null) }
@@ -164,6 +166,7 @@ internal fun LegacyPortMorePage(
                     secondaryTarget = LegacyMoreSecondaryTarget.Folder
                 },
                 onRefreshLibrary = onRefreshLibrary,
+                onSearchClick = onSearchClick,
                 modifier = Modifier.fillMaxSize(),
             )
         },
@@ -177,6 +180,7 @@ internal fun LegacyPortMorePage(
                     },
                     onMediaIdsHidden = onMediaIdsHidden,
                     onRequestDeleteMediaIds = onRequestDeleteMediaIds,
+                    onSearchClick = onSearchClick,
                     modifier = Modifier.fillMaxSize(),
                 )
                 LegacyMoreSecondaryTarget.Settings -> LegacyPortSettingsPage(
@@ -202,6 +206,7 @@ private fun LegacyMoreRootPage(
     onSettingsClick: () -> Unit,
     onFolderClick: () -> Unit,
     onRefreshLibrary: () -> Unit,
+    onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -210,7 +215,10 @@ private fun LegacyMoreRootPage(
             .background(ComposeColor.White),
     ) {
         LegacyPortSmartisanTitleBar(modifier = Modifier.fillMaxWidth()) { titleBar ->
-            titleBar.setupLegacyMoreRootTitleBar(onSettingsClick = onSettingsClick)
+            titleBar.setupLegacyMoreRootTitleBar(
+                onSettingsClick = onSettingsClick,
+                onSearchClick = onSearchClick,
+            )
         }
         LegacyMoreRootList(
             active = active,
@@ -226,6 +234,7 @@ private fun LegacyMoreRootPage(
 
 private fun TitleBar.setupLegacyMoreRootTitleBar(
     onSettingsClick: () -> Unit,
+    onSearchClick: () -> Unit,
 ) {
     removeAllLeftViews()
     removeAllRightViews()
@@ -236,7 +245,11 @@ private fun TitleBar.setupLegacyMoreRootTitleBar(
             onSettingsClick()
         }
     }
-    addRightImageView(R.drawable.search_btn_selector)
+    addRightImageView(R.drawable.search_btn_selector).apply {
+        setOnClickListener {
+            onSearchClick()
+        }
+    }
 }
 
 @Composable
@@ -327,6 +340,7 @@ private fun LegacyPortFolderPage(
     onClose: () -> Unit,
     onMediaIdsHidden: (Set<String>) -> Unit,
     onRequestDeleteMediaIds: (Set<String>) -> Unit,
+    onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -406,6 +420,7 @@ private fun LegacyPortFolderPage(
                         showDeleteConfirm = true
                     }
                 },
+                onSearchClick = onSearchClick,
             )
         }
         Box(
@@ -498,6 +513,7 @@ private fun TitleBar.setupLegacyFolderTitleBar(
     onBack: () -> Unit,
     onEnterEdit: () -> Unit,
     onDeleteSelected: () -> Unit,
+    onSearchClick: () -> Unit,
 ) {
     removeAllLeftViews()
     removeAllRightViews()
@@ -539,6 +555,9 @@ private fun TitleBar.setupLegacyFolderTitleBar(
                 }
             }
             addRightImageView(R.drawable.search_btn_selector, 1)
+                .setOnClickListener {
+                    onSearchClick()
+                }
         }
     }
 }
@@ -952,26 +971,21 @@ private fun LegacyFolderDetailPage(
                 currentIsPlaying = browser?.isPlaying == true,
                 onPlayAll = {
                     if (tracks.isNotEmpty()) {
-                        browser?.shuffleModeEnabled = false
-                        browser?.setMediaItems(tracks, 0, 0L)
-                        browser?.prepare()
-                        browser?.play()
+                        browser.replaceQueueAndPlay(tracks)
                     }
                 },
                 onShuffle = {
                     if (tracks.isNotEmpty()) {
                         val startIndex = Random.nextInt(tracks.size)
-                        browser?.shuffleModeEnabled = true
-                        browser?.setMediaItems(tracks, startIndex, 0L)
-                        browser?.prepare()
-                        browser?.play()
+                        browser.replaceQueueAndPlay(
+                            mediaItems = tracks,
+                            startIndex = startIndex,
+                            shuffleModeEnabled = true,
+                        )
                     }
                 },
                 onTrackClick = { item, index ->
-                    browser?.shuffleModeEnabled = false
-                    browser?.setMediaItems(tracks, index, 0L)
-                    browser?.prepare()
-                    browser?.play()
+                    browser.replaceQueueAndPlay(tracks, index)
                 },
             )
             root.bindPlayback(browser)

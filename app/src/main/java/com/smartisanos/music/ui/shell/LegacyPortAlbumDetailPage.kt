@@ -31,6 +31,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
 import com.smartisanos.music.playback.LocalPlaybackBrowser
+import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.album.AlbumSummary
 import com.smartisanos.music.ui.album.displayTrackNumber
 import com.smartisanos.music.ui.widgets.StretchTextView
@@ -76,17 +77,14 @@ internal fun LegacyPortAlbumDetailPage(
                 album = album,
                 enabled = album.songs.isNotEmpty(),
                 onPlayAll = {
-                    browser?.shuffleModeEnabled = false
-                    browser?.setMediaItems(album.songs, 0, 0L)
-                    browser?.prepare()
-                    browser?.play()
+                    browser.replaceQueueAndPlay(album.songs)
                 },
                 onShuffle = {
                     val shuffledSongs = album.songs.shuffled()
-                    browser?.shuffleModeEnabled = true
-                    browser?.setMediaItems(shuffledSongs, 0, 0L)
-                    browser?.prepare()
-                    browser?.play()
+                    browser.replaceQueueAndPlay(
+                        mediaItems = shuffledSongs,
+                        shuffleModeEnabled = true,
+                    )
                 },
                 onAddToPlaylist = {
                     // 这里只接外观层，播放列表选择弹窗后续按 8.1.0 MenuDialog 单独移植。
@@ -117,10 +115,7 @@ internal fun LegacyPortAlbumDetailPage(
                     return@setOnItemClickListener
                 }
                 adapter.itemAt(trackIndex) ?: return@setOnItemClickListener
-                browser?.shuffleModeEnabled = false
-                browser?.setMediaItems(album.songs, trackIndex, 0L)
-                browser?.prepare()
-                browser?.play()
+                browser.replaceQueueAndPlay(album.songs, trackIndex)
             }
         },
     )

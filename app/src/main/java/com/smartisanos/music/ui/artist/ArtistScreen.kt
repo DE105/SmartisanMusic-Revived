@@ -66,6 +66,7 @@ import com.smartisanos.music.R
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.await
+import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.components.SecondaryPageTransition
 import com.smartisanos.music.ui.components.SmartisanBlankState
 import com.smartisanos.music.ui.components.audioPermission
@@ -701,18 +702,16 @@ private fun MediaBrowser.playArtist(
     artist: ArtistSummary,
     shuffled: Boolean = false,
 ) {
-    setMediaItems(if (shuffled) artist.songs.shuffled() else artist.songs, 0, 0L)
-    prepare()
-    play()
+    replaceQueueAndPlay(
+        mediaItems = if (shuffled) artist.songs.shuffled() else artist.songs,
+    )
 }
 
 private fun MediaBrowser.playArtistTrack(
     artist: ArtistSummary,
     index: Int,
 ) {
-    setMediaItems(artist.songs, index, 0L)
-    prepare()
-    play()
+    replaceQueueAndPlay(artist.songs, index)
 }
 
 private fun formatDuration(durationMs: Long): String {

@@ -61,6 +61,7 @@ import com.smartisanos.music.data.library.LibraryExclusions
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.playback.LocalAudioLibrary
 import com.smartisanos.music.playback.LocalPlaybackBrowser
+import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.components.SecondaryPageTransition
 import com.smartisanos.music.ui.components.SmartisanBlankState
 import com.smartisanos.music.ui.components.audioPermission
@@ -366,9 +367,7 @@ private fun FolderDetail(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = {
                     currentMediaId = item.mediaId
-                    playbackBrowser?.setMediaItems(directorySongs, index, 0L)
-                    playbackBrowser?.prepare()
-                    playbackBrowser?.play()
+                    playbackBrowser.replaceQueueAndPlay(directorySongs, index)
                 },
             )
         }

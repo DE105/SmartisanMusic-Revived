@@ -60,6 +60,7 @@ import com.smartisanos.music.data.genre.GenreTagRepository
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.await
+import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.components.SecondaryPageTransition
 import com.smartisanos.music.ui.components.SmartisanBlankState
 import com.smartisanos.music.ui.components.audioPermission
@@ -458,9 +459,9 @@ private fun GenreDetail(
                     modifier = Modifier.fillMaxSize(),
                     onClick = {
                         val shuffled = genre.songs.shuffled()
-                        playbackBrowser?.setMediaItems(shuffled, 0, 0L)
-                        playbackBrowser?.prepare()
-                        playbackBrowser?.play()
+                        playbackBrowser.replaceQueueAndPlay(
+                            mediaItems = shuffled,
+                        )
                     },
                 )
             }
@@ -477,9 +478,7 @@ private fun GenreDetail(
                 ),
                 highlighted = item.mediaId == currentMediaId,
                 onClick = {
-                    playbackBrowser?.setMediaItems(genre.songs, index, 0L)
-                    playbackBrowser?.prepare()
-                    playbackBrowser?.play()
+                    playbackBrowser.replaceQueueAndPlay(genre.songs, index)
                 },
             )
         }

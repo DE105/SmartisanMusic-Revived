@@ -72,6 +72,7 @@ import com.smartisanos.music.data.favorite.FavoriteSongsRepository
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.await
+import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.components.SmartisanBlankState
 import com.smartisanos.music.ui.components.audioPermission
 import com.smartisanos.music.ui.components.hasAudioPermission
@@ -267,17 +268,16 @@ fun LovedSongsScreen(
             onPlayClick = {
                 val request = buildLovedSongsPlayRequest(sortedEntries)
                 if (request != null) {
-                    playbackBrowser?.setMediaItems(request.mediaItems, request.startIndex, 0L)
-                    playbackBrowser?.prepare()
-                    playbackBrowser?.play()
+                    playbackBrowser.replaceQueueAndPlay(request.mediaItems, request.startIndex)
                 }
             },
             onShuffleClick = {
                 val request = buildLovedSongsShuffleRequest(sortedEntries)
                 if (request != null) {
-                    playbackBrowser?.setMediaItems(request.mediaItems, request.startIndex, 0L)
-                    playbackBrowser?.prepare()
-                    playbackBrowser?.play()
+                    playbackBrowser.replaceQueueAndPlay(
+                        mediaItems = request.mediaItems,
+                        startIndex = request.startIndex,
+                    )
                 }
             },
         )
@@ -309,9 +309,10 @@ fun LovedSongsScreen(
                                 startMediaId = entry.mediaItem.mediaId,
                             )
                             if (request != null) {
-                                playbackBrowser?.setMediaItems(request.mediaItems, request.startIndex, 0L)
-                                playbackBrowser?.prepare()
-                                playbackBrowser?.play()
+                                playbackBrowser.replaceQueueAndPlay(
+                                    request.mediaItems,
+                                    request.startIndex,
+                                )
                             }
                         },
                         onMoreClick = {

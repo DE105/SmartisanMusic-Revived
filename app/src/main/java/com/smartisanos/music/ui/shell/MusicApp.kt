@@ -89,7 +89,6 @@ import com.smartisanos.music.ui.playback.PlaybackScreen
 import com.smartisanos.music.ui.playlist.PlaylistNameDialog
 import com.smartisanos.music.ui.playlist.PlaylistPickerDialog
 import com.smartisanos.music.ui.search.GlobalSearchScreen
-import com.smartisanos.music.ui.search.SearchTab
 import com.smartisanos.music.isExternalAudioLaunchItem
 import com.smartisanos.music.resolveExternalAudioMediaStoreIds
 import com.smartisanos.music.resolveExternalAudioArtist
@@ -102,6 +101,7 @@ private val ShellBackground = Color(0xFFF7F7F7)
 private val SearchIconSize = 24.dp
 private val AlbumViewModeIconSize = 22.dp
 private val SettingsIconSize = 24.dp
+private const val SearchOverlayExitOffsetMultiplier = 1.09f
 private val PlaybackOverlayEasing = Easing { fraction ->
     1f - (1f - fraction) * (1f - fraction)
 }
@@ -159,9 +159,10 @@ fun MusicApp(
             )
         }
         var searchVisible by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+        var searchCoveredByDetail by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
         var searchQuery by rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
-        var selectedSearchTab by rememberSaveable { androidx.compose.runtime.mutableStateOf(SearchTab.All) }
         val searchVisibilityState = remember { MutableTransitionState(false) }
+        var searchOriginRoute by rememberSaveable { androidx.compose.runtime.mutableStateOf(startDestination.route) }
         var albumViewMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(AlbumViewMode.Tile) }
         var selectedAlbumId by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
         var selectedAlbumTitle by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
@@ -224,10 +225,20 @@ fun MusicApp(
         val closeAlbumDetail = {
             selectedAlbumId = null
             selectedAlbumTitle = null
+            if (searchCoveredByDetail) {
+                searchVisible = true
+                searchCoveredByDetail = false
+                navigateToDestination(MusicDestination.fromRouteOrDefault(searchOriginRoute))
+            }
         }
         val closeArtistDetail = {
             selectedArtistId = null
             selectedArtistTitle = null
+            if (searchCoveredByDetail) {
+                searchVisible = true
+                searchCoveredByDetail = false
+                navigateToDestination(MusicDestination.fromRouteOrDefault(searchOriginRoute))
+            }
         }
         val closeSongsEdit = {
             songsEditMode = false
@@ -248,15 +259,17 @@ fun MusicApp(
             moreSecondaryPage = null
         }
         val openSearchOverlay = {
+            searchOriginRoute = currentRoute
             searchQuery = ""
-            selectedSearchTab = SearchTab.All
+            searchCoveredByDetail = false
             searchVisible = true
         }
         val closeSearchOverlay = {
             searchVisible = false
+            searchCoveredByDetail = false
         }
-        LaunchedEffect(searchVisible) {
-            searchVisibilityState.targetState = searchVisible
+        LaunchedEffect(searchVisible, searchCoveredByDetail) {
+            searchVisibilityState.targetState = searchVisible && !searchCoveredByDetail
         }
         DisposableEffect(lifecycleOwner) {
             val observer = LifecycleEventObserver { _, event ->
@@ -269,10 +282,16 @@ fun MusicApp(
                 lifecycleOwner.lifecycle.removeObserver(observer)
             }
         }
-        LaunchedEffect(searchVisibilityState.currentState, searchVisibilityState.targetState) {
-            if (!searchVisibilityState.currentState && !searchVisibilityState.targetState) {
+        LaunchedEffect(
+            searchVisible,
+            searchCoveredByDetail,
+            searchVisibilityState.currentState,
+            searchVisibilityState.targetState,
+        ) {
+            if (!searchVisible && !searchCoveredByDetail &&
+                !searchVisibilityState.currentState && !searchVisibilityState.targetState
+            ) {
                 searchQuery = ""
-                selectedSearchTab = SearchTab.All
             }
         }
         val showToast = { textRes: Int ->
@@ -791,30 +810,30 @@ fun MusicApp(
                         durationMillis = 300,
                         easing = PlaybackOverlayEasing,
                     ),
-                    targetOffsetY = { fullHeight -> fullHeight },
+                    targetOffsetY = { fullHeight ->
+                        (fullHeight * SearchOverlayExitOffsetMultiplier).toInt()
+                    },
                 ),
             ) {
                 GlobalSearchScreen(
                     query = searchQuery,
-                    selectedTab = selectedSearchTab,
                     libraryRefreshVersion = libraryRefreshVersion,
                     modifier = Modifier.fillMaxSize(),
                     onQueryChange = { value ->
                         searchQuery = value
-                    },
-                    onTabChange = { tab ->
-                        selectedSearchTab = tab
                     },
                     onDismiss = closeSearchOverlay,
                     onOpenPlayback = {
                         playbackVisible = true
                     },
                     onAlbumClick = { id, title ->
+                        searchCoveredByDetail = true
                         selectedAlbumId = id
                         selectedAlbumTitle = title
                         navigateToDestination(MusicDestination.Album)
                     },
                     onArtistClick = { id, title ->
+                        searchCoveredByDetail = true
                         selectedArtistId = id
                         selectedArtistTitle = title
                         navigateToDestination(MusicDestination.Artist)
