@@ -74,6 +74,7 @@ import com.smartisanos.music.R
 import com.smartisanos.music.data.favorite.FavoriteSongsRepository
 import com.smartisanos.music.data.library.LibraryExclusions
 import com.smartisanos.music.data.library.LibraryExclusionsStore
+import com.smartisanos.music.data.playlist.PlaylistCreateResult
 import com.smartisanos.music.data.playlist.PlaylistRepository
 import com.smartisanos.music.data.playlist.UserPlaylistSummary
 import com.smartisanos.music.data.settings.PlaybackSettings
@@ -92,6 +93,7 @@ import com.smartisanos.music.resolveExternalAudioArtist
 import com.smartisanos.music.ui.components.hasAudioPermission
 import com.smartisanos.music.ui.album.AlbumViewMode
 import com.smartisanos.music.ui.navigation.MusicDestination
+import com.smartisanos.music.ui.playlist.PlaylistNameDialog
 import com.smartisanos.music.ui.widgets.EditableListViewItem
 import com.smartisanos.music.ui.widgets.StretchTextView
 import smartisanos.app.MenuDialog
@@ -148,6 +150,7 @@ private fun LegacyPortMainShellContent(
     val favoriteIds by favoriteRepository.observeFavoriteIds().collectAsState(initial = emptySet())
     val libraryExclusions by libraryExclusionsStore.exclusions.collectAsState(initial = LibraryExclusions())
     val playbackSettings by playbackSettingsStore.settings.collectAsState(initial = PlaybackSettings())
+    val playlists by playlistRepository.playlists.collectAsState(initial = emptyList())
     var playbackVisible by remember { mutableStateOf(false) }
     var currentDestination by remember { mutableStateOf(MusicDestination.Songs) }
     var playlistAddModeActive by remember { mutableStateOf(false) }
@@ -165,6 +168,9 @@ private fun LegacyPortMainShellContent(
     var libraryRefreshing by remember { mutableStateOf(false) }
     var showSongDeleteConfirm by remember { mutableStateOf(false) }
     var pendingSystemDeleteSongIds by remember { mutableStateOf(emptySet<String>()) }
+    var pendingPlaylistPickerMediaItems by remember { mutableStateOf<List<MediaItem>?>(null) }
+    var showPlaybackPlaylistCreateDialog by remember { mutableStateOf(false) }
+    var playbackPlaylistCreateInitialValue by remember { mutableStateOf("") }
     var snapshot by remember(controller) {
         mutableStateOf(
             LegacyPlaybackBarSnapshot(
@@ -226,6 +232,27 @@ private fun LegacyPortMainShellContent(
             return
         }
         controller.removeMediaItemsByMediaIds(mediaIds)
+    }
+
+    fun enqueueMediaItems(items: List<MediaItem>) {
+        if (items.isEmpty()) {
+            return
+        }
+        if (controller?.repeatMode == Player.REPEAT_MODE_ONE) {
+            Toast.makeText(context, R.string.can_not_add_to_queue_single_repeat, Toast.LENGTH_SHORT).show()
+        } else {
+            controller?.addMediaItems(items)
+            Toast.makeText(context, R.string.add_to_queue_success, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun requestAddToPlaylist(items: List<MediaItem>) {
+        val candidates = items.filter { item ->
+            item.mediaId.isNotBlank() && !item.isExternalAudioLaunchItem()
+        }
+        if (candidates.isNotEmpty()) {
+            pendingPlaylistPickerMediaItems = candidates
+        }
     }
 
     fun refreshLegacyLibrary() {
@@ -574,6 +601,8 @@ private fun LegacyPortMainShellContent(
         LegacyPortPlaybackOverlay(
             visible = playbackVisible,
             playbackSettings = playbackSettings,
+            onRequestAddToPlaylist = ::requestAddToPlaylist,
+            onRequestAddToQueue = ::enqueueMediaItems,
             onScratchEnabledChange = { enabled ->
                 scope.launch {
                     playbackSettingsStore.setScratchEnabled(enabled)
@@ -584,6 +613,65 @@ private fun LegacyPortMainShellContent(
             },
             modifier = Modifier.zIndex(1f),
         )
+        LegacyPlaybackPlaylistPickerOverlay(
+            visible = pendingPlaylistPickerMediaItems != null && !showPlaybackPlaylistCreateDialog,
+            playlists = playlists,
+            onDismiss = {
+                pendingPlaylistPickerMediaItems = null
+            },
+            onCreateNewPlaylist = {
+                scope.launch {
+                    playbackPlaylistCreateInitialValue = playlistRepository.suggestNextUntitledName()
+                    showPlaybackPlaylistCreateDialog = true
+                }
+            },
+            onPlaylistSelected = { playlistId ->
+                val mediaIds = pendingPlaylistPickerMediaItems?.map(MediaItem::mediaId).orEmpty()
+                scope.launch {
+                    val result = playlistRepository.addMediaIds(playlistId, mediaIds)
+                    when {
+                        result.addedCount > 0 -> {
+                            Toast.makeText(context, R.string.playlist_added, Toast.LENGTH_SHORT).show()
+                        }
+                        result.duplicateCount > 0 -> {
+                            Toast.makeText(context, R.string.playlist_song_exists, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    pendingPlaylistPickerMediaItems = null
+                }
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(2f),
+        )
+        if (showPlaybackPlaylistCreateDialog) {
+            PlaylistNameDialog(
+                title = androidx.compose.ui.res.stringResource(R.string.new_playlist),
+                initialValue = playbackPlaylistCreateInitialValue,
+                selectAllOnOpen = true,
+                onDismiss = {
+                    showPlaybackPlaylistCreateDialog = false
+                },
+                onConfirm = { input ->
+                    val mediaIds = pendingPlaylistPickerMediaItems?.map(MediaItem::mediaId).orEmpty()
+                    scope.launch {
+                        when (val result = playlistRepository.createPlaylist(input, mediaIds)) {
+                            PlaylistCreateResult.EmptyName -> {
+                                Toast.makeText(context, R.string.playlist_create_failed, Toast.LENGTH_SHORT).show()
+                            }
+                            PlaylistCreateResult.DuplicateName -> {
+                                Toast.makeText(context, R.string.playlist_duplicate_name, Toast.LENGTH_SHORT).show()
+                            }
+                            is PlaylistCreateResult.Success -> {
+                                showPlaybackPlaylistCreateDialog = false
+                                pendingPlaylistPickerMediaItems = null
+                                Toast.makeText(context, R.string.playlist_added, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                },
+            )
+        }
         if (showSongDeleteConfirm) {
             LegacySongDeleteConfirmOverlay(
                 onDismiss = {

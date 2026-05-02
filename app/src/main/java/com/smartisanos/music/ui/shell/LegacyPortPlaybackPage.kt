@@ -70,6 +70,8 @@ import kotlin.math.abs
 @Composable
 internal fun LegacyPortPlaybackPage(
     playbackSettings: PlaybackSettings,
+    onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
+    onRequestAddToQueue: (List<MediaItem>) -> Unit,
     onScratchEnabledChange: (Boolean) -> Unit,
     onCollapse: () -> Unit,
     modifier: Modifier = Modifier,
@@ -176,6 +178,8 @@ internal fun LegacyPortPlaybackPage(
         ) {
             PlaybackScreen(
                 playbackSettings = playbackSettings,
+                onRequestAddToPlaylist = onRequestAddToPlaylist,
+                onRequestAddToQueue = onRequestAddToQueue,
                 onScratchEnabledChange = onScratchEnabledChange,
                 onCollapse = onCollapse,
                 showTopBar = false,

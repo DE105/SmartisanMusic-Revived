@@ -158,6 +158,7 @@
     <string name="time_1h">1 小时</string>
     <string name="time_1_5h">1 小时 30 分钟</string>
     <string name="time_2h">2 小时</string>
+    <string name="time_countdown">正在倒计时</string>
     <string name="choise_seting_name">是否将此歌曲设置为铃声?</string>
     <string name="ring_success">设置铃声成功</string>
     <string name="ring_fault">设置铃声失败</string>

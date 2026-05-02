@@ -120,9 +120,17 @@
     <id name="contentPanel" />
     <id name="content_list" />
     <id name="check_view" />
+    <id name="container" />
+    <id name="gridview" />
+    <id name="menu_icon" />
     <id name="menu_dialog_title_bar" />
     <id name="menu_dialog_title_bar_container" />
+    <id name="menu_text" />
+    <id name="number_picker" />
+    <id name="parentPanel" />
+    <id name="poprelative" />
     <id name="title" />
+    <id name="titlebar" />
     <id name="title_view" />
 
     <attr name="backgroundStyle">
@@ -263,6 +271,8 @@
     <dimen name="title_bar_title_size">18.0px</dimen>
     <dimen name="title_text_size">20.0sp</dimen>
     <dimen name="titlebar_height">48.0dp</dimen>
+    <dimen name="time_picker_text_size">16.0dp</dimen>
+    <dimen name="time_picker_text_size_hight">18.0dp</dimen>
     <dimen name="bar_divider_height">0.6700001dp</dimen>
     <dimen name="router_padding_top">51.0dp</dimen>
     <dimen name="max_playback_title">22.0dp</dimen>
@@ -291,7 +301,11 @@
     <color name="list_item_first_line">#99000000</color>
     <color name="list_item_second_line">#66000000</color>
     <color name="list_text_color_small">#a4a7ac</color>
+    <color name="add_nav_text_color">#9a000000</color>
+    <color name="bottom_line">#e2e2e2</color>
     <color name="listview_divider_color">#ebebeb</color>
+    <color name="list_divider_color">@color/listview_divider_color</color>
+    <color name="menu_text_color">#9a000000</color>
     <color name="nav_list_line">#ebebeb</color>
     <color name="no_chosen_letter_font_color">#9a000000</color>
     <color name="quickbar_ex_alphabet_text_dark_color">#f0f0f0</color>

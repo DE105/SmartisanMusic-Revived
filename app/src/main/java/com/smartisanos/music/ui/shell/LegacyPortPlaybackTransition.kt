@@ -10,6 +10,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.media3.common.MediaItem
 import com.smartisanos.music.data.settings.PlaybackSettings
 import kotlin.math.roundToInt
 
@@ -24,6 +25,8 @@ private val LegacyDecelerateEasing = Easing { fraction ->
 internal fun LegacyPortPlaybackOverlay(
     visible: Boolean,
     playbackSettings: PlaybackSettings,
+    onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
+    onRequestAddToQueue: (List<MediaItem>) -> Unit,
     onScratchEnabledChange: (Boolean) -> Unit,
     onCollapse: () -> Unit,
     modifier: Modifier = Modifier,
@@ -36,6 +39,8 @@ internal fun LegacyPortPlaybackOverlay(
     ) {
         LegacyPortPlaybackPage(
             playbackSettings = playbackSettings,
+            onRequestAddToPlaylist = onRequestAddToPlaylist,
+            onRequestAddToQueue = onRequestAddToQueue,
             onScratchEnabledChange = onScratchEnabledChange,
             onCollapse = onCollapse,
             modifier = Modifier.fillMaxSize(),

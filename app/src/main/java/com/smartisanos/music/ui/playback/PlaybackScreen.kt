@@ -23,8 +23,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -390,7 +388,9 @@ fun PlaybackScreen(
     }
 
     BackHandler {
-        if (showQueueOverlay) {
+        if (showSleepTimerDialog) {
+            showSleepTimerDialog = false
+        } else if (showQueueOverlay) {
             showQueueOverlay = false
         } else if (showMorePanel) {
             showMorePanel = false
@@ -900,6 +900,7 @@ fun PlaybackScreen(
                         resetCoverPageInteraction(resumePlayback = true)
                     },
                     onNeedleSeekStart = { rotationDegrees, positionMs ->
+                        LegacyPlaybackHaptics.vibrateEffect(context)
                         val resumePlaybackAfterDrag = state.isPlaying
                         coverPageState = coverPageState.copy(
                             dragMode = CoverDragMode.NeedleSeek,
@@ -922,6 +923,7 @@ fun PlaybackScreen(
                         )
                     },
                     onNeedleSeekEnd = { rotationDegrees, positionMs ->
+                        LegacyPlaybackHaptics.vibrateEffect(context)
                         if (positionMs == null) {
                             coverPageState = coverPageState.copy(
                                 dragMode = CoverDragMode.None,
@@ -949,6 +951,7 @@ fun PlaybackScreen(
                         scratchSoundController.stop()
                     },
                     onNeedleSeekCancel = {
+                        LegacyPlaybackHaptics.vibrateEffect(context)
                         resetCoverPageInteraction(resumePlayback = true)
                     },
                 )
@@ -988,113 +991,99 @@ fun PlaybackScreen(
             )
         }
 
-        AnimatedVisibility(
+        LegacyPlaybackMoreActionsOverlay(
             visible = showMorePanel,
-            modifier = Modifier.fillMaxSize(),
-            enter = fadeIn(animationSpec = tween(180)),
-            exit = fadeOut(animationSpec = tween(160)),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0x12000000))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) {
-                        showMorePanel = false
-                    },
-            ) {
-                PlaybackMoreActionPanel(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth(),
-                    favoriteEnabled = favoriteEnabled,
-                    visualPage = currentVisualPage,
-                    scratchEnabled = playbackSettings.scratchEnabled,
-                    sleepTimerActive = sleepTimerState.isActive,
-                    bottomInset = bottomInset,
-                    addToPlaylistEnabled = !currentIsExternalAudio,
-                    onAddToPlaylistClick = {
-                        state.mediaItem?.let { onRequestAddToPlaylist(listOf(it)) }
-                        showMorePanel = false
-                    },
-                    onAddToQueueClick = {
-                        state.mediaItem?.let { onRequestAddToQueue(listOf(it)) }
-                        showMorePanel = false
-                    },
-                    onFavoriteToggle = {
-                        val mediaId = currentMediaId ?: return@PlaybackMoreActionPanel
-                        if (currentIsExternalAudio) {
-                            return@PlaybackMoreActionPanel
-                        }
+            favoriteEnabled = favoriteEnabled,
+            visualPage = currentVisualPage,
+            scratchEnabled = playbackSettings.scratchEnabled,
+            sleepTimerActive = sleepTimerState.isActive,
+            addToPlaylistEnabled = !currentIsExternalAudio,
+            callbacks = LegacyPlaybackMoreActionCallbacks(
+                onAddToPlaylistClick = {
+                    state.mediaItem?.let { onRequestAddToPlaylist(listOf(it)) }
+                    showMorePanel = false
+                },
+                onAddToQueueClick = {
+                    state.mediaItem?.let { onRequestAddToQueue(listOf(it)) }
+                    showMorePanel = false
+                },
+                onFavoriteToggle = {
+                    val mediaId = currentMediaId
+                    if (!mediaId.isNullOrBlank() && !currentIsExternalAudio) {
                         scope.launch {
                             favoriteRepository.toggle(mediaId)
                         }
-                    },
-                    onSetRingtoneClick = {
-                        showMorePanel = false
-                        showSetRingtoneDialog = true
-                    },
-                    onSleepTimerClick = {
-                        showMorePanel = false
-                        showSleepTimerDialog = true
-                    },
-                    onLyricsToggle = {
-                        setVisualPage(
-                            if (currentVisualPage == PlaybackVisualPage.Cover) {
-                                PlaybackVisualPage.Lyrics
-                            } else {
-                                PlaybackVisualPage.Cover
-                            },
-                        )
-                        showMorePanel = false
-                    },
-                    onScratchToggle = {
-                        onScratchEnabledChange(!playbackSettings.scratchEnabled)
-                        showMorePanel = false
-                    },
-                    onDeleteClick = {
-                        when (val result = state.mediaItem?.resolveDeleteTarget()
-                            ?: PlaybackDeleteTargetResult.Unavailable) {
-                            is PlaybackDeleteTargetResult.Available -> {
-                                launchDeleteRequest(result.target)
-                            }
-                            PlaybackDeleteTargetResult.CueFile -> {
-                                context.toast(R.string.can_not_delete_cue_file)
-                            }
-                            PlaybackDeleteTargetResult.Unavailable -> {
-                                context.toast(R.string.can_not_delete_song)
-                            }
-                        }
-                        showMorePanel = false
-                    },
-                    onDismiss = {
-                        showMorePanel = false
-                    },
-                )
-            }
-        }
-
-        if (showSleepTimerDialog) {
-            PlaybackSleepTimerDialog(
-                state = sleepTimerState,
-                onDismiss = {
-                    showSleepTimerDialog = false
+                    }
+                    showMorePanel = false
                 },
-                onDurationSelected = { durationMs ->
-                    showSleepTimerDialog = false
-                    if (durationMs > 0L) {
-                        controller?.startSleepTimer(durationMs)
-                    } else {
-                        controller?.cancelSleepTimer()
-                        if (sleepTimerState.isActive) {
-                            context.toast(R.string.sleep_timer_stopped)
+                onSetRingtoneClick = {
+                    showMorePanel = false
+                    showSetRingtoneDialog = true
+                },
+                onSleepTimerClick = {
+                    showMorePanel = false
+                    showSleepTimerDialog = true
+                },
+                onLyricsToggle = {
+                    setVisualPage(
+                        if (currentVisualPage == PlaybackVisualPage.Cover) {
+                            PlaybackVisualPage.Lyrics
+                        } else {
+                            PlaybackVisualPage.Cover
+                        },
+                    )
+                    showMorePanel = false
+                },
+                onScratchToggle = {
+                    onScratchEnabledChange(!playbackSettings.scratchEnabled)
+                    showMorePanel = false
+                },
+                onDeleteClick = {
+                    when (val result = state.mediaItem?.resolveDeleteTarget()
+                        ?: PlaybackDeleteTargetResult.Unavailable) {
+                        is PlaybackDeleteTargetResult.Available -> {
+                            launchDeleteRequest(result.target)
+                        }
+                        PlaybackDeleteTargetResult.CueFile -> {
+                            context.toast(R.string.can_not_delete_cue_file)
+                        }
+                        PlaybackDeleteTargetResult.Unavailable -> {
+                            context.toast(R.string.can_not_delete_song)
                         }
                     }
+                    showMorePanel = false
                 },
-            )
-        }
+                onDismissRequest = {
+                    showMorePanel = false
+                },
+            ),
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(8f),
+        )
+
+        LegacyPlaybackSleepTimerDialog(
+            visible = showSleepTimerDialog,
+            state = sleepTimerState,
+            bottomInsetPx = (bottomInset.value * density.density).roundToInt(),
+            onDismissRequest = {
+                showSleepTimerDialog = false
+            },
+            onDurationSelected = { durationMs ->
+                showSleepTimerDialog = false
+                if (durationMs > 0L) {
+                    controller?.startSleepTimer(durationMs)
+                } else {
+                    controller?.cancelSleepTimer()
+                    if (sleepTimerState.isActive) {
+                        context.toast(R.string.sleep_timer_stopped)
+                    }
+                }
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(9f),
+        )
 
         if (showSetRingtoneDialog) {
             PlaybackConfirmDialog(
