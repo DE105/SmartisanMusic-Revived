@@ -46,6 +46,7 @@ internal fun <T : Any> LegacyPortPageStackTransition(
     modifier: Modifier = Modifier,
     label: String = "legacy page stack transition",
     axis: LegacyPortPageStackAxis = LegacyPortPageStackAxis.Horizontal,
+    axisForKey: (T) -> LegacyPortPageStackAxis = { axis },
     primaryContent: @Composable () -> Unit,
     secondaryContent: @Composable (T) -> Unit,
 ) {
@@ -58,9 +59,13 @@ internal fun <T : Any> LegacyPortPageStackTransition(
     var retainedSecondaryKey by remember {
         mutableStateOf<T?>(secondaryKey)
     }
+    var retainedAxis by remember {
+        mutableStateOf(axis)
+    }
     LaunchedEffect(secondaryKey) {
         if (secondaryKey != null) {
             retainedSecondaryKey = secondaryKey
+            retainedAxis = axisForKey(secondaryKey)
         }
     }
     LaunchedEffect(visibleState.isIdle, visibleState.currentState) {
@@ -71,6 +76,7 @@ internal fun <T : Any> LegacyPortPageStackTransition(
 
     BoxWithConstraints(modifier = modifier.clipToBounds()) {
         val widthPx = with(LocalDensity.current) { maxWidth.roundToPx() }
+        val activeAxis = secondaryKey?.let(axisForKey) ?: retainedAxis
         val transition = updateTransition(
             targetState = hasSecondary,
             label = label,
@@ -84,7 +90,7 @@ internal fun <T : Any> LegacyPortPageStackTransition(
             },
             label = "$label primary offset",
         ) { showingSecondary ->
-            if (axis == LegacyPortPageStackAxis.Horizontal && showingSecondary) -widthPx else 0
+            if (activeAxis == LegacyPortPageStackAxis.Horizontal && showingSecondary) -widthPx else 0
         }
 
         Box(
@@ -102,7 +108,7 @@ internal fun <T : Any> LegacyPortPageStackTransition(
                 modifier = Modifier
                     .fillMaxSize()
                     .zIndex(1f),
-                enter = if (axis == LegacyPortPageStackAxis.VerticalPush) {
+                enter = if (activeAxis == LegacyPortPageStackAxis.VerticalPush) {
                     slideInVertically(
                         animationSpec = tween(
                             durationMillis = LegacyPageStackSlideMillis,
@@ -119,7 +125,7 @@ internal fun <T : Any> LegacyPortPageStackTransition(
                         initialOffsetX = { it },
                     )
                 },
-                exit = if (axis == LegacyPortPageStackAxis.VerticalPush) {
+                exit = if (activeAxis == LegacyPortPageStackAxis.VerticalPush) {
                     slideOutVertically(
                         animationSpec = tween(
                             durationMillis = LegacyPageStackSlideMillis,

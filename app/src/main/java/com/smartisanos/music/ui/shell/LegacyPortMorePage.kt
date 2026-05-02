@@ -90,10 +90,6 @@ private enum class LegacyMoreRootEntry(
     @param:StringRes val labelRes: Int,
     @param:DrawableRes val iconRes: Int,
 ) {
-    Style(
-        labelRes = R.string.tab_style,
-        iconRes = R.drawable.tabbar_style_selector,
-    ),
     LovedSongs(
         labelRes = R.string.collect_music,
         iconRes = R.drawable.tabbar_like_selector,
@@ -150,7 +146,12 @@ internal fun LegacyPortMorePage(
         secondaryKey = secondaryTarget,
         modifier = modifier.fillMaxSize(),
         label = "legacy more page stack",
-        axis = LegacyPortPageStackAxis.VerticalPush,
+        axisForKey = { target ->
+            when (target) {
+                LegacyMoreSecondaryTarget.Folder -> LegacyPortPageStackAxis.Horizontal
+                LegacyMoreSecondaryTarget.Settings -> LegacyPortPageStackAxis.VerticalPush
+            }
+        },
         primaryContent = {
             LegacyMoreRootPage(
                 active = active && secondaryTarget == null,
