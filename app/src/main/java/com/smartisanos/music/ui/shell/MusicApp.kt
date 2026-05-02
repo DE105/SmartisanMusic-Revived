@@ -91,7 +91,7 @@ import com.smartisanos.music.ui.playlist.PlaylistPickerDialog
 import com.smartisanos.music.ui.search.GlobalSearchScreen
 import com.smartisanos.music.ui.search.SearchTab
 import com.smartisanos.music.isExternalAudioLaunchItem
-import com.smartisanos.music.resolveExternalAudioAlbumId
+import com.smartisanos.music.resolveExternalAudioMediaStoreIds
 import com.smartisanos.music.resolveExternalAudioArtist
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -383,14 +383,15 @@ fun MusicApp(
             val request = externalAudioLaunchRequest ?: return@LaunchedEffect
             playbackVisible = true
             val controller = playbackController ?: return@LaunchedEffect
-            val (artist, albumId) = withContext(Dispatchers.IO) {
+            val (artist, mediaStoreIds) = withContext(Dispatchers.IO) {
                 request.resolveExternalAudioArtist(context.applicationContext) to
-                    request.resolveExternalAudioAlbumId(context.applicationContext)
+                    request.resolveExternalAudioMediaStoreIds(context.applicationContext)
             }
             val mediaItem = request.toExternalAudioMediaItem(
                 fallbackTitle = context.getString(R.string.unknown_song_title),
                 artist = artist,
-                albumId = albumId,
+                mediaStoreId = mediaStoreIds.mediaStoreId,
+                albumId = mediaStoreIds.albumId,
             )
             controller.setMediaItem(mediaItem)
             controller.prepare()
@@ -914,6 +915,7 @@ fun MusicApp(
 private fun ExternalAudioLaunchRequest.toExternalAudioMediaItem(
     fallbackTitle: String,
     artist: String?,
+    mediaStoreId: Long?,
     albumId: Long?,
 ): MediaItem {
     val uriTitle = uri.lastPathSegment
@@ -942,8 +944,8 @@ private fun ExternalAudioLaunchRequest.toExternalAudioMediaItem(
         .setIsPlayable(true)
         .setIsBrowsable(false)
         .setExtras(extras)
-    if (albumId != null) {
-        metadataBuilder.setArtworkUri(LocalAudioLibrary.albumArtworkUri(albumId))
+    if (mediaStoreId != null) {
+        metadataBuilder.setArtworkUri(LocalAudioLibrary.trackArtworkUri(mediaStoreId))
     }
     artist?.takeIf(String::isNotBlank)?.let { externalArtist ->
         metadataBuilder

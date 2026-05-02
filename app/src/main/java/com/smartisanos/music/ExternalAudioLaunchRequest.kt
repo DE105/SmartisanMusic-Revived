@@ -3,6 +3,7 @@ package com.smartisanos.music
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import androidx.media3.common.MediaItem
 
@@ -14,6 +15,11 @@ data class ExternalAudioLaunchRequest(
     val uri: Uri,
     val mimeType: String?,
     val displayName: String?,
+)
+
+internal data class ExternalAudioMediaStoreIds(
+    val mediaStoreId: Long?,
+    val albumId: Long?,
 )
 
 internal fun MediaItem.isExternalAudioLaunchItem(): Boolean {
@@ -42,23 +48,69 @@ internal fun ExternalAudioLaunchRequest.resolveExternalAudioArtist(context: Cont
 }
 
 internal fun ExternalAudioLaunchRequest.resolveExternalAudioAlbumId(context: Context): Long? {
+    return resolveExternalAudioMediaStoreIds(context).albumId
+}
+
+internal fun ExternalAudioLaunchRequest.resolveExternalAudioMediaStoreIds(context: Context): ExternalAudioMediaStoreIds {
     if (uri.scheme != ContentScheme) {
-        return null
+        return ExternalAudioMediaStoreIds(mediaStoreId = null, albumId = null)
     }
-    return runCatching {
+    val queriedIds = runCatching {
         context.contentResolver.query(
             uri,
-            arrayOf(MediaStore.Audio.Media.ALBUM_ID),
+            arrayOf(
+                MediaStore.Audio.Media._ID,
+                MediaStore.Audio.Media.ALBUM_ID,
+            ),
             null,
             null,
             null,
         )?.use { cursor ->
-            val albumIdColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID)
-            if (albumIdColumn == -1 || !cursor.moveToFirst()) {
+            if (!cursor.moveToFirst()) {
                 return@use null
             }
-            cursor.getLong(albumIdColumn).takeIf { it > 0L }
+            val mediaIdColumn = cursor.getColumnIndex(MediaStore.Audio.Media._ID)
+            val albumIdColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID)
+            ExternalAudioMediaStoreIds(
+                mediaStoreId = cursor.getPositiveLong(mediaIdColumn),
+                albumId = cursor.getPositiveLong(albumIdColumn),
+            )
         }
+    }.getOrNull()
+
+    return ExternalAudioMediaStoreIds(
+        mediaStoreId = queriedIds?.mediaStoreId ?: uri.resolveMediaStoreAudioId(context),
+        albumId = queriedIds?.albumId,
+    )
+}
+
+private fun android.database.Cursor.getPositiveLong(columnIndex: Int): Long? {
+    if (columnIndex == -1) {
+        return null
+    }
+    return getLong(columnIndex).takeIf { it > 0L }
+}
+
+private fun Uri.resolveMediaStoreAudioId(context: Context): Long? {
+    val tailId = lastPathSegment
+        ?.takeIf { it.startsWith("audio:") }
+        ?.substringAfter(':')
+        ?.toLongOrNull()
+    if (tailId != null) {
+        return tailId
+    }
+    val directId = lastPathSegment?.toLongOrNull()
+    if (directId != null) {
+        return directId
+    }
+    return runCatching {
+        if (!DocumentsContract.isDocumentUri(context, this)) {
+            return@runCatching null
+        }
+        DocumentsContract.getDocumentId(this)
+            .takeIf { it.startsWith("audio:") }
+            ?.substringAfter(':')
+            ?.toLongOrNull()
     }.getOrNull()
 }
 

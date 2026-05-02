@@ -46,6 +46,7 @@ import com.smartisanos.music.R
 import com.smartisanos.music.data.favorite.FavoriteSongsRepository
 import com.smartisanos.music.isExternalAudioLaunchItem
 import com.smartisanos.music.playback.LocalPlaybackController
+import com.smartisanos.music.playback.artworkRequestKey
 import kotlinx.coroutines.launch
 
 private val PlaybackBarTitleColor = Color(0xCC000000)
@@ -255,7 +256,8 @@ private fun PlaybackBarArtwork(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val artwork by produceState<ImageBitmap?>(initialValue = null, mediaItem.mediaId) {
+    val artworkRequestKey = mediaItem.artworkRequestKey()
+    val artwork by produceState<ImageBitmap?>(initialValue = null, artworkRequestKey) {
         value = loadEmbeddedArtwork(context, mediaItem)
     }
 

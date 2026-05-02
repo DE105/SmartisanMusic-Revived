@@ -100,6 +100,8 @@ internal class ScratchSoundController(
         val generation = sourceGeneration + 1
         sourceGeneration = generation
         loadingSourceKey = sourceKey
+        preparedSourceKey = null
+        scratchBuffer = null
         decodeExecutor.execute {
             val decodedBuffer = decodeScratchBuffer(appContext, sourceUri)
             if (released || generation != sourceGeneration) {
@@ -301,8 +303,8 @@ internal class ScratchSoundController(
         runCatching {
             if (track.playState == AudioTrack.PLAYSTATE_PLAYING) {
                 track.pause()
+                track.flush()
             }
-            track.flush()
         }
     }
 

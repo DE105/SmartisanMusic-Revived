@@ -114,6 +114,7 @@ import com.smartisanos.music.playback.EmbeddedLyrics
 import com.smartisanos.music.playback.LocalAudioLibrary
 import com.smartisanos.music.playback.LocalPlaybackController
 import com.smartisanos.music.playback.PlaybackSleepTimer
+import com.smartisanos.music.playback.artworkRequestKey
 import com.smartisanos.music.playback.await
 import com.smartisanos.music.playback.cancelSleepTimer
 import com.smartisanos.music.playback.extractEmbeddedLyrics
@@ -680,11 +681,10 @@ fun PlaybackScreen(
             loadEmbeddedLyrics(context, mediaItem)
         }
     }
+    val artworkRequestKey = state.mediaItem?.artworkRequestKey()
     val albumArtwork by produceState<ImageBitmap?>(
         initialValue = null,
-        key1 = state.mediaItem?.mediaId,
-        key2 = state.mediaItem?.mediaMetadata?.extras
-            ?.getLong(LocalAudioLibrary.AlbumIdExtraKey),
+        artworkRequestKey,
     ) {
         value = state.mediaItem?.let { mediaItem ->
             loadEmbeddedArtwork(context, mediaItem)

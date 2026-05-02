@@ -124,9 +124,7 @@ class LocalAudioLibrary(
 
                     metadataBuilder.setExtras(extras)
 
-                    if (albumId != null) {
-                        metadataBuilder.setArtworkUri(albumArtworkUri(albumId))
-                    }
+                    metadataBuilder.setArtworkUri(trackArtworkUri(id))
 
                     if (trackNumber != null) {
                         metadataBuilder.setTrackNumber(trackNumber)
@@ -217,6 +215,10 @@ class LocalAudioLibrary(
                 Uri.parse("content://media/external/audio/albumart"),
                 albumId,
             )
+        }
+
+        fun trackArtworkUri(mediaId: Long): Uri {
+            return Uri.parse("content://media/external/audio/media/$mediaId/albumart")
         }
 
         private fun resolveAudioQualityBadge(

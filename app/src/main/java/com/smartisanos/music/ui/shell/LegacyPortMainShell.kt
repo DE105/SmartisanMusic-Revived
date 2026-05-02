@@ -5,13 +5,10 @@ import android.content.ContentUris
 import android.net.Uri
 import android.os.Bundle
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.icu.text.Transliterator
-import android.media.MediaMetadataRetriever
 import android.provider.MediaStore
-import android.util.Size
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -84,11 +81,13 @@ import com.smartisanos.music.playback.LocalAudioLibrary
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.LocalPlaybackController
 import com.smartisanos.music.playback.ProvidePlaybackController
+import com.smartisanos.music.playback.artworkRequestKey
 import com.smartisanos.music.playback.await
 import com.smartisanos.music.playback.invalidateLibrary
+import com.smartisanos.music.playback.loadArtworkBitmap
 import com.smartisanos.music.playback.refreshLibrary
 import com.smartisanos.music.playback.removeMediaItemsByMediaIds
-import com.smartisanos.music.resolveExternalAudioAlbumId
+import com.smartisanos.music.resolveExternalAudioMediaStoreIds
 import com.smartisanos.music.resolveExternalAudioArtist
 import com.smartisanos.music.ui.components.hasAudioPermission
 import com.smartisanos.music.ui.album.AlbumViewMode
@@ -180,7 +179,8 @@ private fun LegacyPortMainShellContent(
         )
     }
     val legacyLibrary = rememberLegacyLibraryMediaState(libraryRefreshVersion)
-    val artworkBitmap by produceState<Bitmap?>(initialValue = null, snapshot.mediaItem?.mediaId) {
+    val artworkRequestKey = snapshot.mediaItem?.artworkRequestKey()
+    val artworkBitmap by produceState<Bitmap?>(initialValue = null, artworkRequestKey) {
         value = snapshot.mediaItem?.let { mediaItem ->
             loadLegacyArtworkBitmap(context.applicationContext, mediaItem)
         }
@@ -358,14 +358,15 @@ private fun LegacyPortMainShellContent(
         val request = externalAudioLaunchRequest ?: return@LaunchedEffect
         playbackVisible = true
         val playbackController = controller ?: return@LaunchedEffect
-        val (artist, albumId) = withContext(Dispatchers.IO) {
+        val (artist, mediaStoreIds) = withContext(Dispatchers.IO) {
             request.resolveExternalAudioArtist(context.applicationContext) to
-                request.resolveExternalAudioAlbumId(context.applicationContext)
+                request.resolveExternalAudioMediaStoreIds(context.applicationContext)
         }
         val mediaItem = request.toExternalAudioMediaItem(
             fallbackTitle = context.getString(R.string.unknown_song_title),
             artist = artist,
-            albumId = albumId,
+            mediaStoreId = mediaStoreIds.mediaStoreId,
+            albumId = mediaStoreIds.albumId,
         )
         playbackController.setMediaItem(mediaItem)
         playbackController.prepare()
@@ -1743,80 +1744,14 @@ private data class LegacyPlaybackBarSnapshot(
 private suspend fun loadLegacyArtworkBitmap(
     context: android.content.Context,
     mediaItem: MediaItem,
-): Bitmap? = withContext(Dispatchers.IO) {
-    loadArtworkData(mediaItem)
-        ?: loadArtworkUri(context, mediaItem)
-        ?: loadAlbumArtworkUri(context, mediaItem)
-        ?: loadMediaThumbnail(context, mediaItem)
-        ?: loadEmbeddedPicture(context, mediaItem)
-}
+): Bitmap? = loadArtworkBitmap(context, mediaItem, LegacyPlaybackBarArtworkDecodeSize)
 
-private fun loadArtworkData(mediaItem: MediaItem): Bitmap? {
-    val artworkData = mediaItem.mediaMetadata.artworkData ?: return null
-    return runCatching {
-        BitmapFactory.decodeByteArray(artworkData, 0, artworkData.size)
-    }.getOrNull()
-}
-
-private fun loadArtworkUri(
-    context: android.content.Context,
-    mediaItem: MediaItem,
-): Bitmap? {
-    val artworkUri = mediaItem.mediaMetadata.artworkUri ?: return null
-    return runCatching {
-        context.contentResolver.openInputStream(artworkUri)?.use(BitmapFactory::decodeStream)
-    }.getOrNull() ?: runCatching {
-        context.contentResolver.loadThumbnail(artworkUri, Size(128, 128), null)
-    }.getOrNull()
-}
-
-private fun loadAlbumArtworkUri(
-    context: android.content.Context,
-    mediaItem: MediaItem,
-): Bitmap? {
-    val albumId = mediaItem.mediaMetadata.extras
-        ?.getLong(LocalAudioLibrary.AlbumIdExtraKey)
-        ?.takeIf { it > 0L }
-        ?: return null
-    val artworkUri = LocalAudioLibrary.albumArtworkUri(albumId)
-    return runCatching {
-        context.contentResolver.loadThumbnail(artworkUri, Size(128, 128), null)
-    }.getOrNull() ?: runCatching {
-        context.contentResolver.openInputStream(artworkUri)?.use(BitmapFactory::decodeStream)
-    }.getOrNull()
-}
-
-private fun loadMediaThumbnail(
-    context: android.content.Context,
-    mediaItem: MediaItem,
-): Bitmap? {
-    val mediaUri = mediaItem.localConfiguration?.uri ?: return null
-    return runCatching {
-        context.contentResolver.loadThumbnail(mediaUri, Size(128, 128), null)
-    }.getOrNull()
-}
-
-private fun loadEmbeddedPicture(
-    context: android.content.Context,
-    mediaItem: MediaItem,
-): Bitmap? {
-    val mediaUri = mediaItem.localConfiguration?.uri ?: return null
-    return runCatching {
-        val retriever = MediaMetadataRetriever()
-        try {
-            retriever.setDataSource(context, mediaUri)
-            retriever.embeddedPicture?.let { bytes ->
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            }
-        } finally {
-            retriever.release()
-        }
-    }.getOrNull()
-}
+private val LegacyPlaybackBarArtworkDecodeSize = android.util.Size(128, 128)
 
 private fun ExternalAudioLaunchRequest.toExternalAudioMediaItem(
     fallbackTitle: String,
     artist: String?,
+    mediaStoreId: Long?,
     albumId: Long?,
 ): MediaItem {
     val uriTitle = uri.lastPathSegment
@@ -1843,8 +1778,8 @@ private fun ExternalAudioLaunchRequest.toExternalAudioMediaItem(
         .setIsPlayable(true)
         .setIsBrowsable(false)
         .setExtras(extras)
-    if (albumId != null) {
-        metadataBuilder.setArtworkUri(LocalAudioLibrary.albumArtworkUri(albumId))
+    if (mediaStoreId != null) {
+        metadataBuilder.setArtworkUri(LocalAudioLibrary.trackArtworkUri(mediaStoreId))
     }
     artist?.takeIf(String::isNotBlank)?.let { externalArtist ->
         metadataBuilder

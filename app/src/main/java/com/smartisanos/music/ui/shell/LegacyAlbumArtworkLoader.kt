@@ -206,9 +206,7 @@ internal class LegacyAlbumArtworkLoader(context: Context) {
         val artworkUri = sourceMetadata.artworkUri
             ?: representativeMetadata.artworkUri
             ?: albumId?.let(LocalAudioLibrary::albumArtworkUri)
-        val trackArtworkUri = mediaId?.let { id ->
-            Uri.parse("content://media/external/audio/media/$id/albumart")
-        }
+        val trackArtworkUri = mediaId?.let(LocalAudioLibrary::trackArtworkUri)
         val mediaUri = sourceItem.localConfiguration?.uri ?: representative.localConfiguration?.uri
         val artworkData = sourceMetadata.artworkData ?: representativeMetadata.artworkData
         if (artworkUri == null && trackArtworkUri == null && mediaUri == null && artworkData == null) {
@@ -246,9 +244,7 @@ internal class LegacyAlbumArtworkLoader(context: Context) {
         val artworkUri = sourceMetadata.artworkUri
             ?: representativeMetadata.artworkUri
             ?: albumId?.let(LocalAudioLibrary::albumArtworkUri)
-        val trackArtworkUri = mediaId?.let { id ->
-            Uri.parse("content://media/external/audio/media/$id/albumart")
-        }
+        val trackArtworkUri = mediaId?.let(LocalAudioLibrary::trackArtworkUri)
         val mediaUri = sourceItem.localConfiguration?.uri ?: mediaItem.localConfiguration?.uri
         val artworkData = sourceMetadata.artworkData ?: representativeMetadata.artworkData
         if (artworkUri == null && trackArtworkUri == null && mediaUri == null && artworkData == null) {

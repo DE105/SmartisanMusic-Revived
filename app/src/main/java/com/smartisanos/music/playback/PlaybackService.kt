@@ -69,6 +69,7 @@ class PlaybackService : MediaLibraryService() {
             PlaybackLibrarySessionCallback(),
         )
             .setSessionActivity(createSessionActivityPendingIntent())
+            .setPeriodicPositionUpdateEnabled(false)
             .build()
 
         serviceScope.launch(Dispatchers.IO) {
