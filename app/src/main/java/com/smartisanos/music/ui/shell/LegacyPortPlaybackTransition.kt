@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.smartisanos.music.data.settings.PlaybackSettings
-import com.smartisanos.music.ui.playback.PlaybackScreen
 import kotlin.math.roundToInt
 
 private const val LegacyPlaybackTransitionDurationMillis = 300
@@ -35,7 +34,7 @@ internal fun LegacyPortPlaybackOverlay(
         enter = legacyPlaybackEnterTransition(),
         exit = legacyPlaybackExitTransition(),
     ) {
-        PlaybackScreen(
+        LegacyPortPlaybackPage(
             playbackSettings = playbackSettings,
             onScratchEnabledChange = onScratchEnabledChange,
             onCollapse = onCollapse,

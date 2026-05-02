@@ -6,6 +6,7 @@ import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.RelativeLayout
 import android.widget.TextView
@@ -20,6 +21,7 @@ class TitleBar @JvmOverloads constructor(
     private val rightViews = mutableListOf<View>()
     private val titleView: TextView
     private val shadowView: ImageView
+    private var centerView: View? = null
     private var titleBarHeight = resources.getDimensionPixelSize(R.dimen.title_bar_height)
     private val imageViewSize = resources.getDimensionPixelSize(R.dimen.standard_icon_size)
     private val marginEdge = resources.getDimensionPixelSize(R.dimen.bar_margin_edge)
@@ -64,6 +66,7 @@ class TitleBar @JvmOverloads constructor(
     }
 
     fun setCenterText(text: String?) {
+        clearCenterView()
         titleView.text = text.orEmpty()
     }
 
@@ -76,6 +79,28 @@ class TitleBar @JvmOverloads constructor(
     }
 
     fun getTitleView(): TextView = titleView
+
+    fun setCenterView(view: View) {
+        if (centerView === view) {
+            return
+        }
+        clearCenterView()
+        (view.parent as? ViewGroup)?.removeView(view)
+        if (view.id == View.NO_ID) {
+            view.id = View.generateViewId()
+        }
+        centerView = view
+        titleView.visibility = View.GONE
+        addView(
+            view,
+            LayoutParams(
+                LayoutParams.WRAP_CONTENT,
+                LayoutParams.WRAP_CONTENT,
+            ).apply {
+                addRule(CENTER_IN_PARENT)
+            },
+        )
+    }
 
     fun getShadowView(): View = shadowView
 
@@ -147,6 +172,14 @@ class TitleBar @JvmOverloads constructor(
             isClickable = true
             isFocusable = true
         }
+    }
+
+    private fun clearCenterView() {
+        centerView?.let { view ->
+            removeView(view)
+        }
+        centerView = null
+        titleView.visibility = View.VISIBLE
     }
 
     private fun addSideView(

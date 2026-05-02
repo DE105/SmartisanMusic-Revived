@@ -3,6 +3,8 @@
     <!-- Minimal 8.1.0 resource bridge for directly inflated XML layouts. -->
     <id name="act_titlebar" />
     <id name="album_art" />
+    <id name="album_cover" />
+    <id name="album_cover_zone" />
     <id name="album_artist_name" />
     <id name="album_id_tag" />
     <id name="album_image" />
@@ -20,7 +22,10 @@
     <id name="btn_add_to_playlist" />
     <id name="btn_add_to_queue" />
     <id name="control_zone" />
+    <id name="content" />
+    <id name="cover_zone" />
     <id name="cb_del" />
+    <id name="clear_btn" />
     <id name="divider_line" />
     <id name="elvitem" />
     <id name="edit_layout" />
@@ -31,8 +36,12 @@
     <id name="fl_album_image" />
     <id name="fl_null_artist" />
     <id name="fl_list_tile" />
+    <id name="first_line_view" />
+    <id name="fake_view_container" />
+    <id name="favorite" />
     <id name="gridview_image" />
     <id name="head" />
+    <id name="header_name" />
     <id name="header_play_all" />
     <id name="header_play_shuffle" />
     <id name="icon_layout" />
@@ -67,6 +76,7 @@
     <id name="operation_zone" />
     <id name="play_container" />
     <id name="play_btn" />
+    <id name="playing_song_header" />
     <id name="playback_bar" />
     <id name="playback_bar_content" />
     <id name="playback_bar_shadow" />
@@ -79,7 +89,9 @@
     <id name="rightExpandView" />
     <id name="rl_list_item_parent" />
     <id name="rl_right" />
+    <id name="rb_score" />
     <id name="sb_rb_playlist" />
+    <id name="second_line_view" />
     <id name="smartisan_iv_btn_group_shadow" />
     <id name="smartlist_header" />
     <id name="song_info_zone" />
@@ -111,6 +123,7 @@
     <id name="menu_dialog_title_bar" />
     <id name="menu_dialog_title_bar_container" />
     <id name="title" />
+    <id name="title_view" />
 
     <attr name="backgroundStyle">
         <enum name="single" value="1" />
@@ -146,6 +159,7 @@
     <dimen name="daily_recommend_cover_width">50.0dp</dimen>
     <dimen name="album_detail_album_name_size">18.0sp</dimen>
     <dimen name="album_detail_artist_size">14.0sp</dimen>
+    <dimen name="album_listview_item_padding">5.0dp</dimen>
     <dimen name="album_detail_text_margin_left">16.0dp</dimen>
     <dimen name="album_detail_text_margin_top">14.0dp</dimen>
     <dimen name="album_detail_text_margin_top1">3.0dp</dimen>
@@ -249,6 +263,10 @@
     <dimen name="title_bar_title_size">18.0px</dimen>
     <dimen name="title_text_size">20.0sp</dimen>
     <dimen name="titlebar_height">48.0dp</dimen>
+    <dimen name="bar_divider_height">0.6700001dp</dimen>
+    <dimen name="router_padding_top">51.0dp</dimen>
+    <dimen name="max_playback_title">22.0dp</dimen>
+    <dimen name="max_title_view_width">150.0dp</dimen>
     <dimen name="menu_dialog_btn_margin_edge">24.0dp</dimen>
     <dimen name="menu_dialog_btn_margin_view">18.0dp</dimen>
     <dimen name="menu_dialog_horizontal_distance">18.0dp</dimen>
@@ -257,6 +275,13 @@
     <dimen name="bar_and_bottom_sheet_extra_space">54.0px</dimen>
     <dimen name="menu_dialog_item_text_size">18.0sp</dimen>
     <dimen name="menu_dialog_multi_list_height">237.0dp</dimen>
+    <dimen name="album_cover_zone_width">95.0dp</dimen>
+    <dimen name="fake_song_playing_zone_layout">105.0dp</dimen>
+    <dimen name="now_playing_header_height">20.0dp</dimen>
+    <dimen name="playback_listview_dividerHeight">2.0px</dimen>
+    <dimen name="queue_rating_bar_height">40.0dp</dimen>
+    <dimen name="radio_category_header_text_size">13.5sp</dimen>
+    <dimen name="tabbar_padding_left">11.0dp</dimen>
 
     <color name="btn_text_color_red">#e65c53</color>
     <color name="btn_text_color_red_pressed">#e03d34</color>
@@ -284,8 +309,10 @@
     <color name="title_down_color">#676767</color>
     <color name="title_or_btn_text_color">#99000000</color>
     <color name="title_text_color">#9a000000</color>
+    <color name="sub_title_text_color">#4c000000</color>
     <color name="transparent">#00000000</color>
     <color name="transparent_black">#99000000</color>
+    <color name="playing_queue_color">#ffffff</color>
 
     <string name="cd_play_all">播放列表</string>
     <string name="cd_shuffle">随机播放</string>

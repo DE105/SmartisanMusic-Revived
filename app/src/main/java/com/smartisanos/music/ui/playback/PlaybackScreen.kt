@@ -143,7 +143,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-private val PlaybackPageBackground = Color(0xFFFDFDFB)
+private val PlaybackPageBackground = Color.White
 private val PlaybackTopBarDivider = Color(0xFFE6E6E6)
 private val PlaybackTitleColor = Color(0xFF6B6B6F)
 private val PlaybackSubtitleColor = Color(0x88333333)
@@ -268,6 +268,7 @@ fun PlaybackScreen(
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit = {},
     onRequestAddToQueue: (List<MediaItem>) -> Unit = {},
     onLibraryChanged: () -> Unit = {},
+    showTopBar: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val controller = LocalPlaybackController.current
@@ -796,13 +797,15 @@ fun PlaybackScreen(
         Column(
             modifier = Modifier.fillMaxSize(),
         ) {
-            PlaybackTopBar(
-                title = title,
-                artist = artist,
-                topInset = topInset,
-                onQueueClick = { showQueueOverlay = true },
-                onCollapse = onCollapse,
-            )
+            if (showTopBar) {
+                PlaybackTopBar(
+                    title = title,
+                    artist = artist,
+                    topInset = topInset,
+                    onQueueClick = { showQueueOverlay = true },
+                    onCollapse = onCollapse,
+                )
+            }
             PlaybackTimeSeekBar(
                 durationMs = durationMs,
                 currentPositionMs = displayPositionMs,

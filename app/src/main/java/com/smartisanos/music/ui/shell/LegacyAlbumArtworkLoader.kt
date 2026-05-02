@@ -48,8 +48,32 @@ internal class LegacyAlbumArtworkLoader(context: Context) {
         fallbackRes: Int,
         sizePx: Int,
     ) {
+        bindRequest(
+            imageView = imageView,
+            request = buildArtworkRequest(album, sizePx),
+            fallbackRes = fallbackRes,
+        )
+    }
+
+    fun bind(
+        imageView: ImageView,
+        mediaItem: MediaItem,
+        fallbackRes: Int,
+        sizePx: Int,
+    ) {
+        bindRequest(
+            imageView = imageView,
+            request = buildArtworkRequest(mediaItem, sizePx),
+            fallbackRes = fallbackRes,
+        )
+    }
+
+    private fun bindRequest(
+        imageView: ImageView,
+        request: LegacyAlbumArtworkRequest?,
+        fallbackRes: Int,
+    ) {
         val previousKey = imageView.getTag(R.id.legacy_album_artwork_request) as? String
-        val request = buildArtworkRequest(album, sizePx)
         if (request == null) {
             imageView.setTag(R.id.legacy_album_artwork_request, null)
             imageView.setImageResource(fallbackRes)
@@ -199,6 +223,47 @@ internal class LegacyAlbumArtworkLoader(context: Context) {
             viewTag = albumId?.let { resolvedAlbumId -> "album:$resolvedAlbumId" }
                 ?: mediaId?.let { resolvedMediaId -> "track:$resolvedMediaId" }
                 ?: album.id,
+            sizePx = sizePx,
+        )
+    }
+
+    private fun buildArtworkRequest(
+        mediaItem: MediaItem,
+        sizePx: Int,
+    ): LegacyAlbumArtworkRequest? {
+        val sourceItem = mediaItem.localConfiguration?.uri?.let { mediaItem }
+            ?: audioLibrary.getItem(mediaItem.mediaId)
+            ?: mediaItem
+        val sourceMetadata = sourceItem.mediaMetadata
+        val representativeMetadata = mediaItem.mediaMetadata
+        val mediaId = sourceItem.mediaId.toLongOrNull() ?: mediaItem.mediaId.toLongOrNull()
+        val albumId = sourceMetadata.extras
+            ?.getLong(LocalAudioLibrary.AlbumIdExtraKey)
+            ?.takeIf { it > 0L }
+            ?: representativeMetadata.extras
+                ?.getLong(LocalAudioLibrary.AlbumIdExtraKey)
+                ?.takeIf { it > 0L }
+        val artworkUri = sourceMetadata.artworkUri
+            ?: representativeMetadata.artworkUri
+            ?: albumId?.let(LocalAudioLibrary::albumArtworkUri)
+        val trackArtworkUri = mediaId?.let { id ->
+            Uri.parse("content://media/external/audio/media/$id/albumart")
+        }
+        val mediaUri = sourceItem.localConfiguration?.uri ?: mediaItem.localConfiguration?.uri
+        val artworkData = sourceMetadata.artworkData ?: representativeMetadata.artworkData
+        if (artworkUri == null && trackArtworkUri == null && mediaUri == null && artworkData == null) {
+            return null
+        }
+        return LegacyAlbumArtworkRequest(
+            mediaItem = sourceItem,
+            artworkUri = artworkUri,
+            trackArtworkUri = trackArtworkUri,
+            mediaUri = mediaUri,
+            artworkData = artworkData,
+            viewTag = albumId?.let { resolvedAlbumId -> "album:$resolvedAlbumId" }
+                ?: mediaId?.let { resolvedMediaId -> "track:$resolvedMediaId" }
+                ?: sourceItem.localConfiguration?.uri?.toString()
+                ?: mediaItem.mediaId,
             sizePx = sizePx,
         )
     }
