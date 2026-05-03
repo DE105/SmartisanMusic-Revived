@@ -372,8 +372,8 @@ private class LegacyFolderRootView(context: Context) : FrameLayout(context) {
     init {
         setBackgroundResource(R.drawable.account_background)
         listView.apply {
-            divider = ColorDrawable(context.getColor(R.color.listview_divider_color))
-            dividerHeight = resources.getDimensionPixelSize(R.dimen.listview_dividerHeight)
+            divider = null
+            dividerHeight = 0
             selector = context.getDrawable(R.drawable.listview_selector)
             cacheColorHint = Color.TRANSPARENT
             setBackgroundColor(Color.TRANSPARENT)
@@ -515,6 +515,7 @@ private class LegacyFolderDirectoryAdapter : BaseAdapter() {
                 bindRow(
                     view = child,
                     entry = entry,
+                    position = position,
                     animateEditMode = animateEditMode,
                     animateHeight = animateHeight,
                 )
@@ -537,6 +538,7 @@ private class LegacyFolderDirectoryAdapter : BaseAdapter() {
         bindRow(
             view = view,
             entry = entry,
+            position = position,
             animateEditMode = false,
             animateHeight = false,
         )
@@ -546,6 +548,7 @@ private class LegacyFolderDirectoryAdapter : BaseAdapter() {
     private fun bindRow(
         view: View,
         entry: DirectoryEntry,
+        position: Int,
         animateEditMode: Boolean,
         animateHeight: Boolean,
     ) {
@@ -575,6 +578,8 @@ private class LegacyFolderDirectoryAdapter : BaseAdapter() {
             text = "$trackCount  ${entry.displayPath}"
             setTextColor(FolderSecondaryTextColor)
         }
+        view.findViewById<View>(R.id.folder_row_divider)?.visibility =
+            if (hasFollowingExpandedRow(position)) View.VISIBLE else View.GONE
         if (!animateEditMode) {
             arrow?.visibility = if (editMode) View.GONE else View.VISIBLE
             arrow?.alpha = if (editMode) 0f else 1f
@@ -616,6 +621,12 @@ private class LegacyFolderDirectoryAdapter : BaseAdapter() {
             checked = selected,
             animate = animateEditMode,
         )
+    }
+
+    private fun hasFollowingExpandedRow(position: Int): Boolean {
+        return items.asSequence()
+            .drop(position + 1)
+            .any { entry -> editMode || hiddenRowsExpanded || !entry.hidden }
     }
 }
 

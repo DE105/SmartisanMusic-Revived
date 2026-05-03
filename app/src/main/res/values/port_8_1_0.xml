@@ -37,6 +37,7 @@
     <id name="empty" />
     <id name="empty_selected_view" />
     <id name="fragment_container" />
+    <id name="folder_row_divider" />
     <id name="fl_album_image" />
     <id name="fl_null_artist" />
     <id name="fl_list_tile" />

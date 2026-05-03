@@ -71,4 +71,11 @@
             android:src="@drawable/eye_icon_0001"
             android:visibility="gone" />
     </RelativeLayout>
+
+    <View
+        android:id="@id/folder_row_divider"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/listview_dividerHeight"
+        android:layout_alignParentBottom="true"
+        android:background="@color/listview_divider_color" />
 </com.smartisanos.music.ui.widgets.EditableLayout>
