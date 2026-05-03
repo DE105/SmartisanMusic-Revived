@@ -99,8 +99,8 @@ internal fun PlaybackMoreActionOverlays(
 @Composable
 internal fun PlaybackQueueOverlayHost(
     showQueueOverlay: Boolean,
-    currentTrack: PlaybackQueueTrack?,
-    upcomingItems: List<PlaybackQueueTrack>,
+    currentTrackProvider: () -> PlaybackQueueTrack?,
+    upcomingItemsProvider: () -> List<PlaybackQueueTrack>,
     isCurrentFavorite: Boolean,
     onExitFullScreenClick: () -> Unit,
     onReturnToPlaybackClick: () -> Unit,
@@ -129,6 +129,8 @@ internal fun PlaybackQueueOverlayHost(
             targetOffsetY = { fullHeight -> fullHeight },
         ),
     ) {
+        val currentTrack = currentTrackProvider()
+        val upcomingItems = upcomingItemsProvider()
         PlaybackQueueScreen(
             state = PlaybackQueueUiState(
                 currentTrack = currentTrack,

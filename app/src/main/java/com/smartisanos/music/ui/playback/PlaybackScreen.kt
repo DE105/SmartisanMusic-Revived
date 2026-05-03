@@ -946,8 +946,12 @@ fun PlaybackScreen(
 
         PlaybackQueueOverlayHost(
             showQueueOverlay = showQueueOverlay,
-            currentTrack = state.mediaItem?.toPlaybackQueueTrack(context),
-            upcomingItems = controller?.upcomingQueueTracks(context).orEmpty(),
+            currentTrackProvider = {
+                state.mediaItem?.toPlaybackQueueTrack(context)
+            },
+            upcomingItemsProvider = {
+                controller?.upcomingQueueTracks(context).orEmpty()
+            },
             isCurrentFavorite = favoriteEnabled,
             onExitFullScreenClick = {
                 showQueueOverlay = false
