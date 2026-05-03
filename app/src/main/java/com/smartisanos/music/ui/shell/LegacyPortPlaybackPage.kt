@@ -58,6 +58,7 @@ import com.smartisanos.music.data.favorite.FavoriteSongsRepository
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.playback.LocalPlaybackController
 import com.smartisanos.music.ui.playback.PlaybackScreen
+import com.smartisanos.music.ui.shell.titlebar.LegacyPortTitleBarShadow
 import kotlinx.coroutines.launch
 import smartisanos.widget.TitleBar
 
@@ -182,7 +183,7 @@ internal fun LegacyPortPlaybackPage(
                     .padding(top = titleTopPadding),
             )
         }
-        LegacyPlaybackTitleBarShadow(
+        LegacyPortTitleBarShadow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = titleTopPadding)
@@ -202,37 +203,6 @@ internal fun LegacyPortPlaybackPage(
                 .zIndex(3f),
         )
     }
-}
-
-@Composable
-private fun LegacyPlaybackTitleBarShadow(modifier: Modifier = Modifier) {
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            FrameLayout(context).apply {
-                clipChildren = false
-                addView(
-                    View(context).apply {
-                        setBackgroundResource(R.drawable.title_bar_shadow)
-                    },
-                    FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                    ),
-                )
-                addView(
-                    View(context).apply {
-                        setBackgroundResource(R.drawable.search_bar_background)
-                    },
-                    FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        resources.getDimensionPixelSize(R.dimen.bar_divider_height),
-                        Gravity.TOP,
-                    ),
-                )
-            }
-        },
-    )
 }
 
 @Composable
