@@ -88,7 +88,7 @@ private class LegacySettingsContentView(context: Context) : ScrollView(context) 
         orientation = LinearLayout.VERTICAL
     }
     private val scratchRow = LegacySettingsSwitchRow(context, R.string.djing)
-    private val axisRow = LegacySettingsSwitchRow(context, R.string.player_axis_and_needle_enabled)
+    private val axisRow = LegacySettingsSwitchRow(context, R.string.player_axis_enabled)
     private val popcornRow = LegacySettingsSwitchRow(context, R.string.popcorn_sound)
 
     init {
