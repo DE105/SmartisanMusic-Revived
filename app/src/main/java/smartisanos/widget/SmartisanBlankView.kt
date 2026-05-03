@@ -2,15 +2,24 @@ package smartisanos.widget
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.Gravity
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.smartisanos.music.R
 
 private val SmartisanBlankAttributeNamespaces = arrayOf(
+    "http://schemas.android.com/apk/res-auto",
     "http://schemas.android.com/apk/res/com.smartisanos.music",
     "http://schemas.android.com/apk/res/smartisanos",
+)
+
+private val SmartisanBlankAttributeIds = intArrayOf(
+    R.attr.emptyDrawable,
+    R.attr.primaryHint,
+    R.attr.secondaryHint,
 )
 
 class SmartisanBlankView @JvmOverloads constructor(
@@ -23,44 +32,86 @@ class SmartisanBlankView @JvmOverloads constructor(
         orientation = VERTICAL
         gravity = Gravity.CENTER
 
-        val drawableRes = attrs.resolveResource("emptyDrawable")
+        val blankAttributes = context.resolveBlankAttributes(attrs)
+        val drawableRes = blankAttributes.emptyDrawable
         if (drawableRes != 0) {
             addView(
                 ImageView(context).apply {
                     setImageResource(drawableRes)
                 },
+                LayoutParams(context.dp(120f), context.dp(120f)).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    topMargin = context.dp(40f)
+                },
             )
         }
 
-        resolveText(attrs, "primaryHint")?.let { primary ->
+        blankAttributes.primaryHint?.let { primary ->
             addView(
                 TextView(context).apply {
                     text = primary
                     gravity = Gravity.CENTER
-                    setTextColor(Color.rgb(0x99, 0x99, 0x99))
-                    textSize = 17f
+                    setTextColor(Color.argb(0x26, 0x00, 0x00, 0x00))
+                    setTypeface(typeface, Typeface.BOLD)
+                    setSingleLine(true)
+                    textSize = 20f
+                },
+                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    leftMargin = context.dp(60f)
+                    topMargin = context.dp(18f)
+                    rightMargin = context.dp(60f)
                 },
             )
         }
-        resolveText(attrs, "secondaryHint")?.let { secondary ->
+        blankAttributes.secondaryHint?.let { secondary ->
             addView(
                 TextView(context).apply {
                     text = secondary
                     gravity = Gravity.CENTER
-                    setTextColor(Color.rgb(0xbb, 0xbb, 0xbb))
+                    setTextColor(Color.argb(0x26, 0x00, 0x00, 0x00))
                     textSize = 13.5f
+                },
+                LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    leftMargin = context.dp(60f)
+                    topMargin = context.dp(5f)
+                    rightMargin = context.dp(60f)
+                    bottomMargin = context.dp(40f)
                 },
             )
         }
     }
+}
 
-    private fun resolveText(attrs: AttributeSet?, name: String): CharSequence? {
-        val resId = attrs.resolveResource(name)
-        return if (resId != 0) {
-            context.getText(resId)
-        } else {
-            attrs.resolveValue(name)
-        }
+private data class SmartisanBlankAttributes(
+    val emptyDrawable: Int,
+    val primaryHint: CharSequence?,
+    val secondaryHint: CharSequence?,
+)
+
+private fun Context.resolveBlankAttributes(attrs: AttributeSet?): SmartisanBlankAttributes {
+    val typedArray = obtainStyledAttributes(attrs, SmartisanBlankAttributeIds)
+    return try {
+        SmartisanBlankAttributes(
+            emptyDrawable = typedArray.getResourceId(0, 0).takeIf { it != 0 }
+                ?: attrs.resolveResource("emptyDrawable"),
+            primaryHint = typedArray.getText(1)
+                ?: attrs.resolveText(this, "primaryHint"),
+            secondaryHint = typedArray.getText(2)
+                ?: attrs.resolveText(this, "secondaryHint"),
+        )
+    } finally {
+        typedArray.recycle()
+    }
+}
+
+private fun AttributeSet?.resolveText(context: Context, name: String): CharSequence? {
+    val resId = resolveResource(name)
+    return if (resId != 0) {
+        context.getText(resId)
+    } else {
+        resolveValue(name)
     }
 }
 
@@ -87,4 +138,8 @@ private fun AttributeSet?.resolveValue(name: String): String? {
         }
     }
     return null
+}
+
+private fun Context.dp(value: Float): Int {
+    return (value * resources.displayMetrics.density + 0.5f).toInt()
 }
