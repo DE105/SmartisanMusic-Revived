@@ -229,7 +229,10 @@ private fun LegacyMoreRootPage(
             .fillMaxSize()
             .background(ComposeColor.White),
     ) {
-        LegacyPortSmartisanTitleBar(modifier = Modifier.fillMaxWidth()) { titleBar ->
+        LegacyPortSmartisanTitleBar(
+            modifier = Modifier.fillMaxWidth(),
+            showShadow = true,
+        ) { titleBar ->
             titleBar.setupLegacyMoreRootTitleBar(
                 onSettingsClick = onSettingsClick,
                 onSearchClick = onSearchClick,

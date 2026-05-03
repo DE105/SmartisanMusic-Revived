@@ -32,6 +32,9 @@ class TitleBar @JvmOverloads constructor(
 
     init {
         setBackgroundColor(context.getColor(android.R.color.white))
+        clipChildren = false
+        clipToPadding = false
+        elevation = 0.11f
 
         titleView = TextView(context).apply {
             id = View.generateViewId()
@@ -55,7 +58,8 @@ class TitleBar @JvmOverloads constructor(
 
         shadowView = ImageView(context).apply {
             id = View.generateViewId()
-            setBackgroundResource(R.drawable.title_bar_shadow_standard)
+            setBackgroundResource(R.drawable.title_bar_shadow)
+            translationY = titleBarHeight.toFloat()
         }
         addView(
             shadowView,
@@ -63,7 +67,7 @@ class TitleBar @JvmOverloads constructor(
                 LayoutParams.MATCH_PARENT,
                 resources.getDimensionPixelSize(R.dimen.title_bar_shadow_height),
             ).apply {
-                addRule(ALIGN_PARENT_BOTTOM)
+                addRule(ALIGN_PARENT_TOP)
             },
         )
     }
@@ -113,6 +117,7 @@ class TitleBar @JvmOverloads constructor(
 
     fun setTitleBarHeight(height: Int) {
         titleBarHeight = height
+        shadowView.translationY = titleBarHeight.toFloat()
         requestLayout()
     }
 

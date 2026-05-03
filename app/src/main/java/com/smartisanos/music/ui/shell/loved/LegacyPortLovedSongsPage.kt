@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.runtime.Composable
@@ -37,11 +38,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
@@ -56,6 +59,7 @@ import com.smartisanos.music.ui.loved.buildLovedSongsPlayRequest
 import com.smartisanos.music.ui.loved.buildLovedSongsShuffleRequest
 import com.smartisanos.music.ui.loved.sortLovedSongEntries
 import com.smartisanos.music.ui.shell.LegacyAlbumArtworkLoader
+import com.smartisanos.music.ui.shell.titlebar.LegacyPortTitleBarShadow
 import com.smartisanos.music.ui.shell.songs.LegacyTitleNormalizer
 import com.smartisanos.music.ui.widgets.EditableLayout
 import com.smartisanos.music.ui.widgets.StretchTextView
@@ -329,8 +333,10 @@ private fun LegacyLovedSongsTitleBar(
     modifier: Modifier = Modifier,
 ) {
     val titleContentHeight = dimensionResource(R.dimen.title_bar_height)
+    val shadowHeight = dimensionResource(R.dimen.title_bar_shadow_height)
     Column(
         modifier = modifier
+            .zIndex(1f)
             .fillMaxWidth()
             .background(ComposeColor.White),
     ) {
@@ -339,99 +345,100 @@ private fun LegacyLovedSongsTitleBar(
                 .fillMaxWidth()
                 .windowInsetsTopHeight(WindowInsets.statusBars),
         )
-        AndroidView(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(titleContentHeight),
-            factory = { context ->
-                FrameLayout(context).apply {
-                    LayoutInflater.from(context).inflate(R.layout.title_saved_songs, this, true)
-                    findViewById<Button>(R.id.bt_left)?.prepareTitleIconButton()
-                    findViewById<Button>(R.id.bt_right)?.prepareTitleIconButton()
-                    val rightButton = findViewById<Button>(R.id.bt_right)
-                    val sortButton = ImageButton(context).apply {
-                        id = R.id.saved_songs_sort_button
-                        background = null
-                        scaleType = ImageView.ScaleType.CENTER
-                        setImageResource(R.drawable.saved_songs_sort_btn_selector)
+        ) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    FrameLayout(context).apply {
+                        LayoutInflater.from(context).inflate(R.layout.title_saved_songs, this, true)
+                        findViewById<Button>(R.id.bt_left)?.prepareTitleIconButton()
+                        findViewById<Button>(R.id.bt_right)?.prepareTitleIconButton()
+                        val rightButton = findViewById<Button>(R.id.bt_right)
+                        val sortButton = ImageButton(context).apply {
+                            id = R.id.saved_songs_sort_button
+                            background = null
+                            scaleType = ImageView.ScaleType.CENTER
+                            setImageResource(R.drawable.saved_songs_sort_btn_selector)
+                        }
+                        val iconSize = resources.getDimensionPixelSize(R.dimen.standard_icon_size)
+                        val marginView = resources.getDimensionPixelSize(R.dimen.title_bar_margin_view)
+                        (getChildAt(0) as? RelativeLayout)?.addView(
+                            sortButton,
+                            RelativeLayout.LayoutParams(iconSize, iconSize).apply {
+                                addRule(RelativeLayout.CENTER_VERTICAL)
+                                if (rightButton != null) {
+                                    addRule(RelativeLayout.LEFT_OF, R.id.bt_right)
+                                } else {
+                                    addRule(RelativeLayout.ALIGN_PARENT_RIGHT)
+                                }
+                                rightMargin = marginView
+                            },
+                        )
                     }
-                    val iconSize = resources.getDimensionPixelSize(R.dimen.standard_icon_size)
-                    val marginView = resources.getDimensionPixelSize(R.dimen.title_bar_margin_view)
-                    (getChildAt(0) as? RelativeLayout)?.addView(
-                        sortButton,
-                        RelativeLayout.LayoutParams(iconSize, iconSize).apply {
-                            addRule(RelativeLayout.CENTER_VERTICAL)
-                            if (rightButton != null) {
-                                addRule(RelativeLayout.LEFT_OF, R.id.bt_right)
-                            } else {
-                                addRule(RelativeLayout.ALIGN_PARENT_RIGHT)
-                            }
-                            rightMargin = marginView
-                        },
-                    )
-                }
-            },
-            update = { root ->
-                val leftButton = root.findViewById<Button>(R.id.bt_left)
-                val rightButton = root.findViewById<Button>(R.id.bt_right)
-                val sortButton = root.findViewById<ImageButton>(R.id.saved_songs_sort_button)
-                root.findViewById<TextView>(R.id.tv_title)?.setText(R.string.collect_music)
+                },
+                update = { root ->
+                    val leftButton = root.findViewById<Button>(R.id.bt_left)
+                    val rightButton = root.findViewById<Button>(R.id.bt_right)
+                    val sortButton = root.findViewById<ImageButton>(R.id.saved_songs_sort_button)
+                    root.findViewById<TextView>(R.id.tv_title)?.setText(R.string.collect_music)
 
-                leftButton?.apply {
-                    setBackgroundResource(
-                        if (editMode) {
-                            R.drawable.standard_icon_cancel_selector
-                        } else {
-                            R.drawable.standard_icon_back_selector
-                        },
-                    )
-                    setOnClickListener {
-                        onBack()
+                    leftButton?.apply {
+                        setBackgroundResource(
+                            if (editMode) {
+                                R.drawable.standard_icon_cancel_selector
+                            } else {
+                                R.drawable.standard_icon_back_selector
+                            },
+                        )
+                        setOnClickListener {
+                            onBack()
+                        }
                     }
-                }
-                rightButton?.apply {
-                    setBackgroundResource(
-                        if (editMode) {
-                            R.drawable.titlebar_btn_delete_selector
-                        } else {
-                            R.drawable.standard_icon_multi_select_selector
-                        },
-                    )
-                    isEnabled = if (editMode) selectedCount > 0 else hasSongs
-                    setOnClickListener {
-                        if (editMode) {
-                            if (selectedCount > 0) {
-                                onRemoveSelected()
+                    rightButton?.apply {
+                        setBackgroundResource(
+                            if (editMode) {
+                                R.drawable.titlebar_btn_delete_selector
+                            } else {
+                                R.drawable.standard_icon_multi_select_selector
+                            },
+                        )
+                        isEnabled = if (editMode) selectedCount > 0 else hasSongs
+                        setOnClickListener {
+                            if (editMode) {
+                                if (selectedCount > 0) {
+                                    onRemoveSelected()
+                                }
+                            } else if (hasSongs) {
+                                onEnterEdit()
                             }
-                        } else if (hasSongs) {
-                            onEnterEdit()
                         }
                     }
-                }
-                sortButton?.apply {
-                    isEnabled = hasSongs
-                    setOnClickListener { anchor ->
-                        if (hasSongs) {
-                            showLovedSongsSortPopup(
-                                anchor = anchor,
-                                sortMode = sortMode,
-                                onSortModeChanged = onSortModeChanged,
-                            )
+                    sortButton?.apply {
+                        isEnabled = hasSongs
+                        setOnClickListener { anchor ->
+                            if (hasSongs) {
+                                showLovedSongsSortPopup(
+                                    anchor = anchor,
+                                    sortMode = sortMode,
+                                    onSortModeChanged = onSortModeChanged,
+                                )
+                            }
                         }
                     }
-                }
-            },
-        )
-        AndroidView(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(dimensionResource(R.dimen.titlebar_shadow_height)),
-            factory = { context ->
-                View(context).apply {
-                    setBackgroundResource(R.drawable.titlebar_bg_shadow)
-                }
-            },
-        )
+                },
+            )
+            LegacyPortTitleBarShadow(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .offset(y = shadowHeight)
+                    .fillMaxWidth()
+                    .height(shadowHeight),
+            )
+        }
     }
 }
 

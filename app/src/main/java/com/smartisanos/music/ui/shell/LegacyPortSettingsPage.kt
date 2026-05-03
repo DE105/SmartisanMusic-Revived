@@ -43,7 +43,10 @@ internal fun LegacyPortSettingsPage(
             .fillMaxSize()
             .background(ComposeColor.White),
     ) {
-        LegacyPortSmartisanTitleBar(modifier = Modifier.fillMaxWidth()) { titleBar ->
+        LegacyPortSmartisanTitleBar(
+            modifier = Modifier.fillMaxWidth(),
+            showShadow = true,
+        ) { titleBar ->
             titleBar.setupLegacySettingsTitleBar(onClose = onClose)
         }
         AndroidView(

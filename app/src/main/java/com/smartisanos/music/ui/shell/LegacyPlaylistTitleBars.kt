@@ -71,12 +71,18 @@ internal fun LegacyPlaylistTitleArea(
                     promptText.text = promptText.context.getString(R.string.add_track_to) + " \"$shortTitle\""
                 },
             )
-            LegacyPortSmartisanTitleBar(includeStatusBar = false) { titleBar ->
+            LegacyPortSmartisanTitleBar(
+                includeStatusBar = false,
+                showShadow = true,
+            ) { titleBar ->
                 titleBar.setupLegacyPlaylistAddModeTitleBar(onAddModeConfirm)
             }
         }
     } else {
-        LegacyPortSmartisanTitleBar(modifier = modifier) { titleBar ->
+        LegacyPortSmartisanTitleBar(
+            modifier = modifier,
+            showShadow = true,
+        ) { titleBar ->
             titleBar.setupLegacyPlaylistTitleBar(
                 target = target,
                 detailTitle = detailTitle,

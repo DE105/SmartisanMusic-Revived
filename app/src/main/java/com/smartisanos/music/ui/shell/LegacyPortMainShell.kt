@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
@@ -75,6 +76,7 @@ import com.smartisanos.music.ui.shell.search.LegacyPortSearchOverlay
 import com.smartisanos.music.ui.shell.search.LegacySearchDrilldownTarget
 import com.smartisanos.music.ui.shell.tabs.LegacyPortBottomBar
 import com.smartisanos.music.ui.shell.tabs.LegacyPortTabContent
+import com.smartisanos.music.ui.shell.titlebar.LegacyPortTitleBarShadow
 import com.smartisanos.music.ui.shell.titlebar.LegacyPortTitleBar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -438,13 +440,16 @@ private fun LegacyPortMainShellContent(
                 }
             },
         )
+        val titleContentHeight = dimensionResource(R.dimen.title_bar_height)
+        val titleShadowHeight = dimensionResource(R.dimen.title_bar_shadow_height)
+        val titleAreaHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + titleContentHeight
+        val mainTitleShadowVisible = currentDestination == MusicDestination.Artist ||
+            currentDestination == MusicDestination.Album
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(bottom = if (hideBottomChrome) 0.dp else realTabContentBottomMargin),
         ) {
-            val titleContentHeight = dimensionResource(R.dimen.title_bar_height)
-            val titleAreaHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + titleContentHeight
             val titleBarContent: @Composable (String?, LegacyArtistTarget?, Modifier) -> Unit = { albumDetailTitle, artistTarget, titleModifier ->
                 LegacyPortTitleBar(
                     destination = currentDestination,
@@ -610,6 +615,16 @@ private fun LegacyPortMainShellContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
+            )
+        }
+        if (mainTitleShadowVisible) {
+            LegacyPortTitleBarShadow(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(y = titleAreaHeight)
+                    .fillMaxWidth()
+                    .height(titleShadowHeight)
+                    .zIndex(4f),
             )
         }
         if (!hideBottomChrome) {

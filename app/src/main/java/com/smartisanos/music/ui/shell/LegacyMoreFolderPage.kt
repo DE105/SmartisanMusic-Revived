@@ -151,7 +151,10 @@ internal fun LegacyPortFolderPage(
             .fillMaxSize()
             .background(ComposeColor.White),
     ) {
-        LegacyPortSmartisanTitleBar(modifier = Modifier.fillMaxWidth()) { titleBar ->
+        LegacyPortSmartisanTitleBar(
+            modifier = Modifier.fillMaxWidth(),
+            showShadow = true,
+        ) { titleBar ->
             titleBar.setupLegacyFolderTitleBar(
                 target = target,
                 editMode = editMode,
