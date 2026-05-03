@@ -23,11 +23,20 @@
         android:layout_height="wrap_content"
         android:layout_centerVertical="true"
         android:layout_marginLeft="@dimen/listview_items_margin_left"
-        android:layout_toLeftOf="@id/img_action_more"
+        android:layout_toLeftOf="@id/rl_right"
         android:duplicateParentState="true"
         android:singleLine="true"
         android:textColor="@drawable/text_color_white_and_gray1_selector"
         android:textSize="@dimen/text_size_micro" />
+
+    <View
+        android:id="@id/rl_right"
+        android:layout_width="30.0dp"
+        android:layout_height="30.0dp"
+        android:layout_alignParentRight="true"
+        android:layout_centerVertical="true"
+        android:layout_marginRight="@dimen/listview_items_margin_right"
+        android:visibility="invisible" />
 
     <ImageView
         android:id="@id/img_action_more"

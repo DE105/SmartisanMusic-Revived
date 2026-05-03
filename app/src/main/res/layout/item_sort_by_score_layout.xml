@@ -22,12 +22,21 @@
         android:layout_width="wrap_content"
         android:layout_height="14.0dp"
         android:layout_centerVertical="true"
-        android:layout_toLeftOf="@id/img_action_more"
+        android:layout_toLeftOf="@id/rl_right"
         android:contentDescription="@string/sort_by_song_score"
         android:isIndicator="true"
         android:max="5"
         android:progressDrawable="@drawable/rating_bar_small_style"
         android:stepSize="1.0" />
+
+    <View
+        android:id="@id/rl_right"
+        android:layout_width="30.0dp"
+        android:layout_height="30.0dp"
+        android:layout_alignParentRight="true"
+        android:layout_centerVertical="true"
+        android:layout_marginRight="@dimen/listview_items_margin_right"
+        android:visibility="invisible" />
 
     <ImageView
         android:id="@id/img_action_more"
