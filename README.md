@@ -24,12 +24,14 @@ Smartisan OS 早已退出历史舞台，原版音乐播放器也留在了旧 And
 ## 真机截图
 
 <p align="center">
-  <img src="docs/images/device-shot-01.jpg" width="280" />
-  <img src="docs/images/device-shot-02.jpg" width="280" />
-  <img src="docs/images/device-shot-03.jpg" width="280" />
-  <img src="docs/images/device-shot-04.jpg" width="280" />
-  <img src="docs/images/device-shot-05.jpg" width="280" />
-  <img src="docs/images/device-shot-06.jpg" width="280" />
+  <img src="docs/images/device-shot-01.jpg" width="220" />
+  <img src="docs/images/device-shot-02.jpg" width="220" />
+  <img src="docs/images/device-shot-03.jpg" width="220" />
+</p>
+<p align="center">
+  <img src="docs/images/device-shot-04.jpg" width="220" />
+  <img src="docs/images/device-shot-05.jpg" width="220" />
+  <img src="docs/images/device-shot-06.jpg" width="220" />
 </p>
 
 ## 为什么又重写了一版？
