@@ -523,7 +523,7 @@ private fun LegacyPortArtistAllSongsPage(
                     }
                 },
             )
-            val adapter = root.listView.adapter as? LegacyAlbumTrackAdapter
+            val adapter = root.listView.legacyAlbumTrackAdapter()
                 ?: LegacyAlbumTrackAdapter().also { adapter ->
                     root.listView.adapter = adapter
                 }

@@ -13,6 +13,7 @@ import android.view.ViewGroup
 import android.widget.AbsListView
 import android.widget.BaseAdapter
 import android.widget.FrameLayout
+import android.widget.HeaderViewListAdapter
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -101,7 +102,7 @@ internal fun LegacyPortAlbumDetailPage(
                 },
             )
 
-            val adapter = root.listView.adapter as? LegacyAlbumTrackAdapter
+            val adapter = root.listView.legacyAlbumTrackAdapter()
                 ?: LegacyAlbumTrackAdapter().also { adapter ->
                     root.listView.adapter = adapter
                 }
@@ -125,6 +126,14 @@ internal fun LegacyPortAlbumDetailPage(
             }
         },
     )
+}
+
+internal fun ListView.legacyAlbumTrackAdapter(): LegacyAlbumTrackAdapter? {
+    return when (val currentAdapter = adapter) {
+        is LegacyAlbumTrackAdapter -> currentAdapter
+        is HeaderViewListAdapter -> currentAdapter.wrappedAdapter as? LegacyAlbumTrackAdapter
+        else -> null
+    }
 }
 
 private class LegacyAlbumDetailRoot(context: Context) : FrameLayout(context) {
