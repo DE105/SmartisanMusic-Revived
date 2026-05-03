@@ -99,6 +99,12 @@
     <string name="play">播放</string>
     <string name="play_all">全部播放</string>
     <string name="play_shuffle">随机播放</string>
+    <string name="sort_title">歌曲排序</string>
+    <string name="sort_by_saved_time">最近添加</string>
+    <string name="sort_by_name">歌曲名称</string>
+    <string name="track_count">%1$d 首歌曲</string>
+    <string name="uncollect_song_dialog_title">确认取消喜欢选中的歌曲？</string>
+    <string name="uncollect_song_confirm">取消喜欢</string>
     <string name="pause">暂停</string>
     <string name="favorite">收藏</string>
     <string name="volume">音量</string>

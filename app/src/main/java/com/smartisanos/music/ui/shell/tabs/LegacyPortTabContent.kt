@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.media3.common.MediaItem
+import com.smartisanos.music.data.favorite.FavoriteSongRecord
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.ui.album.AlbumViewMode
 import com.smartisanos.music.ui.navigation.MusicDestination
@@ -24,6 +25,7 @@ import com.smartisanos.music.ui.shell.songs.LegacyPortSongsPage
 internal fun LegacyPortTabContent(
     destination: MusicDestination,
     mediaItems: List<MediaItem>,
+    favoriteRecords: List<FavoriteSongRecord>,
     libraryLoaded: Boolean,
     songsEditMode: Boolean,
     selectedSongIds: Set<String>,
@@ -46,7 +48,9 @@ internal fun LegacyPortTabContent(
     onMediaIdsHidden: (Set<String>) -> Unit,
     onRequestDeleteMediaIds: (Set<String>) -> Unit,
     onLibraryTrackMoreClick: (MediaItem) -> Unit,
+    onLovedSongsTrackMoreClick: (MediaItem) -> Unit,
     onPlaylistTrackMoreClick: (MediaItem) -> Unit,
+    onRemoveFavoriteMediaIds: (Set<String>) -> Unit,
     onMoreSettingsPageActiveChanged: (Boolean) -> Unit,
     onToggleSongSelected: (String) -> Unit,
     onToggleAlbumSelected: (String) -> Unit,
@@ -118,7 +122,11 @@ internal fun LegacyPortTabContent(
             )
             MusicDestination.More -> LegacyPortMorePage(
                 active = true,
+                mediaItems = mediaItems,
+                favoriteRecords = favoriteRecords,
+                hiddenMediaIds = hiddenMediaIds,
                 playbackSettings = playbackSettings,
+                libraryLoaded = libraryLoaded,
                 libraryRefreshVersion = libraryRefreshVersion,
                 libraryRefreshing = libraryRefreshing,
                 onRefreshLibrary = onRefreshLibrary,
@@ -127,6 +135,8 @@ internal fun LegacyPortTabContent(
                 onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,
                 onMediaIdsHidden = onMediaIdsHidden,
                 onRequestDeleteMediaIds = onRequestDeleteMediaIds,
+                onLovedSongsTrackMoreClick = onLovedSongsTrackMoreClick,
+                onRemoveFavoriteMediaIds = onRemoveFavoriteMediaIds,
                 onSettingsPageActiveChanged = onMoreSettingsPageActiveChanged,
                 onSearchClick = onSearchClick,
                 modifier = Modifier.fillMaxSize(),

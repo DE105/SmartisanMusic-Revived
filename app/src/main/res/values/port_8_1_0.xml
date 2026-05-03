@@ -17,10 +17,14 @@
     <id name="all_track_fragment_container" />
     <id name="arrow" />
     <id name="artist_name" />
+    <id name="bt_left" />
     <id name="bt_play" />
+    <id name="bt_right" />
     <id name="bt_shuffle" />
     <id name="btn_add_to_playlist" />
     <id name="btn_add_to_queue" />
+    <id name="btn_more" />
+    <id name="circle_cover" />
     <id name="control_zone" />
     <id name="content" />
     <id name="cover_zone" />
@@ -56,6 +60,7 @@
     <id name="iv_right_view" />
     <id name="iv_mask_albumcover" />
     <id name="l_alltrack_header" />
+    <id name="layout_play_container" />
     <id name="left_container" />
     <id name="left_icon" />
     <id name="linerlayout" />
@@ -68,10 +73,12 @@
     <id name="listview_item_line_one" />
     <id name="listview_item_line_two" />
     <id name="ll_bright" />
+    <id name="ll_left" />
     <id name="ll_group_button_container" />
     <id name="ll_title" />
     <id name="mid_container" />
     <id name="mime_type" />
+    <id name="music_download_view" />
     <id name="next_btn" />
     <id name="operation_zone" />
     <id name="play_container" />
@@ -92,9 +99,12 @@
     <id name="rb_score" />
     <id name="sb_rb_playlist" />
     <id name="second_line_view" />
+    <id name="saved_songs_sort_button" />
     <id name="smartisan_iv_btn_group_shadow" />
     <id name="smartlist_header" />
     <id name="song_info_zone" />
+    <id name="song_quality" />
+    <id name="song_vip" />
     <id name="status_bar_album_art" />
     <id name="status_bar_artist_name" />
     <id name="status_bar_collapse" />
@@ -109,6 +119,7 @@
     <id name="text" />
     <id name="textwidth" />
     <id name="track_name" />
+    <id name="tv_title" />
     <id name="tv_play_count" />
     <id name="tv_duration" />
     <id name="tv_album_name" />
@@ -128,6 +139,8 @@
     <id name="menu_dialog_title_bar" />
     <id name="menu_dialog_title_bar_container" />
     <id name="menu_text" />
+    <id name="menu_selected" />
+    <id name="menu_title" />
     <id name="number_picker" />
     <id name="parentPanel" />
     <id name="poprelative" />
@@ -194,6 +207,7 @@
     <dimen name="button_text_size">14.0sp</dimen>
     <dimen name="btn_margin_right">8.0dp</dimen>
     <dimen name="check_box_margin_left">18.0dp</dimen>
+    <dimen name="collect_text_padding_top">8.0dp</dimen>
     <dimen name="common_padding_left">12.0dp</dimen>
     <dimen name="float_button_margin">3.0dp</dimen>
     <dimen name="float_cover_padding_left">12.0dp</dimen>
@@ -228,6 +242,7 @@
     <dimen name="playback_bar_text_width">143.29999dp</dimen>
     <dimen name="play_list_check_box_margin_left">20.0dp</dimen>
     <dimen name="play_list_check_box_margin_right">20.0dp</dimen>
+    <dimen name="popup_list_menu_item_height">44.0dp</dimen>
     <dimen name="playlist_right_action_width">30.0dp</dimen>
     <dimen name="primary_text_size">17.0sp</dimen>
     <dimen name="quickbar_width">217.5dp</dimen>
@@ -242,6 +257,7 @@
     <dimen name="smartisan_quickbarex_gridview_font_size">16.0sp</dimen>
     <dimen name="realtabcontent_margin_bottom">54.0dp</dimen>
     <dimen name="right_container_margin">6.0dp</dimen>
+    <dimen name="saved_songs_items_margin_left">15.5dp</dimen>
     <dimen name="samrtisan_button_fixed_height">48.0dp</dimen>
     <dimen name="sb_tab_bar_top_padding">7.0dp</dimen>
     <dimen name="secondary_bar_height">48.0dp</dimen>
@@ -272,6 +288,7 @@
     <dimen name="title_bar_margin_view">12.0dp</dimen>
     <dimen name="title_bar_shadow_height">14.0dp</dimen>
     <dimen name="title_bar_title_size">18.0px</dimen>
+    <dimen name="title_button_max_width">110.0dp</dimen>
     <dimen name="title_text_size">20.0sp</dimen>
     <dimen name="titlebar_height">48.0dp</dimen>
     <dimen name="time_picker_text_size">16.0dp</dimen>
@@ -351,6 +368,7 @@
     <integer name="gridview_columns">3</integer>
     <integer name="quickbar_ex_num_columns">3</integer>
     <integer name="smartisan_letterbar_gridview_column_num">3</integer>
+    <integer name="text_shaow">-2</integer>
 
     <style name="StatusBarButton">
         <item name="android:background">?android:listChoiceBackgroundIndicator</item>
@@ -397,6 +415,16 @@
         <item name="android:visibility">gone</item>
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">match_parent</item>
+    </style>
+
+    <style name="bt_style">
+        <item name="android:textSize">@dimen/button_text_size</item>
+        <item name="android:textColor">@color/title_color</item>
+        <item name="android:gravity">center</item>
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_centerVertical">true</item>
+        <item name="android:background">@android:color/transparent</item>
     </style>
 
     <style name="ListContentItemPrimaryText">

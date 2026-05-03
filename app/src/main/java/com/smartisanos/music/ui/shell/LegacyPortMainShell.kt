@@ -82,6 +82,7 @@ import kotlinx.coroutines.withContext
 
 private enum class LegacyTrackActionSource {
     Library,
+    Loved,
     Playlist,
 }
 
@@ -127,6 +128,7 @@ private fun LegacyPortMainShellContent(
     val favoriteIds by favoriteRepository.observeFavoriteIds().collectAsState(initial = emptySet())
     val libraryExclusions by libraryExclusionsStore.exclusions.collectAsState(initial = LibraryExclusions())
     val playbackSettings by playbackSettingsStore.settings.collectAsState(initial = PlaybackSettings())
+    val favoriteRecords by favoriteRepository.observeFavorites().collectAsState(initial = emptyList())
     val playlists by playlistRepository.playlists.collectAsState(initial = emptyList())
     var playbackVisible by remember { mutableStateOf(false) }
     var searchVisible by remember { mutableStateOf(false) }
@@ -283,6 +285,19 @@ private fun LegacyPortMainShellContent(
         }
         pendingSongDeleteMediaIds = mediaIds
         showSongDeleteConfirm = true
+    }
+
+    fun removeFavoriteMediaIds(mediaIds: Set<String>) {
+        if (mediaIds.isEmpty()) {
+            return
+        }
+        scope.launch {
+            if (mediaIds.size == 1) {
+                favoriteRepository.remove(mediaIds.first())
+            } else {
+                favoriteRepository.removeAll(mediaIds)
+            }
+        }
     }
 
     fun refreshLegacyLibrary() {
@@ -518,6 +533,7 @@ private fun LegacyPortMainShellContent(
             LegacyPortTabContent(
                 destination = currentDestination,
                 mediaItems = legacyLibrary.items,
+                favoriteRecords = favoriteRecords,
                 libraryLoaded = legacyLibrary.loaded,
                 songsEditMode = currentDestination == MusicDestination.Songs && songsEditMode,
                 selectedSongIds = selectedSongIds,
@@ -554,9 +570,13 @@ private fun LegacyPortMainShellContent(
                 onLibraryTrackMoreClick = { item ->
                     showTrackActions(item, LegacyTrackActionSource.Library)
                 },
+                onLovedSongsTrackMoreClick = { item ->
+                    showTrackActions(item, LegacyTrackActionSource.Loved)
+                },
                 onPlaylistTrackMoreClick = { item ->
                     showTrackActions(item, LegacyTrackActionSource.Playlist)
                 },
+                onRemoveFavoriteMediaIds = ::removeFavoriteMediaIds,
                 onMoreSettingsPageActiveChanged = { active ->
                     moreSettingsPageActive = active
                 },

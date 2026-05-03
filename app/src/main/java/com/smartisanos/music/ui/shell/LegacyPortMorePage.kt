@@ -49,6 +49,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
+import com.smartisanos.music.data.favorite.FavoriteSongRecord
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.data.library.LibraryExclusions
 import com.smartisanos.music.data.library.LibraryExclusionsStore
@@ -62,6 +63,7 @@ import com.smartisanos.music.ui.folder.buildDirectoryEntries
 import com.smartisanos.music.ui.folder.filterDirectoryEntriesForDisplay
 import com.smartisanos.music.ui.folder.filterMediaItemsForDirectory
 import com.smartisanos.music.ui.folder.mediaIdsInDirectory
+import com.smartisanos.music.ui.shell.loved.LegacyPortLovedSongsPage
 import com.smartisanos.music.ui.widgets.EditableLayout
 import com.smartisanos.music.ui.widgets.StretchTextView
 import kotlinx.coroutines.Dispatchers
@@ -76,6 +78,7 @@ import java.util.Locale
 import kotlin.random.Random
 
 private enum class LegacyMoreSecondaryTarget {
+    LovedSongs,
     Folder,
     Settings,
 }
@@ -101,7 +104,11 @@ private enum class LegacyMoreRootEntry(
 @Composable
 internal fun LegacyPortMorePage(
     active: Boolean,
+    mediaItems: List<MediaItem>,
+    favoriteRecords: List<FavoriteSongRecord>,
+    hiddenMediaIds: Set<String>,
     playbackSettings: PlaybackSettings,
+    libraryLoaded: Boolean,
     libraryRefreshVersion: Int,
     libraryRefreshing: Boolean,
     onRefreshLibrary: () -> Unit,
@@ -110,6 +117,8 @@ internal fun LegacyPortMorePage(
     onPopcornSoundEnabledChange: (Boolean) -> Unit,
     onMediaIdsHidden: (Set<String>) -> Unit,
     onRequestDeleteMediaIds: (Set<String>) -> Unit,
+    onLovedSongsTrackMoreClick: (MediaItem) -> Unit,
+    onRemoveFavoriteMediaIds: (Set<String>) -> Unit,
     onSettingsPageActiveChanged: (Boolean) -> Unit,
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -138,6 +147,7 @@ internal fun LegacyPortMorePage(
         label = "legacy more page stack",
         axisForKey = { target ->
             when (target) {
+                LegacyMoreSecondaryTarget.LovedSongs -> LegacyPortPageStackAxis.Horizontal
                 LegacyMoreSecondaryTarget.Folder -> LegacyPortPageStackAxis.Horizontal
                 LegacyMoreSecondaryTarget.Settings -> LegacyPortPageStackAxis.VerticalPush
             }
@@ -153,6 +163,9 @@ internal fun LegacyPortMorePage(
                 onFolderClick = {
                     secondaryTarget = LegacyMoreSecondaryTarget.Folder
                 },
+                onLovedSongsClick = {
+                    secondaryTarget = LegacyMoreSecondaryTarget.LovedSongs
+                },
                 onRefreshLibrary = onRefreshLibrary,
                 onSearchClick = onSearchClick,
                 modifier = Modifier.fillMaxSize(),
@@ -160,6 +173,19 @@ internal fun LegacyPortMorePage(
         },
         secondaryContent = { target ->
             when (target) {
+                LegacyMoreSecondaryTarget.LovedSongs -> LegacyPortLovedSongsPage(
+                    active = active && secondaryTarget == LegacyMoreSecondaryTarget.LovedSongs,
+                    mediaItems = mediaItems,
+                    favoriteRecords = favoriteRecords,
+                    hiddenMediaIds = hiddenMediaIds,
+                    libraryLoaded = libraryLoaded,
+                    onClose = {
+                        secondaryTarget = null
+                    },
+                    onTrackMoreClick = onLovedSongsTrackMoreClick,
+                    onRemoveFavoriteMediaIds = onRemoveFavoriteMediaIds,
+                    modifier = Modifier.fillMaxSize(),
+                )
                 LegacyMoreSecondaryTarget.Folder -> LegacyPortFolderPage(
                     active = active,
                     libraryRefreshVersion = libraryRefreshVersion,
@@ -193,6 +219,7 @@ private fun LegacyMoreRootPage(
     libraryRefreshing: Boolean,
     onSettingsClick: () -> Unit,
     onFolderClick: () -> Unit,
+    onLovedSongsClick: () -> Unit,
     onRefreshLibrary: () -> Unit,
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -212,6 +239,7 @@ private fun LegacyMoreRootPage(
             active = active,
             libraryRefreshing = libraryRefreshing,
             onFolderClick = onFolderClick,
+            onLovedSongsClick = onLovedSongsClick,
             onRefreshLibrary = onRefreshLibrary,
             modifier = Modifier
                 .fillMaxWidth()
@@ -245,6 +273,7 @@ private fun LegacyMoreRootList(
     active: Boolean,
     libraryRefreshing: Boolean,
     onFolderClick: () -> Unit,
+    onLovedSongsClick: () -> Unit,
     onRefreshLibrary: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -270,9 +299,10 @@ private fun LegacyMoreRootList(
             adapter.updateRefreshing(libraryRefreshing)
             listView.setOnItemClickListener { _, _, position, _ ->
                 when (adapter.itemAt(position)) {
+                    LegacyMoreRootEntry.LovedSongs -> onLovedSongsClick()
                     LegacyMoreRootEntry.Folder -> onFolderClick()
                     LegacyMoreRootEntry.Rescan -> onRefreshLibrary()
-                    else -> Unit
+                    null -> Unit
                 }
             }
         },
