@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -239,6 +240,7 @@ internal fun PlaybackControlButtons(
     repeatMode: Int,
     shuffleEnabled: Boolean,
     scale: Float,
+    entranceTimeMillis: Float,
     onRepeatClick: () -> Unit,
     onPreviousClick: () -> Unit,
     onPlayPauseClick: () -> Unit,
@@ -259,7 +261,16 @@ internal fun PlaybackControlButtons(
             contentDescription = stringResource(repeatContentDescriptionRes(repeatMode)),
             modifier = Modifier
                 .width(67.3.dp * scale)
-                .height(87.dp * scale),
+                .height(87.dp * scale)
+                .then(
+                    playbackControlEntranceModifier(
+                        timeMillis = entranceTimeMillis,
+                        delayMillis = PlaybackOuterButtonAlphaDelayMillis,
+                        durationMillis = PlaybackOuterButtonAlphaDurationMillis,
+                        offsetY = PlaybackControlEntranceOffset,
+                        animateY = false,
+                    ),
+                ),
             onClick = onRepeatClick,
         )
         PressedDrawableButton(
@@ -268,7 +279,15 @@ internal fun PlaybackControlButtons(
             contentDescription = stringResource(R.string.previous_song),
             modifier = Modifier
                 .width(70.dp * scale)
-                .height(87.dp * scale),
+                .height(87.dp * scale)
+                .then(
+                    playbackControlEntranceModifier(
+                        timeMillis = entranceTimeMillis,
+                        delayMillis = PlaybackSideButtonEntranceDelayMillis,
+                        durationMillis = PlaybackControlEntranceDurationMillis,
+                        offsetY = PlaybackControlEntranceOffset,
+                    ),
+                ),
             onClick = onPreviousClick,
         )
         PressedDrawableButton(
@@ -289,7 +308,15 @@ internal fun PlaybackControlButtons(
             },
             modifier = Modifier
                 .width(85.3.dp * scale)
-                .height(87.dp * scale),
+                .height(87.dp * scale)
+                .then(
+                    playbackControlEntranceModifier(
+                        timeMillis = entranceTimeMillis,
+                        delayMillis = PlaybackPlayButtonEntranceDelayMillis,
+                        durationMillis = PlaybackControlEntranceDurationMillis,
+                        offsetY = PlaybackControlEntranceOffset,
+                    ),
+                ),
             onClick = onPlayPauseClick,
         )
         PressedDrawableButton(
@@ -298,7 +325,15 @@ internal fun PlaybackControlButtons(
             contentDescription = stringResource(R.string.next_song),
             modifier = Modifier
                 .width(70.dp * scale)
-                .height(87.dp * scale),
+                .height(87.dp * scale)
+                .then(
+                    playbackControlEntranceModifier(
+                        timeMillis = entranceTimeMillis,
+                        delayMillis = PlaybackSideButtonEntranceDelayMillis,
+                        durationMillis = PlaybackControlEntranceDurationMillis,
+                        offsetY = PlaybackControlEntranceOffset,
+                    ),
+                ),
             onClick = onNextClick,
         )
         PressedDrawableButton(
@@ -315,9 +350,43 @@ internal fun PlaybackControlButtons(
             contentDescription = stringResource(R.string.shuffle),
             modifier = Modifier
                 .width(67.3.dp * scale)
-                .height(87.dp * scale),
+                .height(87.dp * scale)
+                .then(
+                    playbackControlEntranceModifier(
+                        timeMillis = entranceTimeMillis,
+                        delayMillis = PlaybackOuterButtonAlphaDelayMillis,
+                        durationMillis = PlaybackOuterButtonAlphaDurationMillis,
+                        offsetY = PlaybackControlEntranceOffset,
+                        animateY = false,
+                    ),
+                ),
             onClick = onShuffleClick,
         )
+    }
+}
+
+@Composable
+private fun playbackControlEntranceModifier(
+    timeMillis: Float,
+    delayMillis: Int,
+    durationMillis: Int,
+    offsetY: Dp,
+    animateY: Boolean = true,
+): Modifier {
+    val density = LocalDensity.current
+    val progress = playbackEntranceProgress(
+        timeMillis = timeMillis,
+        delayMillis = delayMillis,
+        durationMillis = durationMillis,
+    )
+    val offsetYPx = with(density) {
+        offsetY.roundToPx().toFloat()
+    }
+    return Modifier.graphicsLayer {
+        if (animateY) {
+            translationY = (1f - progress) * offsetYPx
+        }
+        alpha = if (animateY) 1f else progress
     }
 }
 

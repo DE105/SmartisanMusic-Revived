@@ -36,7 +36,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -93,6 +95,7 @@ internal fun PlaybackBottomControls(
     width: Dp,
     bottomInset: Dp,
     state: PlaybackScreenState,
+    entranceTimeMillis: Float,
     onRepeatClick: () -> Unit,
     onPreviousClick: () -> Unit,
     onPlayPauseClick: () -> Unit,
@@ -100,6 +103,16 @@ internal fun PlaybackBottomControls(
     onShuffleClick: () -> Unit,
     onVolumeChange: (Float) -> Unit,
 ) {
+    val density = LocalDensity.current
+    val volumeEntranceProgress = playbackEntranceProgress(
+        timeMillis = entranceTimeMillis,
+        delayMillis = PlaybackVolumeEntranceDelayMillis,
+        durationMillis = PlaybackControlEntranceDurationMillis,
+    )
+    val controlEntranceOffsetPx = with(density) {
+        PlaybackControlEntranceOffset.roundToPx().toFloat()
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -116,6 +129,7 @@ internal fun PlaybackBottomControls(
                 repeatMode = state.repeatMode,
                 shuffleEnabled = state.shuffleEnabled,
                 scale = width.value / 360f,
+                entranceTimeMillis = entranceTimeMillis,
                 onRepeatClick = onRepeatClick,
                 onPreviousClick = onPreviousClick,
                 onPlayPauseClick = onPlayPauseClick,
@@ -123,7 +137,11 @@ internal fun PlaybackBottomControls(
                 onShuffleClick = onShuffleClick,
             )
             PlaybackVolumeBar(
-                modifier = Modifier.padding(top = 18.dp),
+                modifier = Modifier
+                    .padding(top = 18.dp)
+                    .graphicsLayer {
+                        translationY = (1f - volumeEntranceProgress) * controlEntranceOffsetPx
+                    },
                 width = width,
                 value = state.volume.coerceIn(0f, 1f),
                 onValueChange = onVolumeChange,

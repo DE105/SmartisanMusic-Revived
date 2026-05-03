@@ -75,6 +75,30 @@ internal val PlaybackSeekBarDividerHeight = 0.7.dp
 internal val PlaybackVolumeBarHeight = 60.dp
 internal val PlaybackVolumeThumbOffset = 5.dp
 internal val PlaybackActionButtonSize = 31.dp
+internal val PlaybackControlEntranceOffset = 186.dp
+
+internal const val PlaybackEntranceTotalDurationMillis = 980
+internal const val PlaybackTurntableEntranceDurationMillis = 300
+internal const val PlaybackControlEntranceDurationMillis = 240
+internal const val PlaybackPlayButtonEntranceDelayMillis = 100
+internal const val PlaybackSideButtonEntranceDelayMillis = 150
+internal const val PlaybackVolumeEntranceDelayMillis = 155
+internal const val PlaybackOuterButtonAlphaDelayMillis = 500
+internal const val PlaybackOuterButtonAlphaDurationMillis = 480
+
+internal fun playbackEntranceProgress(
+    timeMillis: Float,
+    delayMillis: Int,
+    durationMillis: Int,
+): Float {
+    if (durationMillis <= 0) {
+        return 1f
+    }
+    val linear = ((timeMillis - delayMillis.toFloat()) / durationMillis.toFloat())
+        .coerceIn(0f, 1f)
+    val inverse = 1f - linear
+    return 1f - inverse * inverse * inverse
+}
 
 internal val PlaybackTitleStyle = TextStyle(
     fontSize = 18.sp,

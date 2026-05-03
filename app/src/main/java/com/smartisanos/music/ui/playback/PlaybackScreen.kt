@@ -9,6 +9,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -37,6 +40,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -105,6 +109,7 @@ fun PlaybackScreen(
     val playlistRepository = remember(context.applicationContext) {
         PlaylistRepository.getInstance(context.applicationContext)
     }
+    val entranceTimeMillis = remember { Animatable(0f) }
     val favoriteIds by favoriteRepository.observeFavoriteIds().collectAsState(initial = emptySet())
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -135,6 +140,17 @@ fun PlaybackScreen(
     var scratchFlingJob by remember { mutableStateOf<Job?>(null) }
     var discManualRotationOffsetDegrees by remember { mutableFloatStateOf(0f) }
     val sleepTimerState by PlaybackSleepTimer.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        entranceTimeMillis.snapTo(0f)
+        entranceTimeMillis.animateTo(
+            targetValue = PlaybackEntranceTotalDurationMillis.toFloat(),
+            animationSpec = tween(
+                durationMillis = PlaybackEntranceTotalDurationMillis,
+                easing = LinearEasing,
+            ),
+        )
+    }
 
     fun clearPendingDeleteTarget() {
         pendingDeleteMediaId = null
@@ -634,6 +650,9 @@ fun PlaybackScreen(
             .background(PlaybackPageBackground),
     ) {
         val density = LocalDensity.current
+        val screenHeightPx = with(density) {
+            maxHeight.roundToPx()
+        }
         val topInset = with(density) {
             WindowInsets.safeDrawing.getTop(this).toDp()
         }
@@ -647,6 +666,11 @@ fun PlaybackScreen(
             OriginalTurntableBaseWidthDp.dp,
         )
         val scale = turntableWidth.value / OriginalTurntableBaseWidthDp
+        val turntableEntranceProgress = playbackEntranceProgress(
+            timeMillis = entranceTimeMillis.value,
+            delayMillis = 0,
+            durationMillis = PlaybackTurntableEntranceDurationMillis,
+        )
 
         Box(
             modifier = Modifier
@@ -677,7 +701,10 @@ fun PlaybackScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 16.dp),
+                    .padding(top = 16.dp)
+                    .graphicsLayer {
+                        translationY = (1f - turntableEntranceProgress) * screenHeightPx.toFloat()
+                    },
                 contentAlignment = Alignment.TopCenter,
             ) {
                 PlaybackVisualStage(
@@ -814,6 +841,7 @@ fun PlaybackScreen(
                 width = bottomControlsWidth,
                 bottomInset = bottomInset,
                 state = state,
+                entranceTimeMillis = entranceTimeMillis.value,
                 onRepeatClick = {
                     val nextRepeatMode = nextPlaybackRepeatMode(state.repeatMode)
                     controller?.repeatMode = nextRepeatMode
