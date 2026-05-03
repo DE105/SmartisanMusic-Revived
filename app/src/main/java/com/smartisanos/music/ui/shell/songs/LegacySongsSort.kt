@@ -128,7 +128,13 @@ internal const val LegacyAddedTimeBucketOlder = 4
 private const val LegacyDayMillis = 24L * 60L * 60L * 1000L
 
 internal fun MediaItem.legacyRating(): Long {
-    return mediaMetadata.extras?.getLong("star", 0L) ?: 0L
+    return mediaMetadata.extras?.legacyExtraLong(
+        LocalAudioLibrary.RatingExtraKey,
+        "star",
+        "score",
+        "rating",
+        "play_score",
+    )?.coerceIn(0L, 5L) ?: 0L
 }
 
 internal fun MediaItem.legacyPlayCount(): Long {

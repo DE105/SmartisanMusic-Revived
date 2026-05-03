@@ -5,6 +5,7 @@ import androidx.room.withTransaction
 
 data class PlaybackStatsRecord(
     val playCount: Long,
+    val score: Int,
 )
 
 class PlaybackStatsRepository private constructor(
@@ -18,6 +19,7 @@ class PlaybackStatsRepository private constructor(
             .associate { row ->
                 row.mediaId to PlaybackStatsRecord(
                     playCount = row.playCount,
+                    score = row.score,
                 )
             }
     }
@@ -36,11 +38,37 @@ class PlaybackStatsRepository private constructor(
                     PlaybackStatsEntity(
                         mediaId = normalizedMediaId,
                         playCount = 1L,
+                        score = 0,
                         updatedAt = updatedAt,
                     ),
                 )
             }
             playbackStatsDao.getPlayCount(normalizedMediaId)
+        }
+    }
+
+    suspend fun setScore(
+        mediaId: String,
+        score: Int,
+        updatedAt: Long = System.currentTimeMillis(),
+    ): Int? {
+        val normalizedMediaId = mediaId.trim()
+        if (normalizedMediaId.isEmpty()) {
+            return null
+        }
+        val normalizedScore = score.coerceIn(MinScore, MaxScore)
+        return database.withTransaction {
+            if (playbackStatsDao.updateScore(normalizedMediaId, normalizedScore, updatedAt) == 0) {
+                playbackStatsDao.insert(
+                    PlaybackStatsEntity(
+                        mediaId = normalizedMediaId,
+                        playCount = 0L,
+                        score = normalizedScore,
+                        updatedAt = updatedAt,
+                    ),
+                )
+            }
+            playbackStatsDao.getScore(normalizedMediaId)
         }
     }
 
@@ -59,5 +87,8 @@ class PlaybackStatsRepository private constructor(
         internal fun create(database: PlaybackStatsDatabase): PlaybackStatsRepository {
             return PlaybackStatsRepository(database)
         }
+
+        private const val MinScore = 0
+        private const val MaxScore = 5
     }
 }

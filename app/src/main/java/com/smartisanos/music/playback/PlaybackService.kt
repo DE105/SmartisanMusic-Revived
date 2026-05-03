@@ -237,6 +237,7 @@ class PlaybackService : MediaLibraryService() {
                 .add(CancelSleepTimerCommand)
                 .add(RefreshLibraryCommand)
                 .add(InvalidateLibraryCommand)
+                .add(SetTrackRatingCommand)
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(sessionCommands)
@@ -391,6 +392,20 @@ class PlaybackService : MediaLibraryService() {
                     serviceScope.launch {
                         playbackSessionStateCoordinator?.restoreIfQueueEmpty()
                     }
+                    SessionResult(SessionResult.RESULT_SUCCESS)
+                }
+            }
+            if (customCommand.customAction == SetTrackRatingAction) {
+                val mediaId = args.getString(TrackRatingMediaIdKey)?.trim().orEmpty()
+                val score = args.getInt(TrackRatingScoreKey, -1)
+                if (mediaId.isBlank() || score !in TrackRatingMinScore..TrackRatingMaxScore) {
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_BAD_VALUE))
+                }
+                return libraryRefreshExecutor.submit<SessionResult> {
+                    runBlocking {
+                        playbackStatsRepository.setScore(mediaId, score)
+                    } ?: return@submit SessionResult(SessionResult.RESULT_ERROR_UNKNOWN)
+                    scheduleStatsLibraryRefresh()
                     SessionResult(SessionResult.RESULT_SUCCESS)
                 }
             }

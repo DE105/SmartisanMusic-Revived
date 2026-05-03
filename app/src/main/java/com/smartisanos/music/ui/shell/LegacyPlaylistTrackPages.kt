@@ -1011,7 +1011,12 @@ private fun List<MediaItem>.sortedForPlaylistAddMode(sortIndex: Int): List<Media
             },
         )
         1 -> sortedByPlaylistMetricDescending { item ->
-            item.playlistExtraLong("score", "rating", "play_score")
+            item.playlistExtraLong(
+                LocalAudioLibrary.RatingExtraKey,
+                "score",
+                "rating",
+                "play_score",
+            )
         }
         2 -> sortedByPlaylistMetricDescending { item ->
             item.playlistExtraLong(

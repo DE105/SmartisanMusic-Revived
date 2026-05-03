@@ -101,6 +101,7 @@ class LocalAudioLibrary(
                     val mediaUri = ContentUris.withAppendedId(audioCollection(), id)
                     val stats = playbackStats[id.toString()]
                     val playCount = stats?.playCount?.takeIf { it > 0L }
+                    val score = stats?.score?.takeIf { it > 0 }
 
                     val extras = Bundle().apply {
                         putString(TitleSortKeyExtraKey, titleSortKey)
@@ -122,6 +123,9 @@ class LocalAudioLibrary(
                         }
                         if (playCount != null) {
                             putLong(PlayCountExtraKey, playCount)
+                        }
+                        if (score != null) {
+                            putLong(RatingExtraKey, score.toLong())
                         }
                     }
 
@@ -208,6 +212,7 @@ class LocalAudioLibrary(
         const val TitleSectionExtraKey = "com.smartisanos.music.extra.TITLE_SECTION"
         const val AudioQualityBadgeExtraKey = "com.smartisanos.music.extra.AUDIO_QUALITY_BADGE"
         const val PlayCountExtraKey = "com.smartisanos.music.extra.PLAY_COUNT"
+        const val RatingExtraKey = "com.smartisanos.music.extra.RATING"
         const val AudioQualityBadgeFlac = "flac"
         const val AudioQualityBadgeApe = "ape"
         const val AudioQualityBadgeWav = "wav"

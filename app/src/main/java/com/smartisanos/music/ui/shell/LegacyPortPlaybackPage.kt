@@ -53,13 +53,18 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.session.SessionResult
 import com.smartisanos.music.R
 import com.smartisanos.music.data.favorite.FavoriteSongsRepository
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.playback.LocalPlaybackController
+import com.smartisanos.music.playback.await
+import com.smartisanos.music.playback.setTrackRating
 import com.smartisanos.music.ui.playback.PlaybackScreen
+import com.smartisanos.music.ui.shell.songs.legacyRating
 import com.smartisanos.music.ui.shell.titlebar.LegacyPortTitleBarShadow
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import smartisanos.widget.TitleBar
 
 @Composable
@@ -78,8 +83,16 @@ internal fun LegacyPortPlaybackPage(
         FavoriteSongsRepository.getInstance(context.applicationContext)
     }
     val favoriteIds by favoriteRepository.observeFavoriteIds().collectAsState(initial = emptySet())
-    var queueSnapshot by remember(controller, context, favoriteIds) {
-        mutableStateOf(controller.toLegacyPlaybackQueueSnapshot(context, favoriteIds))
+    var ratingOverrides by remember { mutableStateOf(emptyMap<String, Int>()) }
+    var pendingRatingRequests by remember { mutableStateOf(emptyMap<String, Int>()) }
+    var queueSnapshot by remember(controller, context, favoriteIds, ratingOverrides) {
+        mutableStateOf(
+            controller.toLegacyPlaybackQueueSnapshot(
+                context = context,
+                favoriteIds = favoriteIds,
+                ratingOverrides = ratingOverrides,
+            ),
+        )
     }
     var queueVisible by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -90,15 +103,23 @@ internal fun LegacyPortPlaybackPage(
     }
     val titleTopPadding = statusBarHeight + titleContentHeight
 
-    DisposableEffect(controller, context, favoriteIds) {
+    DisposableEffect(controller, context, favoriteIds, ratingOverrides) {
         val playbackController = controller ?: return@DisposableEffect onDispose { }
         val listener = object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
-                queueSnapshot = player.toLegacyPlaybackQueueSnapshot(context, favoriteIds)
+                queueSnapshot = player.toLegacyPlaybackQueueSnapshot(
+                    context = context,
+                    favoriteIds = favoriteIds,
+                    ratingOverrides = ratingOverrides,
+                )
             }
         }
         playbackController.addListener(listener)
-        queueSnapshot = playbackController.toLegacyPlaybackQueueSnapshot(context, favoriteIds)
+        queueSnapshot = playbackController.toLegacyPlaybackQueueSnapshot(
+            context = context,
+            favoriteIds = favoriteIds,
+            ratingOverrides = ratingOverrides,
+        )
         onDispose {
             playbackController.removeListener(listener)
         }
@@ -136,6 +157,34 @@ internal fun LegacyPortPlaybackPage(
                 if (mediaId.isNotBlank()) {
                     scope.launch {
                         favoriteRepository.toggle(mediaId)
+                    }
+                }
+            },
+            onCurrentRatingChanged = { mediaId, score ->
+                if (mediaId.isNotBlank()) {
+                    val playbackController = controller
+                    val previousScore = queueSnapshot.current
+                        ?.takeIf { current -> current.mediaId == mediaId }
+                        ?.score
+                        ?: ratingOverrides[mediaId]
+                        ?: 0
+                    if (playbackController != null) {
+                        pendingRatingRequests = pendingRatingRequests + (mediaId to score)
+                        scope.launch {
+                            val successful = runCatching {
+                                playbackController
+                                    .setTrackRating(mediaId, score)
+                                    .await(context)
+                                    .resultCode == SessionResult.RESULT_SUCCESS
+                            }.getOrDefault(false)
+                            if (pendingRatingRequests[mediaId] != score) {
+                                return@launch
+                            }
+                            pendingRatingRequests = pendingRatingRequests - mediaId
+                            val settledScore = if (successful) score else previousScore
+                            ratingOverrides = ratingOverrides + (mediaId to settledScore)
+                            queueSnapshot = queueSnapshot.withCurrentRating(mediaId, settledScore)
+                        }
                     }
                 }
             },
@@ -296,6 +345,7 @@ private fun LegacyPlaybackQueueLayer(
     snapshot: LegacyPlaybackQueueSnapshot,
     onItemClick: (Int) -> Unit,
     onFavoriteCurrentClick: () -> Unit,
+    onCurrentRatingChanged: (String, Int) -> Unit,
     onClearUpcomingClick: () -> Unit,
     onMoveRequest: (Int, Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -311,6 +361,7 @@ private fun LegacyPlaybackQueueLayer(
                 callbacks = LegacyPlaybackQueueCallbacks(
                     onItemClick = onItemClick,
                     onFavoriteCurrentClick = onFavoriteCurrentClick,
+                    onCurrentRatingChanged = onCurrentRatingChanged,
                     onClearUpcomingClick = onClearUpcomingClick,
                     onMoveRequest = onMoveRequest,
                 ),
@@ -361,12 +412,14 @@ private data class LegacyPlaybackQueueTrack(
     val mediaId: String,
     val title: String,
     val artist: String,
+    val score: Int,
     val mediaItem: MediaItem,
 )
 
 private data class LegacyPlaybackQueueCallbacks(
     val onItemClick: (Int) -> Unit,
     val onFavoriteCurrentClick: () -> Unit,
+    val onCurrentRatingChanged: (String, Int) -> Unit,
     val onClearUpcomingClick: () -> Unit,
     val onMoveRequest: (Int, Int) -> Unit,
 )
@@ -387,11 +440,16 @@ private fun Player?.toLegacyPlaybackTitleState(context: Context): LegacyPlayback
 private fun Player?.toLegacyPlaybackQueueSnapshot(
     context: Context,
     favoriteIds: Set<String>,
+    ratingOverrides: Map<String, Int>,
 ): LegacyPlaybackQueueSnapshot {
     val player = this ?: return LegacyPlaybackQueueSnapshot()
     val itemCount = player.mediaItemCount
     if (itemCount <= 0) {
-        val current = player.currentMediaItem?.toLegacyPlaybackQueueTrack(context, 0)
+        val current = player.currentMediaItem?.toLegacyPlaybackQueueTrack(
+            context = context,
+            queueIndex = 0,
+            ratingOverrides = ratingOverrides,
+        )
         return LegacyPlaybackQueueSnapshot(
             current = current,
             isCurrentFavorite = current?.mediaId?.let(favoriteIds::contains) == true,
@@ -400,11 +458,19 @@ private fun Player?.toLegacyPlaybackQueueSnapshot(
     val currentIndex = player.currentMediaItemIndex.takeIf { it in 0 until itemCount } ?: -1
     val tracks = (0 until itemCount).mapNotNull { index ->
         runCatching {
-            player.getMediaItemAt(index).toLegacyPlaybackQueueTrack(context, index)
+            player.getMediaItemAt(index).toLegacyPlaybackQueueTrack(
+                context = context,
+                queueIndex = index,
+                ratingOverrides = ratingOverrides,
+            )
         }.getOrNull()
     }
     val current = tracks.firstOrNull { it.queueIndex == currentIndex }
-        ?: player.currentMediaItem?.toLegacyPlaybackQueueTrack(context, currentIndex.coerceAtLeast(0))
+        ?: player.currentMediaItem?.toLegacyPlaybackQueueTrack(
+            context = context,
+            queueIndex = currentIndex.coerceAtLeast(0),
+            ratingOverrides = ratingOverrides,
+        )
     return LegacyPlaybackQueueSnapshot(
         history = tracks.filter { it.queueIndex < currentIndex }.takeLast(LegacyQueueHistoryLimit),
         current = current,
@@ -416,6 +482,7 @@ private fun Player?.toLegacyPlaybackQueueSnapshot(
 private fun MediaItem.toLegacyPlaybackQueueTrack(
     context: Context,
     queueIndex: Int,
+    ratingOverrides: Map<String, Int>,
 ): LegacyPlaybackQueueTrack {
     val metadata = mediaMetadata
     val title = metadata.displayTitle?.toString()?.takeIf(String::isNotBlank)
@@ -431,7 +498,21 @@ private fun MediaItem.toLegacyPlaybackQueueTrack(
         mediaId = mediaId,
         title = title,
         artist = artist,
+        score = ratingOverrides[mediaId] ?: legacyRating().toInt(),
         mediaItem = this,
+    )
+}
+
+private fun LegacyPlaybackQueueSnapshot.withCurrentRating(
+    mediaId: String,
+    score: Int,
+): LegacyPlaybackQueueSnapshot {
+    val currentTrack = current ?: return this
+    if (currentTrack.mediaId != mediaId) {
+        return this
+    }
+    return copy(
+        current = currentTrack.copy(score = score.coerceIn(0, 5)),
     )
 }
 
@@ -442,6 +523,7 @@ private class LegacyPlaybackQueueView(context: Context) : FrameLayout(context) {
     private var callbacks = LegacyPlaybackQueueCallbacks(
         onItemClick = {},
         onFavoriteCurrentClick = {},
+        onCurrentRatingChanged = { _, _ -> },
         onClearUpcomingClick = {},
         onMoveRequest = { _, _ -> },
     )
@@ -499,6 +581,7 @@ private class LegacyPlaybackQueueAdapter(
     private var callbacks = LegacyPlaybackQueueCallbacks(
         onItemClick = {},
         onFavoriteCurrentClick = {},
+        onCurrentRatingChanged = { _, _ -> },
         onClearUpcomingClick = {},
         onMoveRequest = { _, _ -> },
     )
@@ -653,7 +736,21 @@ private class LegacyPlaybackQueueAdapter(
             fallbackRes = R.drawable.playing_cover_lp,
             sizePx = view.resources.getDimensionPixelSize(R.dimen.album_cover_zone_width),
         )
-        view.findViewById<RatingBar>(R.id.rb_score).rating = 0f
+        view.findViewById<RatingBar>(R.id.rb_score).apply {
+            setOnRatingBarChangeListener(null)
+            rating = track.score.toFloat()
+            setIsIndicator(false)
+            isClickable = true
+            isFocusable = false
+            setOnRatingBarChangeListener { _, nextRating, fromUser ->
+                if (fromUser) {
+                    callbacks.onCurrentRatingChanged(
+                        track.mediaId,
+                        nextRating.roundToInt().coerceIn(0, 5),
+                    )
+                }
+            }
+        }
         view.findViewById<CheckBox>(R.id.favorite).apply {
             isChecked = currentFavorite
             setOnClickListener {
