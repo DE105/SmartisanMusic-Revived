@@ -29,8 +29,8 @@ internal const val ScratchFlingMinVelocitySampleMs = 16L
 internal const val ScratchFlingDurationMultiplier = 1.5f
 internal const val ScratchFlingPlayingRewindDurationScale = 1.2f
 internal const val ScratchFlingFrameDivisor = 1_700f
-internal const val ScratchFlingReadyFraction = 0.7f
 internal const val ScratchPixelFlingDivisor = 40f
+internal const val ScratchWarmupRefreshMs = 3_000L
 internal const val ScratchPlaybackVelocityDegreesPerSecond =
     DiscRotationDegrees * 1_000f / PlaybackDiscCycleDurationMs
 internal const val CoverPreviewTimeoutMs = 260L

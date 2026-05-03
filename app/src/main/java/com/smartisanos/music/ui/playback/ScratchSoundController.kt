@@ -19,17 +19,19 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private const val ScratchPlaybackCycleMs = 1_800f
-private const val ScratchMinMotionDegrees = 0.18f
-private const val ScratchIdleTimeoutMs = 110L
+private const val ScratchMinMotionDegrees = 0.05f
+private const val ScratchIdleTimeoutMs = 240L
 private const val ScratchDecodeTimeoutUs = 10_000L
+private const val ScratchDecodeWindowBeforeMs = 12_000L
+private const val ScratchDecodeWindowAfterMs = 18_000L
+private const val ScratchDecodeRefreshDistanceMs = 4_000L
 private const val ScratchMinDeltaTimeMs = 8L
 private const val ScratchMaxDeltaTimeMs = 72L
 private const val ScratchOutputFrames = 384
 private const val ScratchOutputChannels = 2
 private const val ScratchOutputGain = 1.08f
-private const val ScratchRateSmoothing = 0.35f
+private const val ScratchPrimingRatePermille = 1f
 private const val ScratchMaxPlaybackRatePermille = 6_000
-private const val ScratchMaxDecodedDurationMs = 12 * 60 * 1_000L
 
 internal class ScratchSoundController(
     context: Context,
@@ -50,10 +52,13 @@ internal class ScratchSoundController(
     private var sourceGeneration = 0
 
     @Volatile
-    private var preparedSourceKey: String? = null
+    private var currentSourceKey: String? = null
 
     @Volatile
-    private var loadingSourceKey: String? = null
+    private var currentSourceUri: Uri? = null
+
+    @Volatile
+    private var loadingRequest: ScratchDecodeRequest? = null
 
     @Volatile
     private var scratchBuffer: ScratchBuffer? = null
@@ -68,48 +73,81 @@ internal class ScratchSoundController(
     private var requestedDirection = 0
 
     @Volatile
-    private var smoothedPlaybackRatePermille = 0f
+    private var requestedPlaybackRatePermille = 0f
 
     @Volatile
-    private var motionGeneration = 0L
+    private var cursorResetGeneration = 0L
 
     @Volatile
     private var lastMotionRealtimeMs = 0L
 
-    private var lastDirection = 0
     private var audioTrack: AudioTrack? = null
     private var audioTrackSampleRate = 0
     private var playbackCursor = 0.0
-    private var appliedMotionGeneration = -1L
+    private var appliedCursorResetGeneration = -1L
     private var appliedSourceKey: String? = null
     private val stereoWriteBuffer = ShortArray(ScratchOutputFrames * ScratchOutputChannels)
 
-    fun prepareSource(sourceUri: Uri?) {
+    fun prepareSource(
+        sourceUri: Uri?,
+        positionMs: Long,
+    ) {
         val sourceKey = sourceUri?.toString()
         if (sourceKey.isNullOrEmpty()) {
             sourceGeneration += 1
-            preparedSourceKey = null
-            loadingSourceKey = null
+            currentSourceKey = null
+            currentSourceUri = null
+            loadingRequest = null
             scratchBuffer = null
             wakePlaybackThread()
             return
         }
-        if (preparedSourceKey == sourceKey || loadingSourceKey == sourceKey || released) {
+        currentSourceUri = sourceUri
+        if (currentSourceKey != sourceKey) {
+            currentSourceKey = sourceKey
+            scratchBuffer = null
+            loadingRequest = null
+        }
+        requestBufferForPosition(sourceUri, sourceKey, positionMs)
+    }
+
+    private fun requestBufferForPosition(
+        sourceUri: Uri,
+        sourceKey: String,
+        positionMs: Long,
+    ) {
+        if (released) {
             return
         }
+        val anchorPositionMs = positionMs.coerceAtLeast(0L)
+        scratchBuffer?.takeIf { buffer ->
+            buffer.covers(sourceKey, anchorPositionMs) &&
+                !buffer.needsRefresh(anchorPositionMs)
+        }?.let {
+            return
+        }
+        loadingRequest?.takeIf { request ->
+            request.sourceKey == sourceKey &&
+                anchorPositionMs in request.windowStartMs..request.windowEndMs
+        }?.let {
+            return
+        }
+        val request = ScratchDecodeRequest(
+            sourceUri = sourceUri,
+            sourceKey = sourceKey,
+            windowStartMs = (anchorPositionMs - ScratchDecodeWindowBeforeMs).coerceAtLeast(0L),
+            windowEndMs = anchorPositionMs + ScratchDecodeWindowAfterMs,
+        )
         val generation = sourceGeneration + 1
         sourceGeneration = generation
-        loadingSourceKey = sourceKey
-        preparedSourceKey = null
-        scratchBuffer = null
+        loadingRequest = request
         decodeExecutor.execute {
-            val decodedBuffer = decodeScratchBuffer(appContext, sourceUri)
+            val decodedBuffer = decodeScratchBuffer(appContext, request)
             if (released || generation != sourceGeneration) {
                 return@execute
             }
             scratchBuffer = decodedBuffer
-            preparedSourceKey = sourceKey
-            loadingSourceKey = null
+            loadingRequest = null
             wakePlaybackThread()
         }
     }
@@ -118,14 +156,13 @@ internal class ScratchSoundController(
         sourceUri: Uri?,
         positionMs: Long,
     ) {
-        prepareSource(sourceUri)
+        prepareSource(sourceUri, positionMs)
         scratchPositionMs = positionMs
         scratchActive = true
-        requestedDirection = 0
-        smoothedPlaybackRatePermille = 0f
-        lastDirection = 0
+        requestedDirection = 1
+        requestedPlaybackRatePermille = ScratchPrimingRatePermille
         lastMotionRealtimeMs = 0L
-        motionGeneration += 1
+        cursorResetGeneration += 1
         wakePlaybackThread()
     }
 
@@ -148,26 +185,22 @@ internal class ScratchSoundController(
         lastMotionRealtimeMs = now
 
         val direction = if (deltaAngleDegrees >= 0f) 1 else -1
-        val rawRatePermille = scratchPlaybackRatePermille(magnitude, deltaTimeMs).toFloat()
-        smoothedPlaybackRatePermille = if (direction != lastDirection || smoothedPlaybackRatePermille == 0f) {
-            rawRatePermille
-        } else {
-            smoothedPlaybackRatePermille +
-                ((rawRatePermille - smoothedPlaybackRatePermille) * ScratchRateSmoothing)
-        }
-        lastDirection = direction
+        requestedPlaybackRatePermille = scratchPlaybackRatePermille(magnitude, deltaTimeMs).toFloat()
         requestedDirection = direction
         scratchPositionMs = positionMs
+        currentSourceUri?.let { sourceUri ->
+            currentSourceKey?.let { sourceKey ->
+                requestBufferForPosition(sourceUri, sourceKey, positionMs)
+            }
+        }
         scratchActive = true
-        motionGeneration += 1
         wakePlaybackThread()
     }
 
     fun stop() {
         scratchActive = false
         requestedDirection = 0
-        smoothedPlaybackRatePermille = 0f
-        lastDirection = 0
+        requestedPlaybackRatePermille = 0f
         lastMotionRealtimeMs = 0L
         pauseAndFlushTrack()
         wakePlaybackThread()
@@ -192,15 +225,18 @@ internal class ScratchSoundController(
     private fun playbackLoop() {
         while (!released) {
             val buffer = scratchBuffer
+            val sourceKey = currentSourceKey
             val idleForTooLong = lastMotionRealtimeMs != 0L &&
                 (SystemClock.elapsedRealtime() - lastMotionRealtimeMs) > ScratchIdleTimeoutMs
             val shouldPlay = scratchActive &&
                 buffer != null &&
+                sourceKey != null &&
+                buffer.covers(sourceKey, scratchPositionMs) &&
                 requestedDirection != 0 &&
-                smoothedPlaybackRatePermille > 0f &&
+                requestedPlaybackRatePermille > 0f &&
                 !idleForTooLong
 
-            if (!shouldPlay || buffer.monoSamples.isEmpty()) {
+            if (!shouldPlay || buffer.stereoSamples.isEmpty()) {
                 pauseAndFlushTrack()
                 playbackLock.withLock {
                     if (!released) {
@@ -215,14 +251,17 @@ internal class ScratchSoundController(
                 track.play()
             }
 
-            val localMotionGeneration = motionGeneration
-            if (buffer.sourceKey != appliedSourceKey || localMotionGeneration != appliedMotionGeneration) {
+            val localCursorResetGeneration = cursorResetGeneration
+            if (
+                buffer.sourceKey != appliedSourceKey ||
+                localCursorResetGeneration != appliedCursorResetGeneration
+            ) {
                 playbackCursor = buffer.positionMsToSample(scratchPositionMs)
                 appliedSourceKey = buffer.sourceKey
-                appliedMotionGeneration = localMotionGeneration
+                appliedCursorResetGeneration = localCursorResetGeneration
             }
 
-            val frameStep = (smoothedPlaybackRatePermille / 1_000f) * requestedDirection.toDouble()
+            val frameStep = (requestedPlaybackRatePermille / 1_000f) * requestedDirection.toDouble()
             fillStereoBuffer(buffer, frameStep)
             track.write(
                 stereoWriteBuffer,
@@ -237,27 +276,29 @@ internal class ScratchSoundController(
         buffer: ScratchBuffer,
         frameStep: Double,
     ) {
-        val lastIndex = buffer.monoSamples.lastIndex
-        if (lastIndex < 0) {
+        val lastFrameIndex = buffer.frameCount - 1
+        if (lastFrameIndex < 0) {
             stereoWriteBuffer.fill(0)
             return
         }
         var outputIndex = 0
         repeat(ScratchOutputFrames) {
-            val sample = if (
-                (frameStep >= 0.0 && playbackCursor > lastIndex.toDouble()) ||
+            if (
+                (frameStep >= 0.0 && playbackCursor > lastFrameIndex.toDouble()) ||
                 (frameStep < 0.0 && playbackCursor < 0.0)
             ) {
-                0
+                stereoWriteBuffer[outputIndex++] = 0
+                stereoWriteBuffer[outputIndex++] = 0
             } else {
-                interpolateMonoSample(buffer.monoSamples, playbackCursor)
+                val left = amplifySample(
+                    interpolateStereoSample(buffer.stereoSamples, playbackCursor, channel = 0),
+                )
+                val right = amplifySample(
+                    interpolateStereoSample(buffer.stereoSamples, playbackCursor, channel = 1),
+                )
+                stereoWriteBuffer[outputIndex++] = left
+                stereoWriteBuffer[outputIndex++] = right
             }
-            val amplified = (sample * ScratchOutputGain)
-                .roundToInt()
-                .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
-                .toShort()
-            stereoWriteBuffer[outputIndex++] = amplified
-            stereoWriteBuffer[outputIndex++] = amplified
             playbackCursor += frameStep
         }
     }
@@ -328,57 +369,95 @@ internal fun scratchPlaybackRatePermille(
         .coerceIn(0, ScratchMaxPlaybackRatePermille)
 }
 
-private fun interpolateMonoSample(
+private fun amplifySample(sample: Int): Short {
+    return (sample * ScratchOutputGain)
+        .roundToInt()
+        .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+        .toShort()
+}
+
+private fun interpolateStereoSample(
     samples: ShortArray,
     sampleIndex: Double,
+    channel: Int,
 ): Int {
     if (samples.isEmpty()) {
         return 0
     }
-    val clampedIndex = sampleIndex.coerceIn(0.0, samples.lastIndex.toDouble())
-    val leftIndex = clampedIndex.toInt()
-    val rightIndex = (leftIndex + 1).coerceAtMost(samples.lastIndex)
-    val fraction = clampedIndex - leftIndex
-    val left = samples[leftIndex].toDouble()
-    val right = samples[rightIndex].toDouble()
+    val frameCount = samples.size / ScratchOutputChannels
+    val lastFrameIndex = frameCount - 1
+    val clampedIndex = sampleIndex.coerceIn(0.0, lastFrameIndex.toDouble())
+    val leftFrameIndex = clampedIndex.toInt()
+    val rightFrameIndex = (leftFrameIndex + 1).coerceAtMost(lastFrameIndex)
+    val fraction = clampedIndex - leftFrameIndex
+    val sampleChannel = channel.coerceIn(0, ScratchOutputChannels - 1)
+    val left = samples[(leftFrameIndex * ScratchOutputChannels) + sampleChannel].toDouble()
+    val right = samples[(rightFrameIndex * ScratchOutputChannels) + sampleChannel].toDouble()
     return (left + ((right - left) * fraction)).roundToInt()
 }
 
 private data class ScratchBuffer(
     val sourceKey: String,
     val sampleRate: Int,
-    val monoSamples: ShortArray,
+    val windowStartMs: Long,
+    val stereoSamples: ShortArray,
 ) {
+    val frameCount: Int
+        get() = stereoSamples.size / ScratchOutputChannels
+
+    private val windowEndMs: Long
+        get() = windowStartMs + ((frameCount * 1_000L) / sampleRate.coerceAtLeast(1))
+
+    fun covers(
+        sourceKey: String,
+        positionMs: Long,
+    ): Boolean {
+        return this.sourceKey == sourceKey && positionMs in windowStartMs..windowEndMs
+    }
+
+    fun needsRefresh(positionMs: Long): Boolean {
+        return (windowStartMs > 0L && positionMs - windowStartMs < ScratchDecodeRefreshDistanceMs) ||
+            windowEndMs - positionMs < ScratchDecodeRefreshDistanceMs
+    }
+
     fun positionMsToSample(positionMs: Long): Double {
-        if (monoSamples.isEmpty()) {
+        if (stereoSamples.isEmpty()) {
             return 0.0
         }
-        val samplePosition = positionMs.coerceAtLeast(0L) * sampleRate.toDouble() / 1_000.0
-        return samplePosition.coerceIn(0.0, monoSamples.lastIndex.toDouble())
+        val localPositionMs = positionMs.coerceAtLeast(windowStartMs) - windowStartMs
+        val samplePosition = localPositionMs * sampleRate.toDouble() / 1_000.0
+        return samplePosition.coerceIn(0.0, (frameCount - 1).toDouble())
     }
+}
+
+private data class ScratchDecodeRequest(
+    val sourceUri: Uri,
+    val sourceKey: String,
+    val windowStartMs: Long,
+    val windowEndMs: Long,
+) {
+    val windowStartUs: Long
+        get() = windowStartMs * 1_000L
+
+    val windowEndUs: Long
+        get() = windowEndMs * 1_000L
 }
 
 private fun decodeScratchBuffer(
     context: Context,
-    sourceUri: Uri,
+    request: ScratchDecodeRequest,
 ): ScratchBuffer? {
     val extractor = MediaExtractor()
     var codec: MediaCodec? = null
     return try {
-        extractor.setDataSource(context, sourceUri, null)
+        extractor.setDataSource(context, request.sourceUri, null)
         val trackIndex = findAudioTrackIndex(extractor)
         if (trackIndex == -1) {
             null
         } else {
             extractor.selectTrack(trackIndex)
+            extractor.seekTo(request.windowStartUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             val sourceFormat = extractor.getTrackFormat(trackIndex)
-            val sourceKey = sourceUri.toString()
-            if (
-                sourceFormat.containsKey(MediaFormat.KEY_DURATION) &&
-                sourceFormat.getLong(MediaFormat.KEY_DURATION) / 1_000L > ScratchMaxDecodedDurationMs
-            ) {
-                return null
-            }
             val mimeType = sourceFormat.getString(MediaFormat.KEY_MIME) ?: return null
             val decoder = MediaCodec.createDecoderByType(mimeType).apply {
                 configure(sourceFormat, null, null, 0)
@@ -387,12 +466,13 @@ private fun decodeScratchBuffer(
             codec = decoder
 
             val initialSampleRate = sourceFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-            val initialCapacity = buildInitialSampleCapacity(sourceFormat, initialSampleRate)
-            val sampleBuilder = MonoSampleBuilder(initialCapacity)
+            val initialCapacity = buildInitialSampleCapacity(request, initialSampleRate)
+            val sampleBuilder = StereoSampleBuilder(initialCapacity)
             val bufferInfo = MediaCodec.BufferInfo()
             var outputSampleRate = initialSampleRate
             var outputChannelCount = sourceFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             var pcmEncoding = AudioFormat.ENCODING_PCM_16BIT
+            var firstOutputTimeUs: Long? = null
             var inputEnded = false
             var outputEnded = false
 
@@ -401,8 +481,9 @@ private fun decodeScratchBuffer(
                     val inputIndex = decoder.dequeueInputBuffer(ScratchDecodeTimeoutUs)
                     if (inputIndex >= 0) {
                         val inputBuffer = decoder.getInputBuffer(inputIndex) ?: break
+                        val sampleTimeUs = extractor.sampleTime
                         val sampleSize = extractor.readSampleData(inputBuffer, 0)
-                        if (sampleSize < 0) {
+                        if (sampleSize < 0 || (sampleTimeUs >= 0L && sampleTimeUs > request.windowEndUs)) {
                             decoder.queueInputBuffer(
                                 inputIndex,
                                 0,
@@ -416,7 +497,7 @@ private fun decodeScratchBuffer(
                                 inputIndex,
                                 0,
                                 sampleSize,
-                                extractor.sampleTime,
+                                sampleTimeUs,
                                 extractor.sampleFlags,
                             )
                             extractor.advance()
@@ -439,6 +520,9 @@ private fun decodeScratchBuffer(
                     else -> {
                         if (outputIndex >= 0) {
                             if (bufferInfo.size > 0) {
+                                if (firstOutputTimeUs == null) {
+                                    firstOutputTimeUs = bufferInfo.presentationTimeUs.coerceAtLeast(0L)
+                                }
                                 val outputBuffer = decoder.getOutputBuffer(outputIndex)
                                     ?.duplicate()
                                     ?.apply {
@@ -462,14 +546,15 @@ private fun decodeScratchBuffer(
                 }
             }
 
-            val monoSamples = sampleBuilder.build()
-            if (monoSamples.isEmpty()) {
+            val stereoSamples = sampleBuilder.build()
+            if (stereoSamples.isEmpty()) {
                 null
             } else {
                 ScratchBuffer(
-                    sourceKey = sourceKey,
+                    sourceKey = request.sourceKey,
                     sampleRate = outputSampleRate,
-                    monoSamples = monoSamples,
+                    windowStartMs = (firstOutputTimeUs ?: request.windowStartUs) / 1_000L,
+                    stereoSamples = stereoSamples,
                 )
             }
         }
@@ -494,22 +579,18 @@ private fun findAudioTrackIndex(extractor: MediaExtractor): Int {
 }
 
 private fun buildInitialSampleCapacity(
-    format: MediaFormat,
+    request: ScratchDecodeRequest,
     sampleRate: Int,
 ): Int {
-    if (!format.containsKey(MediaFormat.KEY_DURATION)) {
-        return sampleRate * 30
-    }
-    val durationUs = format.getLong(MediaFormat.KEY_DURATION).coerceAtLeast(0L)
-    val projectedSamples = (durationUs * sampleRate / 1_000_000L)
+    val durationMs = (request.windowEndMs - request.windowStartMs).coerceAtLeast(1L)
+    val projectedSamples = (durationMs * sampleRate / 1_000L)
         .coerceAtLeast(sampleRate.toLong())
-        .coerceAtMost(sampleRate.toLong() * ScratchMaxDecodedDurationMs / 1_000L)
     return projectedSamples.toInt()
 }
 
-private class MonoSampleBuilder(initialCapacity: Int) {
-    private var buffer = ShortArray(initialCapacity.coerceAtLeast(2_048))
-    private var size = 0
+private class StereoSampleBuilder(initialCapacity: Int) {
+    private var buffer = ShortArray(initialCapacity.coerceAtLeast(2_048) * ScratchOutputChannels)
+    private var frameCount = 0
 
     fun append(
         outputBuffer: ByteBuffer,
@@ -522,7 +603,7 @@ private class MonoSampleBuilder(initialCapacity: Int) {
         }
     }
 
-    fun build(): ShortArray = buffer.copyOf(size)
+    fun build(): ShortArray = buffer.copyOf(frameCount * ScratchOutputChannels)
 
     private fun append16Bit(
         outputBuffer: ByteBuffer,
@@ -531,16 +612,21 @@ private class MonoSampleBuilder(initialCapacity: Int) {
         val channels = channelCount.coerceAtLeast(1)
         val shortBuffer = outputBuffer.order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
         val frameCount = shortBuffer.remaining() / channels
-        ensureCapacity(size + frameCount)
+        ensureCapacity(this.frameCount + frameCount)
         repeat(frameCount) {
-            var mixedSample = 0f
-            repeat(channels) {
-                mixedSample += shortBuffer.get().toFloat()
+            val left = shortBuffer.get()
+            val right = if (channels > 1) {
+                shortBuffer.get()
+            } else {
+                left
             }
-            buffer[size++] = (mixedSample / channels.toFloat())
-                .roundToInt()
-                .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
-                .toShort()
+            repeat((channels - 2).coerceAtLeast(0)) {
+                shortBuffer.get()
+            }
+            val outputIndex = this.frameCount * ScratchOutputChannels
+            buffer[outputIndex] = left
+            buffer[outputIndex + 1] = right
+            this.frameCount += 1
         }
     }
 
@@ -551,20 +637,32 @@ private class MonoSampleBuilder(initialCapacity: Int) {
         val channels = channelCount.coerceAtLeast(1)
         val floatBuffer = outputBuffer.order(ByteOrder.nativeOrder()).asFloatBuffer()
         val frameCount = floatBuffer.remaining() / channels
-        ensureCapacity(size + frameCount)
+        ensureCapacity(this.frameCount + frameCount)
         repeat(frameCount) {
-            var mixedSample = 0f
-            repeat(channels) {
-                mixedSample += floatBuffer.get()
+            val left = floatBuffer.get()
+            val right = if (channels > 1) {
+                floatBuffer.get()
+            } else {
+                left
             }
-            buffer[size++] = ((mixedSample / channels.toFloat()) * Short.MAX_VALUE.toFloat())
+            repeat((channels - 2).coerceAtLeast(0)) {
+                floatBuffer.get()
+            }
+            val outputIndex = this.frameCount * ScratchOutputChannels
+            buffer[outputIndex] = (left * Short.MAX_VALUE.toFloat())
                 .roundToInt()
                 .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
                 .toShort()
+            buffer[outputIndex + 1] = (right * Short.MAX_VALUE.toFloat())
+                .roundToInt()
+                .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                .toShort()
+            this.frameCount += 1
         }
     }
 
-    private fun ensureCapacity(requiredSize: Int) {
+    private fun ensureCapacity(requiredFrameCount: Int) {
+        val requiredSize = requiredFrameCount * ScratchOutputChannels
         if (requiredSize <= buffer.size) {
             return
         }

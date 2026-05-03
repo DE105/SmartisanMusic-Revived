@@ -63,6 +63,7 @@ import com.smartisanos.music.playback.extractEmbeddedLyrics
 import com.smartisanos.music.playback.invalidateLibrary
 import com.smartisanos.music.playback.loadEmbeddedLyrics
 import com.smartisanos.music.playback.removeMediaItemsByMediaIds
+import com.smartisanos.music.playback.setScratchAudioSuppressionEnabled
 import com.smartisanos.music.playback.setScratchSeekModeEnabled
 import com.smartisanos.music.playback.startSleepTimer
 import com.smartisanos.music.ui.components.loadEmbeddedArtwork
@@ -275,6 +276,7 @@ fun PlaybackScreen(
         }
         controller?.setScratchSeekModeEnabled(false)
         scratchSoundController.stop()
+        controller?.setScratchAudioSuppressionEnabled(false)
     }
 
     fun finishDiscScratch(
@@ -295,6 +297,7 @@ fun PlaybackScreen(
         }
         controller?.setScratchSeekModeEnabled(false)
         scratchSoundController.stop()
+        controller?.setScratchAudioSuppressionEnabled(false)
     }
 
     fun launchDiscScratchFling(
@@ -333,7 +336,6 @@ fun PlaybackScreen(
             var previousFrameNanos = Long.MIN_VALUE
             var previousVelocity = velocityKeyframes.first()
             var elapsedMs = 0f
-            var readyToEndHandled = false
             while (isActive && elapsedMs < flingDurationMs) {
                 val frameNanos = withFrameNanos { it }
                 if (previousFrameNanos == Long.MIN_VALUE) {
@@ -368,10 +370,6 @@ fun PlaybackScreen(
                     }
                 }
 
-                if (!readyToEndHandled && elapsedMs > flingDurationMs * ScratchFlingReadyFraction) {
-                    controller?.seekTo(positionMs)
-                    readyToEndHandled = true
-                }
             }
             finishDiscScratch(positionMs, resumePlaybackAfterDrag)
             scratchFlingJob = null
@@ -400,9 +398,8 @@ fun PlaybackScreen(
 
     DisposableEffect(controller) {
         val playbackController = controller
-        playbackController?.volume = 1f
         onDispose {
-            playbackController?.volume = 1f
+            playbackController?.setScratchAudioSuppressionEnabled(false)
             playbackController?.setScratchSeekModeEnabled(false)
         }
     }
@@ -609,11 +606,26 @@ fun PlaybackScreen(
         }
     }
 
-    LaunchedEffect(scratchSourceUri) {
+    val latestScratchWarmupPositionMs by rememberUpdatedState(livePositionMs)
+    LaunchedEffect(scratchSourceUri, playbackSettings.scratchEnabled, currentVisualPage) {
         scratchFlingJob?.cancel()
         scratchFlingJob = null
         scratchSoundController.stop()
-        scratchSoundController.prepareSource(scratchSourceUri)
+        if (
+            scratchSourceUri == null ||
+            !playbackSettings.scratchEnabled ||
+            currentVisualPage != PlaybackVisualPage.Cover
+        ) {
+            scratchSoundController.prepareSource(null, 0L)
+            return@LaunchedEffect
+        }
+        while (isActive) {
+            scratchSoundController.prepareSource(
+                sourceUri = scratchSourceUri,
+                positionMs = latestScratchWarmupPositionMs,
+            )
+            delay(ScratchWarmupRefreshMs)
+        }
     }
 
     BoxWithConstraints(
@@ -751,9 +763,7 @@ fun PlaybackScreen(
                             needleSettlingPositionMs = null,
                             needleParkedOutside = false,
                         )
-                        if (resumePlaybackAfterDrag) {
-                            controller?.pause()
-                        }
+                        controller?.setScratchAudioSuppressionEnabled(resumePlaybackAfterDrag)
                         controller?.setScratchSeekModeEnabled(true)
                     },
                     onNeedleSeekPositionChange = { rotationDegrees, positionMs ->
@@ -776,6 +786,7 @@ fun PlaybackScreen(
                             )
                             controller?.seekTo(0L)
                             controller?.pause()
+                            controller?.setScratchAudioSuppressionEnabled(false)
                         } else {
                             coverPageState = coverPageState.copy(
                                 dragMode = CoverDragMode.None,
@@ -787,6 +798,7 @@ fun PlaybackScreen(
                             )
                             controller?.seekTo(positionMs)
                             controller?.play()
+                            controller?.setScratchAudioSuppressionEnabled(false)
                         }
                         controller?.setScratchSeekModeEnabled(false)
                         scratchSoundController.stop()
