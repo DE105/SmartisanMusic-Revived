@@ -42,6 +42,34 @@ internal fun buildGenreSummaries(
         .sortedWith(genreNameComparator(unknownGenreTitle))
 }
 
+internal fun shouldResetGenreDetailSelection(
+    selectedGenreId: String?,
+    hasPermission: Boolean,
+    hasSongs: Boolean,
+    hasGenres: Boolean?,
+): Boolean {
+    if (selectedGenreId == null) {
+        return false
+    }
+    if (!hasPermission) {
+        return true
+    }
+    if (!hasSongs) {
+        return true
+    }
+    return hasGenres == false
+}
+
+internal fun isGenreSelectionAvailable(
+    selectedGenreId: String?,
+    genres: List<GenreSummary>,
+): Boolean {
+    if (selectedGenreId == null) {
+        return true
+    }
+    return genres.any { it.id == selectedGenreId }
+}
+
 private data class MutableGenreGroup(
     val id: String,
     val name: String,

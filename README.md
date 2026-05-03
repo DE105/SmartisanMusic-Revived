@@ -60,17 +60,17 @@
 
 ## 技术架构
 
-原版应用作为 Smartisan OS 的系统预装组件，其界面基于早期的 Android View/XML 体系构建，业务代码则深度绑定于系统镜像。本项目以逆向提取的 `res/layout`、`drawable` 及 `values` 等资源作为蓝本，剥离了底层的系统依赖，使用 Kotlin 与 Jetpack Compose 彻底重写了界面与交互动效，并基于 Media3 重建了现代 Android 环境下的本地播放链路。
+原版应用作为 Smartisan OS 的系统预装组件，其界面基于早期的 Android View/XML 体系构建，业务代码则深度绑定于系统镜像。本项目以 Smartisan Music 8.1.0 移植版资源作为视觉基准，当前主界面采用 legacy View 壳承载原版结构与交互细节，播放页、搜索页和部分弹层保留 Compose 桥接，并基于 Media3 重建现代 Android 环境下的本地播放链路。
 
 ### 整体架构
 
-项目采用单 Activity + Compose UI + Media3 Service 的现代标准架构。遵循单向数据流，数据与播放状态由底层向上驱动 UI。
+项目采用单 Activity + legacy View 壳 + Compose 桥接弹层 + Media3 Service 的架构。UI 壳层负责复刻 8.1.0 的视觉与交互，播放、媒体库、收藏、歌单和设置继续由现代数据层驱动。
 
 ```mermaid
 flowchart TD
-    A["MainActivity"] --> B["MusicApp"]
-    B --> C["MusicNavHost"]
-    B --> D["GlobalPlaybackBar / PlaybackScreen"]
+    A["MainActivity"] --> B["LegacyPortMainShell"]
+    B --> C["Legacy View pages / adapters"]
+    B --> D["PlaybackScreen / GlobalSearchScreen overlays"]
     B --> E["ProvidePlaybackController"]
     E --> F["MediaBrowser / MediaController"]
     F --> G["PlaybackService"]
@@ -84,7 +84,7 @@ flowchart TD
     M --> O["DataStore"]
 ```
 
-* **UI 层**：全面使用 Jetpack Compose 构建页面与交互动效。
+* **UI 层**：主界面使用 legacy View 壳复刻 8.1.0，播放页、搜索页和部分弹层保留 Compose 桥接。
 * **播放层**：基于 Media3 架构实现 `PlaybackService`，负责后台音频播放控制、媒体会话（MediaSession）管理以及音频焦点的处理。
 * **数据层**：使用 Room 数据库持久化用户的播放列表和收藏数据，使用 DataStore 存储应用设置与资料库过滤规则。
 
@@ -94,10 +94,9 @@ flowchart TD
 
 | 类别       | 技术方案                                                      |
 | :--------- | ------------------------------------------------------------- |
-| 构建工具   | Android Gradle Plugin `9.2.0-alpha08`                       |
-| 语言       | Kotlin `2.3.20`                                             |
-| 声明式 UI  | Compose BOM `2026.03.01`                                    |
-| 路由导航   | `navigation-compose:2.9.7`                                  |
+| 构建工具   | Android Gradle Plugin `9.2.0`                               |
+| 语言       | Kotlin `2.3.21`                                             |
+| UI 桥接    | legacy View 壳 + Compose BOM `2026.04.01`                   |
 | 现代音频   | Media3 `1.10.0`（`common` / `exoplayer` / `session`） |
 | 持久化存储 | Room `2.8.4` + DataStore Preferences `1.2.1`              |
 | 系统支持   | `minSdk 31` / `targetSdk 36` / `compileSdk 36`          |
