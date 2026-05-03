@@ -23,10 +23,16 @@ Smartisan OS 早已退出历史舞台，原版音乐播放器也留在了旧 And
 
 ## 真机截图
 
-|                                                           |                                                           |                                                           |
-| --------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------- |
-| ![锤子音乐复刻版真机截图 1](docs/images/device-shot-01.jpg) | ![锤子音乐复刻版真机截图 2](docs/images/device-shot-02.jpg) | ![锤子音乐复刻版真机截图 3](docs/images/device-shot-03.jpg) |
-| ![锤子音乐复刻版真机截图 4](docs/images/device-shot-04.jpg) | ![锤子音乐复刻版真机截图 5](docs/images/device-shot-05.jpg) | ![锤子音乐复刻版真机截图 6](docs/images/device-shot-06.jpg) |
+<p align="center">
+  <img src="docs/images/device-shot-01.jpg" width="30%" style="margin:4px" />
+  <img src="docs/images/device-shot-02.jpg" width="30%" style="margin:4px" />
+  <img src="docs/images/device-shot-03.jpg" width="30%" style="margin:4px" />
+</p>
+<p align="center">
+  <img src="docs/images/device-shot-04.jpg" width="30%" style="margin:4px" />
+  <img src="docs/images/device-shot-05.jpg" width="30%" style="margin:4px" />
+  <img src="docs/images/device-shot-06.jpg" width="30%" style="margin:4px" />
+</p>
 
 ## 为什么又重写了一版？
 

@@ -652,7 +652,7 @@ private fun LegacyPortMainShellContent(
                     .offset(y = titleAreaHeight)
                     .fillMaxWidth()
                     .height(titleShadowHeight)
-                    .zIndex(4f),
+                    .zIndex(1f),
             )
         }
         if (!hideBottomChrome) {

@@ -372,13 +372,6 @@ private fun SearchTopBar(
             )
             SearchCancelButton(onDismiss = onDismiss)
         }
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(SearchDividerColor),
-        )
     }
 }
 
