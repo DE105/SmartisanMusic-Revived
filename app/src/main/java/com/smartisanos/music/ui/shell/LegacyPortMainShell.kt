@@ -79,8 +79,11 @@ import com.smartisanos.music.ui.shell.tabs.LegacyPortTabContent
 import com.smartisanos.music.ui.shell.titlebar.LegacyPortTitleBarShadow
 import com.smartisanos.music.ui.shell.titlebar.LegacyPortTitleBar
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private const val PlaybackBarInitialShowDelayMs = 500L
 
 private enum class LegacyTrackActionSource {
     Library,
@@ -166,18 +169,25 @@ private fun LegacyPortMainShellContent(
             ),
         )
     }
+    var playbackBarContentSnapshot by remember(controller) {
+        mutableStateOf(snapshot)
+    }
     val legacyLibrary = rememberLegacyLibraryMediaState(libraryRefreshVersion)
     val pendingTrackActionItem = remember(pendingTrackActionMediaId, legacyLibrary.items) {
         pendingTrackActionMediaId?.let { mediaId ->
             legacyLibrary.items.firstOrNull { item -> item.mediaId == mediaId }
         }
     }
-    val artworkRequestKey = snapshot.mediaItem?.artworkRequestKey()
+    val artworkRequestKey = playbackBarContentSnapshot.mediaItem?.artworkRequestKey()
     val artworkBitmap by produceState<Bitmap?>(initialValue = null, artworkRequestKey) {
-        value = snapshot.mediaItem?.let { mediaItem ->
+        value = playbackBarContentSnapshot.mediaItem?.let { mediaItem ->
             loadLegacyArtworkBitmap(context.applicationContext, mediaItem)
         }
     }
+    val playbackBarRequestedVisible = snapshot.mediaItem != null
+    val playbackBarHeight = 67.dp
+    var playbackBarComposed by remember { mutableStateOf(false) }
+    var playbackBarShowRequestedOnce by remember { mutableStateOf(false) }
     val openSearchOverlay = {
         searchQuery = ""
         searchDrilldownTarget = null
@@ -204,19 +214,37 @@ private fun LegacyPortMainShellContent(
         }
         val listener = object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
-                snapshot = LegacyPlaybackBarSnapshot(
+                val nextSnapshot = LegacyPlaybackBarSnapshot(
                     mediaItem = player.currentMediaItem,
                     isPlaying = player.isPlaying,
                 )
+                snapshot = nextSnapshot
+                if (nextSnapshot.mediaItem != null) {
+                    playbackBarContentSnapshot = nextSnapshot
+                }
             }
         }
         controller.addListener(listener)
-        snapshot = LegacyPlaybackBarSnapshot(
+        val initialSnapshot = LegacyPlaybackBarSnapshot(
             mediaItem = controller.currentMediaItem,
             isPlaying = controller.isPlaying,
         )
+        snapshot = initialSnapshot
+        if (initialSnapshot.mediaItem != null) {
+            playbackBarContentSnapshot = initialSnapshot
+        }
         onDispose {
             controller.removeListener(listener)
+        }
+    }
+
+    LaunchedEffect(playbackBarRequestedVisible) {
+        if (playbackBarRequestedVisible) {
+            if (!playbackBarShowRequestedOnce) {
+                delay(PlaybackBarInitialShowDelayMs)
+            }
+            playbackBarShowRequestedOnce = true
+            playbackBarComposed = true
         }
     }
 
@@ -633,39 +661,47 @@ private fun LegacyPortMainShellContent(
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter),
             ) {
-                LegacyPortPlaybackBar(
-                    snapshot = snapshot,
-                    favoriteIds = favoriteIds,
-                    artworkBitmap = artworkBitmap,
-                    onOpenPlayback = {
-                        playbackVisible = true
-                    },
-                    onToggleFavorite = { mediaItem ->
-                        if (mediaItem.isExternalAudioLaunchItem()) {
-                            return@LegacyPortPlaybackBar
-                        }
-                        val mediaId = mediaItem.mediaId.takeIf(String::isNotBlank) ?: return@LegacyPortPlaybackBar
-                        scope.launch {
-                            favoriteRepository.toggle(mediaId)
-                        }
-                    },
-                    onPrevious = {
-                        controller?.seekToPrevious()
-                    },
-                    onPlayPause = {
-                        if (controller?.isPlaying == true) {
-                            controller.pause()
-                        } else {
-                            controller?.play()
-                        }
-                    },
-                    onNext = {
-                        controller?.seekToNext()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(67.dp),
-                )
+                if (playbackBarComposed) {
+                    LegacyPortPlaybackBar(
+                        snapshot = playbackBarContentSnapshot,
+                        shown = playbackBarRequestedVisible,
+                        favoriteIds = favoriteIds,
+                        artworkBitmap = artworkBitmap,
+                        onHidden = {
+                            if (!playbackBarRequestedVisible) {
+                                playbackBarComposed = false
+                            }
+                        },
+                        onOpenPlayback = {
+                            playbackVisible = true
+                        },
+                        onToggleFavorite = { mediaItem ->
+                            if (mediaItem.isExternalAudioLaunchItem()) {
+                                return@LegacyPortPlaybackBar
+                            }
+                            val mediaId = mediaItem.mediaId.takeIf(String::isNotBlank) ?: return@LegacyPortPlaybackBar
+                            scope.launch {
+                                favoriteRepository.toggle(mediaId)
+                            }
+                        },
+                        onPrevious = {
+                            controller?.seekToPrevious()
+                        },
+                        onPlayPause = {
+                            if (controller?.isPlaying == true) {
+                                controller.pause()
+                            } else {
+                                controller?.play()
+                            }
+                        },
+                        onNext = {
+                            controller?.seekToNext()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(playbackBarHeight),
+                    )
+                }
                 LegacyPortBottomBar(
                     currentDestination = if (playlistAddModeActive) MusicDestination.Songs else currentDestination,
                     onDestinationSelected = { destination ->
