@@ -1,0 +1,25 @@
+NonCommercial License Notice
+
+Copyright (c) 2026 DE105
+
+This repository is a personal, unofficial revival project for Smartisan Music.
+
+Original source code in this repository, including the playback pipeline, data
+layer, UI bridge logic, custom controls, and build configuration, may be used,
+modified, and redistributed for non-commercial purposes only.
+
+You may not use this project, compiled artifacts, or derivative works for
+commercial purposes without explicit permission from the project author.
+
+Resources migrated or referenced from Smartisan Music 8.1.0 APK, including but
+not limited to drawable, layout, anim, color, values, selector, and other visual
+assets, remain the property of their original rights holders. They are included
+or referenced only for learning, research, and preservation purposes.
+
+Smartisan OS, Smartisan Music, related trademarks, product names, and visual
+designs belong to their respective rights holders. This project is not
+affiliated with, endorsed by, or sponsored by ByteDance, Smartisan, or any
+related rights holder.
+
+If you are a rights holder and believe this repository infringes your rights,
+please contact the project author for removal or further handling.
