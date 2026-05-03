@@ -1,0 +1,136 @@
+package com.smartisanos.music.ui.shell.tabs
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.media3.common.MediaItem
+import com.smartisanos.music.data.settings.PlaybackSettings
+import com.smartisanos.music.ui.album.AlbumViewMode
+import com.smartisanos.music.ui.navigation.MusicDestination
+import com.smartisanos.music.ui.shell.LegacyArtistTarget
+import com.smartisanos.music.ui.shell.LegacyPortAlbumPage
+import com.smartisanos.music.ui.shell.LegacyPortArtistPage
+import com.smartisanos.music.ui.shell.LegacyPortMorePage
+import com.smartisanos.music.ui.shell.LegacyPortPlaylistPage
+import com.smartisanos.music.ui.shell.songs.LegacyPortSongsPage
+
+@Composable
+internal fun LegacyPortTabContent(
+    destination: MusicDestination,
+    mediaItems: List<MediaItem>,
+    libraryLoaded: Boolean,
+    songsEditMode: Boolean,
+    selectedSongIds: Set<String>,
+    albumViewMode: AlbumViewMode,
+    albumEditMode: Boolean,
+    selectedAlbumId: String?,
+    selectedAlbumIds: Set<String>,
+    artistAlbumViewMode: AlbumViewMode,
+    selectedArtistTarget: LegacyArtistTarget?,
+    hiddenMediaIds: Set<String>,
+    libraryRefreshVersion: Int,
+    libraryRefreshing: Boolean,
+    playbackSettings: PlaybackSettings,
+    onRefreshLibrary: () -> Unit,
+    onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
+    onRequestAddToQueue: (List<MediaItem>) -> Unit,
+    onScratchEnabledChange: (Boolean) -> Unit,
+    onHidePlayerAxisEnabledChange: (Boolean) -> Unit,
+    onPopcornSoundEnabledChange: (Boolean) -> Unit,
+    onMediaIdsHidden: (Set<String>) -> Unit,
+    onRequestDeleteMediaIds: (Set<String>) -> Unit,
+    onLibraryTrackMoreClick: (MediaItem) -> Unit,
+    onPlaylistTrackMoreClick: (MediaItem) -> Unit,
+    onMoreSettingsPageActiveChanged: (Boolean) -> Unit,
+    onToggleSongSelected: (String) -> Unit,
+    onToggleAlbumSelected: (String) -> Unit,
+    onAlbumSelected: (String, String) -> Unit,
+    onArtistTargetChanged: (LegacyArtistTarget?) -> Unit,
+    onPlaylistAddModeActiveChanged: (Boolean) -> Unit,
+    onSearchClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var songsPageMounted by remember { mutableStateOf(destination == MusicDestination.Songs) }
+    LaunchedEffect(destination) {
+        if (destination == MusicDestination.Songs) {
+            songsPageMounted = true
+        }
+    }
+
+    Box(modifier = modifier) {
+        if (songsPageMounted) {
+            LegacyPortSongsPage(
+                mediaItems = mediaItems,
+                libraryLoaded = libraryLoaded,
+                active = destination == MusicDestination.Songs,
+                editMode = songsEditMode,
+                selectedSongIds = selectedSongIds,
+                hiddenMediaIds = hiddenMediaIds,
+                onToggleSongSelected = onToggleSongSelected,
+                onTrackMoreClick = onLibraryTrackMoreClick,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        when (destination) {
+            MusicDestination.Songs -> Unit
+            MusicDestination.Album -> LegacyPortAlbumPage(
+                mediaItems = mediaItems,
+                active = true,
+                viewMode = albumViewMode,
+                editMode = albumEditMode,
+                selectedAlbumId = selectedAlbumId,
+                selectedAlbumIds = selectedAlbumIds,
+                hiddenMediaIds = hiddenMediaIds,
+                onAlbumSelected = onAlbumSelected,
+                onToggleAlbumSelected = onToggleAlbumSelected,
+                onRequestAddToPlaylist = onRequestAddToPlaylist,
+                onRequestAddToQueue = onRequestAddToQueue,
+                onTrackMoreClick = onLibraryTrackMoreClick,
+                modifier = Modifier.fillMaxSize(),
+            )
+            MusicDestination.Artist -> LegacyPortArtistPage(
+                mediaItems = mediaItems,
+                active = true,
+                selectedTarget = selectedArtistTarget,
+                albumViewMode = artistAlbumViewMode,
+                hiddenMediaIds = hiddenMediaIds,
+                onTargetChanged = onArtistTargetChanged,
+                onRequestAddToPlaylist = onRequestAddToPlaylist,
+                onRequestAddToQueue = onRequestAddToQueue,
+                onTrackMoreClick = onLibraryTrackMoreClick,
+                modifier = Modifier.fillMaxSize(),
+            )
+            MusicDestination.Playlist -> LegacyPortPlaylistPage(
+                mediaItems = mediaItems,
+                active = true,
+                hiddenMediaIds = hiddenMediaIds,
+                onTrackMoreClick = onPlaylistTrackMoreClick,
+                onAddModeActiveChanged = onPlaylistAddModeActiveChanged,
+                onSearchClick = onSearchClick,
+                modifier = Modifier.fillMaxSize(),
+            )
+            MusicDestination.More -> LegacyPortMorePage(
+                active = true,
+                playbackSettings = playbackSettings,
+                libraryRefreshVersion = libraryRefreshVersion,
+                libraryRefreshing = libraryRefreshing,
+                onRefreshLibrary = onRefreshLibrary,
+                onScratchEnabledChange = onScratchEnabledChange,
+                onHidePlayerAxisEnabledChange = onHidePlayerAxisEnabledChange,
+                onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,
+                onMediaIdsHidden = onMediaIdsHidden,
+                onRequestDeleteMediaIds = onRequestDeleteMediaIds,
+                onSettingsPageActiveChanged = onMoreSettingsPageActiveChanged,
+                onSearchClick = onSearchClick,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
