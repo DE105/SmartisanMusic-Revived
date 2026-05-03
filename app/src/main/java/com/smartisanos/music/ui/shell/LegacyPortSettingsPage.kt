@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.viewinterop.AndroidView
 import com.smartisanos.music.R
 import com.smartisanos.music.data.settings.PlaybackSettings
+import com.smartisanos.music.ui.shell.titlebar.LegacyPortSmartisanTitleBar
 import smartisanos.widget.SwitchEx
 import smartisanos.widget.TitleBar
 

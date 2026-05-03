@@ -1,4 +1,4 @@
-package com.smartisanos.music.ui.shell
+package com.smartisanos.music.ui.shell.titlebar
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column

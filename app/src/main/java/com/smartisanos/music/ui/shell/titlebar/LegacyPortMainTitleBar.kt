@@ -8,7 +8,6 @@ import com.smartisanos.music.R
 import com.smartisanos.music.ui.album.AlbumViewMode
 import com.smartisanos.music.ui.navigation.MusicDestination
 import com.smartisanos.music.ui.shell.LegacyArtistTarget
-import com.smartisanos.music.ui.shell.LegacyPortSmartisanTitleBar
 import com.smartisanos.music.ui.shell.showsAlbumSwitch
 import smartisanos.widget.TitleBar
 
