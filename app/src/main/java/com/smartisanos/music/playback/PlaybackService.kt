@@ -23,12 +23,15 @@ import com.google.common.util.concurrent.MoreExecutors
 import com.smartisanos.music.MainActivity
 import com.smartisanos.music.data.library.LibraryExclusions
 import com.smartisanos.music.data.library.LibraryExclusionsStore
+import com.smartisanos.music.data.playback.PlaybackStatsRepository
 import com.smartisanos.music.isExternalAudioLaunchItem
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -43,8 +46,11 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var libraryExecutor: ListeningExecutorService
     private lateinit var libraryRefreshExecutor: ListeningExecutorService
     private lateinit var libraryExclusionsStore: LibraryExclusionsStore
+    private lateinit var playbackStatsRepository: PlaybackStatsRepository
     private lateinit var playbackSessionStateStore: PlaybackSessionStateStore
     private var playbackSessionStateCoordinator: PlaybackSessionStateCoordinator? = null
+    private var playbackPlayCountTracker: PlaybackPlayCountTracker? = null
+    private var pendingStatsLibraryRefreshJob: Job? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     @Volatile private var exclusionsSnapshot: LibraryExclusions = LibraryExclusions()
     private val exclusionsReady = CompletableDeferred<LibraryExclusions>()
@@ -52,7 +58,11 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
-        localAudioLibrary = LocalAudioLibrary(this)
+        playbackStatsRepository = PlaybackStatsRepository.getInstance(this)
+        localAudioLibrary = LocalAudioLibrary(
+            context = this,
+            playbackStatsProvider = playbackStatsRepository::getStats,
+        )
         libraryExclusionsStore = LibraryExclusionsStore(this)
         playbackSessionStateStore = PlaybackSessionStateStore(this)
         libraryExecutor = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor())
@@ -77,6 +87,17 @@ class PlaybackService : MediaLibraryService() {
             .setSessionActivity(createSessionActivityPendingIntent())
             .setPeriodicPositionUpdateEnabled(false)
             .build()
+
+        playbackPlayCountTracker = PlaybackPlayCountTracker(
+            player = exoPlayer,
+            repository = playbackStatsRepository,
+            scope = serviceScope,
+            onPlayCountChanged = {
+                scheduleStatsLibraryRefresh()
+            },
+        ).also { tracker ->
+            tracker.start()
+        }
 
         playbackSessionStateCoordinator = PlaybackSessionStateCoordinator(
             player = exoPlayer,
@@ -121,6 +142,14 @@ class PlaybackService : MediaLibraryService() {
             coordinator.stop()
         }
         playbackSessionStateCoordinator = null
+        playbackPlayCountTracker?.let { tracker ->
+            runBlocking {
+                tracker.stopAndFlush()
+            }
+        }
+        playbackPlayCountTracker = null
+        pendingStatsLibraryRefreshJob?.cancel()
+        pendingStatsLibraryRefreshJob = null
         serviceScope.cancel()
         PlaybackSleepTimer.cancel()
         mediaLibrarySession?.release()
@@ -369,7 +398,23 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    private fun scheduleStatsLibraryRefresh() {
+        serviceScope.launch(Dispatchers.Main.immediate) {
+            pendingStatsLibraryRefreshJob?.cancel()
+            pendingStatsLibraryRefreshJob = serviceScope.launch(Dispatchers.Main.immediate) {
+                delay(StatsLibraryRefreshDebounceMs)
+                localAudioLibrary.invalidateAudioItems()
+                mediaLibrarySession?.notifyChildrenChanged(
+                    LocalAudioLibrary.ROOT_ID,
+                    Int.MAX_VALUE,
+                    null,
+                )
+            }
+        }
+    }
+
     private companion object {
         private const val PlaybackSessionActivityRequestCode = 1001
+        private const val StatsLibraryRefreshDebounceMs = 600L
     }
 }

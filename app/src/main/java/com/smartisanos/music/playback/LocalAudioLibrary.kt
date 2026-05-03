@@ -12,6 +12,7 @@ import android.webkit.MimeTypeMap
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import com.smartisanos.music.R
+import com.smartisanos.music.data.playback.PlaybackStatsRecord
 import java.io.File
 import java.text.Normalizer
 import java.util.concurrent.CountDownLatch
@@ -22,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class LocalAudioLibrary(
     private val context: Context,
+    private val playbackStatsProvider: () -> Map<String, PlaybackStatsRecord> = { emptyMap() },
 ) {
 
     @Volatile private var audioCache = AudioCache()
@@ -48,6 +50,8 @@ class LocalAudioLibrary(
         }
 
         val items = mutableListOf<MediaItem>()
+        val playbackStats = runCatching(playbackStatsProvider)
+            .getOrDefault(emptyMap())
         try {
             context.contentResolver.query(
                 audioCollection(),
@@ -95,6 +99,8 @@ class LocalAudioLibrary(
                     val titleSortKey = LegacyLibraryTitleNormalizer.normalize(title)
                     val titleSection = titleSortKey.legacyLibraryTitleSection()
                     val mediaUri = ContentUris.withAppendedId(audioCollection(), id)
+                    val stats = playbackStats[id.toString()]
+                    val playCount = stats?.playCount?.takeIf { it > 0L }
 
                     val extras = Bundle().apply {
                         putString(TitleSortKeyExtraKey, titleSortKey)
@@ -113,6 +119,9 @@ class LocalAudioLibrary(
                         }
                         if (!audioQualityBadge.isNullOrBlank()) {
                             putString(AudioQualityBadgeExtraKey, audioQualityBadge)
+                        }
+                        if (playCount != null) {
+                            putLong(PlayCountExtraKey, playCount)
                         }
                     }
 
@@ -163,6 +172,10 @@ class LocalAudioLibrary(
         return items
     }
 
+    fun invalidateAudioItems() {
+        audioCache = AudioCache()
+    }
+
     fun refreshAudioItems(): RefreshResult {
         val indexedSnapshot = queryIndexedAudioSnapshot()
         val pendingAudioPaths = discoverUnindexedAudioPaths(indexedSnapshot)
@@ -194,6 +207,7 @@ class LocalAudioLibrary(
         const val TitleSortKeyExtraKey = "com.smartisanos.music.extra.TITLE_SORT_KEY"
         const val TitleSectionExtraKey = "com.smartisanos.music.extra.TITLE_SECTION"
         const val AudioQualityBadgeExtraKey = "com.smartisanos.music.extra.AUDIO_QUALITY_BADGE"
+        const val PlayCountExtraKey = "com.smartisanos.music.extra.PLAY_COUNT"
         const val AudioQualityBadgeFlac = "flac"
         const val AudioQualityBadgeApe = "ape"
         const val AudioQualityBadgeWav = "wav"

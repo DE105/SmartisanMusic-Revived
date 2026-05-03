@@ -1014,7 +1014,12 @@ private fun List<MediaItem>.sortedForPlaylistAddMode(sortIndex: Int): List<Media
             item.playlistExtraLong("score", "rating", "play_score")
         }
         2 -> sortedByPlaylistMetricDescending { item ->
-            item.playlistExtraLong("play_count", "playCount", "play_count_all")
+            item.playlistExtraLong(
+                LocalAudioLibrary.PlayCountExtraKey,
+                "play_count",
+                "playCount",
+                "play_count_all",
+            )
         }
         3 -> sortedWith(
             compareByDescending<MediaItem> { item ->
@@ -1040,9 +1045,9 @@ private fun List<MediaItem>.sortedByPlaylistMetricDescending(
             },
         )
     } else {
-        // 现代媒体库暂未持久化旧版 score/play_count，保留可见切换并保证排序稳定。
+        // 缺少历史指标时保留可见切换并保证排序稳定。
         sortedWith(
-            compareByDescending<MediaItem> { item ->
+            compareBy<MediaItem> { item ->
                 item.playlistSortKey()
             }.thenBy { item ->
                 item.mediaId

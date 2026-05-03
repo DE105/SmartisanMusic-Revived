@@ -1,6 +1,7 @@
 package com.smartisanos.music.ui.shell.songs
 
 import android.icu.text.Transliterator
+import android.os.Bundle
 import androidx.media3.common.MediaItem
 import com.smartisanos.music.playback.LocalAudioLibrary
 import java.text.Normalizer
@@ -131,7 +132,33 @@ internal fun MediaItem.legacyRating(): Long {
 }
 
 internal fun MediaItem.legacyPlayCount(): Long {
-    return mediaMetadata.extras?.getLong("play_count", 0L) ?: 0L
+    return mediaMetadata.extras?.legacyExtraLong(
+        LocalAudioLibrary.PlayCountExtraKey,
+        "play_count",
+        "playCount",
+        "play_count_all",
+    ) ?: 0L
+}
+
+private fun Bundle.legacyExtraLong(vararg keys: String): Long {
+    keys.forEach { key ->
+        if (!containsKey(key)) {
+            return@forEach
+        }
+        val longValue = getLong(key, Long.MIN_VALUE)
+        if (longValue != Long.MIN_VALUE) {
+            return longValue
+        }
+        val intValue = getInt(key, Int.MIN_VALUE)
+        if (intValue != Int.MIN_VALUE) {
+            return intValue.toLong()
+        }
+        val doubleValue = getDouble(key, Double.NaN)
+        if (!doubleValue.isNaN()) {
+            return doubleValue.toLong()
+        }
+    }
+    return 0L
 }
 
 internal fun MediaItem.legacyGenerationAdded(): Long {
