@@ -95,10 +95,6 @@ private enum class LegacyMoreRootEntry(
         labelRes = R.string.tab_directory,
         iconRes = R.drawable.tabbar_folder_selector,
     ),
-    Rescan(
-        labelRes = R.string.library_rescan_full,
-        iconRes = R.drawable.standard_icon_settings_selector,
-    ),
 }
 
 @Composable
@@ -155,7 +151,6 @@ internal fun LegacyPortMorePage(
         primaryContent = {
             LegacyMoreRootPage(
                 active = active && secondaryTarget == null,
-                libraryRefreshing = libraryRefreshing,
                 onSettingsClick = {
                     onSettingsPageActiveChanged(true)
                     secondaryTarget = LegacyMoreSecondaryTarget.Settings
@@ -166,7 +161,6 @@ internal fun LegacyPortMorePage(
                 onLovedSongsClick = {
                     secondaryTarget = LegacyMoreSecondaryTarget.LovedSongs
                 },
-                onRefreshLibrary = onRefreshLibrary,
                 onSearchClick = onSearchClick,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -189,12 +183,13 @@ internal fun LegacyPortMorePage(
                 LegacyMoreSecondaryTarget.Folder -> LegacyPortFolderPage(
                     active = active,
                     libraryRefreshVersion = libraryRefreshVersion,
+                    libraryRefreshing = libraryRefreshing,
                     onClose = {
                         secondaryTarget = null
                     },
+                    onRefreshLibrary = onRefreshLibrary,
                     onMediaIdsHidden = onMediaIdsHidden,
                     onRequestDeleteMediaIds = onRequestDeleteMediaIds,
-                    onSearchClick = onSearchClick,
                     modifier = Modifier.fillMaxSize(),
                 )
                 LegacyMoreSecondaryTarget.Settings -> LegacyPortSettingsPage(
@@ -216,11 +211,9 @@ internal fun LegacyPortMorePage(
 @Composable
 private fun LegacyMoreRootPage(
     active: Boolean,
-    libraryRefreshing: Boolean,
     onSettingsClick: () -> Unit,
     onFolderClick: () -> Unit,
     onLovedSongsClick: () -> Unit,
-    onRefreshLibrary: () -> Unit,
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -240,10 +233,8 @@ private fun LegacyMoreRootPage(
         }
         LegacyMoreRootList(
             active = active,
-            libraryRefreshing = libraryRefreshing,
             onFolderClick = onFolderClick,
             onLovedSongsClick = onLovedSongsClick,
-            onRefreshLibrary = onRefreshLibrary,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -274,10 +265,8 @@ private fun TitleBar.setupLegacyMoreRootTitleBar(
 @Composable
 private fun LegacyMoreRootList(
     active: Boolean,
-    libraryRefreshing: Boolean,
     onFolderClick: () -> Unit,
     onLovedSongsClick: () -> Unit,
-    onRefreshLibrary: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     AndroidView(
@@ -299,12 +288,10 @@ private fun LegacyMoreRootList(
                 listView.adapter = adapter
                 listView.scheduleLayoutAnimation()
             }
-            adapter.updateRefreshing(libraryRefreshing)
             listView.setOnItemClickListener { _, _, position, _ ->
                 when (adapter.itemAt(position)) {
                     LegacyMoreRootEntry.LovedSongs -> onLovedSongsClick()
                     LegacyMoreRootEntry.Folder -> onFolderClick()
-                    LegacyMoreRootEntry.Rescan -> onRefreshLibrary()
                     null -> Unit
                 }
             }
@@ -314,15 +301,6 @@ private fun LegacyMoreRootList(
 
 private class LegacyMoreRootAdapter : BaseAdapter() {
     private val entries = LegacyMoreRootEntry.entries
-    private var libraryRefreshing = false
-
-    fun updateRefreshing(refreshing: Boolean) {
-        if (libraryRefreshing == refreshing) {
-            return
-        }
-        libraryRefreshing = refreshing
-        notifyDataSetChanged()
-    }
 
     fun itemAt(position: Int): LegacyMoreRootEntry? = entries.getOrNull(position)
 
@@ -340,16 +318,10 @@ private class LegacyMoreRootAdapter : BaseAdapter() {
             ?: return view
         val entry = entries[position]
         itemView.setIcon(entry.iconRes)
-        itemView.setTitle(
-            if (entry == LegacyMoreRootEntry.Rescan && libraryRefreshing) {
-                parent.context.getString(R.string.library_refreshing)
-            } else {
-                parent.context.getString(entry.labelRes)
-            },
-        )
+        itemView.setTitle(parent.context.getString(entry.labelRes))
         itemView.setSummary(null)
         itemView.setSubtitle(null)
-        itemView.setArrowVisible(entry != LegacyMoreRootEntry.Rescan)
+        itemView.setArrowVisible(true)
         return view
     }
 }

@@ -92,10 +92,11 @@ private data class LegacyFolderTarget(
 internal fun LegacyPortFolderPage(
     active: Boolean,
     libraryRefreshVersion: Int,
+    libraryRefreshing: Boolean,
     onClose: () -> Unit,
+    onRefreshLibrary: () -> Unit,
     onMediaIdsHidden: (Set<String>) -> Unit,
     onRequestDeleteMediaIds: (Set<String>) -> Unit,
-    onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -159,6 +160,7 @@ internal fun LegacyPortFolderPage(
                 target = target,
                 editMode = editMode,
                 selectedCount = selectedDirectoryKeys.size,
+                libraryRefreshing = libraryRefreshing,
                 onBack = {
                     when {
                         target != null -> target = null
@@ -178,7 +180,7 @@ internal fun LegacyPortFolderPage(
                         showDeleteConfirm = true
                     }
                 },
-                onSearchClick = onSearchClick,
+                onRefreshLibrary = onRefreshLibrary,
             )
         }
         Box(
@@ -268,10 +270,11 @@ private fun TitleBar.setupLegacyFolderTitleBar(
     target: LegacyFolderTarget?,
     editMode: Boolean,
     selectedCount: Int,
+    libraryRefreshing: Boolean,
     onBack: () -> Unit,
     onEnterEdit: () -> Unit,
     onDeleteSelected: () -> Unit,
-    onSearchClick: () -> Unit,
+    onRefreshLibrary: () -> Unit,
 ) {
     removeAllLeftViews()
     removeAllRightViews()
@@ -312,10 +315,15 @@ private fun TitleBar.setupLegacyFolderTitleBar(
                     onEnterEdit()
                 }
             }
-            addRightImageView(R.drawable.search_btn_selector, 1)
-                .setOnClickListener {
-                    onSearchClick()
+            addRightImageView(R.drawable.standard_icon_refresh_selector, 1).apply {
+                isEnabled = !libraryRefreshing
+                contentDescription = context.getString(R.string.library_rescan_full)
+                setOnClickListener {
+                    if (!libraryRefreshing) {
+                        onRefreshLibrary()
+                    }
                 }
+            }
         }
     }
 }
