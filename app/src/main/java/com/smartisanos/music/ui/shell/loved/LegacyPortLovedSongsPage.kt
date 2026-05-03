@@ -2,7 +2,6 @@ package com.smartisanos.music.ui.shell.loved
 
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -16,9 +15,7 @@ import android.widget.FrameLayout
 import android.widget.HeaderViewListAdapter
 import android.widget.ImageButton
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.ListView
-import android.widget.PopupWindow
 import android.widget.RelativeLayout
 import android.widget.TextView
 import androidx.activity.compose.BackHandler
@@ -425,6 +422,16 @@ private fun LegacyLovedSongsTitleBar(
                 }
             },
         )
+        AndroidView(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(dimensionResource(R.dimen.titlebar_shadow_height)),
+            factory = { context ->
+                View(context).apply {
+                    setBackgroundResource(R.drawable.titlebar_bg_shadow)
+                }
+            },
+        )
     }
 }
 
@@ -439,105 +446,6 @@ private fun Button.prepareTitleIconButton() {
     layoutParams = (layoutParams as? RelativeLayout.LayoutParams)?.apply {
         width = iconSize
         height = iconSize
-    }
-}
-
-private fun showLovedSongsSortPopup(
-    anchor: View,
-    sortMode: LovedSongsSortMode,
-    onSortModeChanged: (LovedSongsSortMode) -> Unit,
-) {
-    val context = anchor.context
-    val density = context.resources.displayMetrics.density
-    val root = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-        background = GradientDrawable().apply {
-            setColor(Color.WHITE)
-            cornerRadius = 10f * density
-        }
-        elevation = 8f * density
-    }
-    root.addView(
-        TextView(context).apply {
-            setText(R.string.sort_title)
-            gravity = Gravity.CENTER_VERTICAL
-            setTextColor(Color.rgb(0x99, 0x99, 0x99))
-            textSize = 18f
-            setPadding(dp(16), 0, dp(16), 0)
-        },
-        LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, anchor.dp(40)),
-    )
-    root.addView(sortPopupDivider(context))
-    val popup = PopupWindow(
-        root,
-        anchor.dp(260),
-        LinearLayout.LayoutParams.WRAP_CONTENT,
-        true,
-    ).apply {
-        isOutsideTouchable = true
-        setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-    }
-    LovedSongsSortMode.entries.forEachIndexed { index, mode ->
-        root.addView(
-            sortPopupRow(
-                parent = root,
-                mode = mode,
-                selected = mode == sortMode,
-                onClick = {
-                    onSortModeChanged(mode)
-                    popup.dismiss()
-                },
-            ),
-        )
-        if (index != LovedSongsSortMode.entries.lastIndex) {
-            root.addView(sortPopupDivider(context))
-        }
-    }
-    popup.showAsDropDown(anchor, -anchor.dp(166), -anchor.dp(2))
-}
-
-private fun sortPopupRow(
-    parent: ViewGroup,
-    mode: LovedSongsSortMode,
-    selected: Boolean,
-    onClick: () -> Unit,
-): View {
-    val context = parent.context
-    return LayoutInflater.from(context)
-        .inflate(R.layout.popup_menu_standard_list_item, parent, false)
-        .apply {
-            isClickable = true
-            setBackgroundResource(R.drawable.listview_selector)
-            setOnClickListener {
-                onClick()
-            }
-            findViewById<ImageView>(R.id.menu_icon)?.setImageResource(
-                when (mode) {
-                    LovedSongsSortMode.Time -> R.drawable.icon_sort_by_time
-                    LovedSongsSortMode.SongName -> R.drawable.icon_sort_by_name
-                },
-            )
-            findViewById<ImageView>(R.id.menu_selected)?.visibility = if (selected) View.VISIBLE else View.GONE
-            findViewById<TextView>(R.id.menu_title)?.apply {
-                text = context.getString(
-                    when (mode) {
-                        LovedSongsSortMode.Time -> R.string.sort_by_saved_time
-                        LovedSongsSortMode.SongName -> R.string.sort_by_name
-                    },
-                )
-                setTextColor(Color.rgb(0x99, 0x99, 0x99))
-                textSize = 18f
-            }
-        }
-}
-
-private fun sortPopupDivider(context: android.content.Context): View {
-    return View(context).apply {
-        setBackgroundColor(Color.rgb(0xeb, 0xeb, 0xeb))
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            1,
-        )
     }
 }
 

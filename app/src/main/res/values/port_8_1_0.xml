@@ -242,7 +242,14 @@
     <dimen name="playback_bar_text_width">143.29999dp</dimen>
     <dimen name="play_list_check_box_margin_left">20.0dp</dimen>
     <dimen name="play_list_check_box_margin_right">20.0dp</dimen>
+    <dimen name="popup_bg_left_right_shadow_width">31.299988dp</dimen>
+    <dimen name="popup_bg_top_bottom_shadow_height">45.69998dp</dimen>
+    <dimen name="popup_list_menu_default_width">220.0dp</dimen>
     <dimen name="popup_list_menu_item_height">44.0dp</dimen>
+    <dimen name="popup_list_menu_title_height">30.0dp</dimen>
+    <dimen name="popup_list_title_left_margin">12.0dp</dimen>
+    <dimen name="menu_panel_bg_min_distance">12.0dp</dimen>
+    <dimen name="list_divider_height">2.0px</dimen>
     <dimen name="playlist_right_action_width">30.0dp</dimen>
     <dimen name="primary_text_size">17.0sp</dimen>
     <dimen name="quickbar_width">217.5dp</dimen>
@@ -291,6 +298,7 @@
     <dimen name="title_button_max_width">110.0dp</dimen>
     <dimen name="title_text_size">20.0sp</dimen>
     <dimen name="titlebar_height">48.0dp</dimen>
+    <dimen name="titlebar_shadow_height">4.0dp</dimen>
     <dimen name="time_picker_text_size">16.0dp</dimen>
     <dimen name="time_picker_text_size_hight">18.0dp</dimen>
     <dimen name="bar_divider_height">0.6700001dp</dimen>
@@ -348,6 +356,18 @@
     <color name="transparent">#00000000</color>
     <color name="transparent_black">#99000000</color>
     <color name="playing_queue_color">#ffffff</color>
+    <drawable name="menu_list_item_normal">#ffffff</drawable>
+    <drawable name="menu_list_item_pressed">#f5f5f5</drawable>
+
+    <style name="PopupWindowDropDownDownAnim" parent="@android:style/Animation">
+        <item name="android:windowEnterAnimation">@anim/dropdown_down_enter</item>
+        <item name="android:windowExitAnimation">@anim/dropdown_down_exit</item>
+    </style>
+
+    <style name="PopupWindowDropDownUpAnim" parent="@android:style/Animation">
+        <item name="android:windowEnterAnimation">@anim/dropdown_up_enter</item>
+        <item name="android:windowExitAnimation">@anim/dropdown_up_exit</item>
+    </style>
 
     <string name="cd_play_all">播放列表</string>
     <string name="cd_shuffle">随机播放</string>
