@@ -109,6 +109,9 @@ internal fun LegacyPortSongsPage(
             }
             val listView = root.findViewById<ListView>(R.id.list) ?: return@AndroidView
             val sortDisplayMode = selectedSortIndex.toLegacySongsSortDisplayMode()
+            val showQuickBar = hasSongs &&
+                sortDisplayMode == LegacySongsSortDisplayMode.Name &&
+                sortedSongs.size > LegacySongsQuickBarVisibilityLimit
             listView.visibility = if (hasSongs || libraryLoaded) View.VISIBLE else View.INVISIBLE
             val adapter = listView.adapter as? LegacySongsAdapter ?: LegacySongsAdapter().also { adapter ->
                 listView.adapter = adapter
@@ -127,6 +130,7 @@ internal fun LegacyPortSongsPage(
                 nextCurrentIsPlaying = browser?.isPlaying == true,
                 nextDisplayMode = sortDisplayMode,
                 nextSectionMode = sortDisplayMode.toSectionMode(),
+                nextReserveQuickBarSpace = showQuickBar,
                 nextEditMode = editMode,
                 nextSelectedMediaIds = selectedSongIds,
             )
@@ -160,7 +164,7 @@ internal fun LegacyPortSongsPage(
                 listView.setTag(R.id.list, browser)
             }
             root.findViewById<QuickBarEx>(R.id.main_quickbar)?.apply {
-                visibility = if (hasSongs && selectedSortIndex == 0) View.VISIBLE else View.GONE
+                visibility = if (showQuickBar) View.VISIBLE else View.GONE
                 (layoutParams as? FrameLayout.LayoutParams)?.let { params ->
                     params.gravity = Gravity.END
                     layoutParams = params
@@ -235,3 +239,5 @@ private fun ActionButtonGroup.setupLegacySongsSortHeader(
     }
     setButtonActivated(selectedSortIndex)
 }
+
+private const val LegacySongsQuickBarVisibilityLimit = 30

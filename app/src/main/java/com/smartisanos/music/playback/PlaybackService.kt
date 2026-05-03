@@ -23,6 +23,7 @@ import com.google.common.util.concurrent.MoreExecutors
 import com.smartisanos.music.MainActivity
 import com.smartisanos.music.data.library.LibraryExclusions
 import com.smartisanos.music.data.library.LibraryExclusionsStore
+import com.smartisanos.music.isExternalAudioLaunchItem
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 
 class PlaybackService : MediaLibraryService() {
@@ -41,6 +43,8 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var libraryExecutor: ListeningExecutorService
     private lateinit var libraryRefreshExecutor: ListeningExecutorService
     private lateinit var libraryExclusionsStore: LibraryExclusionsStore
+    private lateinit var playbackSessionStateStore: PlaybackSessionStateStore
+    private var playbackSessionStateCoordinator: PlaybackSessionStateCoordinator? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     @Volatile private var exclusionsSnapshot: LibraryExclusions = LibraryExclusions()
     private val exclusionsReady = CompletableDeferred<LibraryExclusions>()
@@ -50,6 +54,7 @@ class PlaybackService : MediaLibraryService() {
         super.onCreate()
         localAudioLibrary = LocalAudioLibrary(this)
         libraryExclusionsStore = LibraryExclusionsStore(this)
+        playbackSessionStateStore = PlaybackSessionStateStore(this)
         libraryExecutor = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor())
         libraryRefreshExecutor = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor())
 
@@ -73,17 +78,30 @@ class PlaybackService : MediaLibraryService() {
             .setPeriodicPositionUpdateEnabled(false)
             .build()
 
+        playbackSessionStateCoordinator = PlaybackSessionStateCoordinator(
+            player = exoPlayer,
+            stateStore = playbackSessionStateStore,
+            scope = serviceScope,
+            canLoadLibraryItems = { hasAudioPermission() },
+            loadLibraryItems = { getAudioItems() },
+        ).also { coordinator ->
+            coordinator.start()
+        }
+
         serviceScope.launch(Dispatchers.IO) {
             libraryExclusionsStore.exclusions.collect { exclusions ->
                 exclusionsSnapshot = exclusions
                 if (!exclusionsReady.isCompleted) {
                     exclusionsReady.complete(exclusions)
                 }
-                mediaLibrarySession?.notifyChildrenChanged(
-                    LocalAudioLibrary.ROOT_ID,
-                    Int.MAX_VALUE,
-                    null,
-                )
+                withContext(Dispatchers.Main.immediate) {
+                    removeHiddenQueuedItems(exclusions)
+                    mediaLibrarySession?.notifyChildrenChanged(
+                        LocalAudioLibrary.ROOT_ID,
+                        Int.MAX_VALUE,
+                        null,
+                    )
+                }
             }
         }
     }
@@ -96,6 +114,13 @@ class PlaybackService : MediaLibraryService() {
         if (!exclusionsReady.isCompleted) {
             exclusionsReady.complete(exclusionsSnapshot)
         }
+        playbackSessionStateCoordinator?.let { coordinator ->
+            runBlocking {
+                coordinator.saveNow()
+            }
+            coordinator.stop()
+        }
+        playbackSessionStateCoordinator = null
         serviceScope.cancel()
         PlaybackSleepTimer.cancel()
         mediaLibrarySession?.release()
@@ -159,6 +184,14 @@ class PlaybackService : MediaLibraryService() {
             activePlayer.volume = volume
         }
         scratchSuppressedPlayerVolume = null
+    }
+
+    private fun removeHiddenQueuedItems(exclusions: LibraryExclusions) {
+        player.removeMediaItemsMatching { item ->
+            val relativePath = item.mediaMetadata.extras
+                ?.getString(LocalAudioLibrary.RelativePathExtraKey)
+            exclusions.isMediaHidden(item.mediaId, relativePath)
+        }
     }
 
     private inner class PlaybackLibrarySessionCallback : MediaLibrarySession.Callback {
@@ -249,8 +282,8 @@ class PlaybackService : MediaLibraryService() {
         ): ListenableFuture<MutableList<MediaItem>> {
             return libraryExecutor.submit<MutableList<MediaItem>> {
                 val itemsById = getAudioItems().associateBy { it.mediaId }
-                mediaItems.mapTo(mutableListOf()) { item ->
-                    itemsById[item.mediaId] ?: item
+                mediaItems.mapNotNullTo(mutableListOf()) { item ->
+                    itemsById[item.mediaId] ?: item.takeIf { it.isExternalAudioLaunchItem() }
                 }
             }
         }
@@ -302,6 +335,9 @@ class PlaybackService : MediaLibraryService() {
                         result.items.size,
                         null,
                     )
+                    serviceScope.launch {
+                        playbackSessionStateCoordinator?.restoreIfQueueEmpty()
+                    }
                     SessionResult(
                         if (result.successful) {
                             SessionResult.RESULT_SUCCESS
@@ -323,6 +359,9 @@ class PlaybackService : MediaLibraryService() {
                         items.size,
                         null,
                     )
+                    serviceScope.launch {
+                        playbackSessionStateCoordinator?.restoreIfQueueEmpty()
+                    }
                     SessionResult(SessionResult.RESULT_SUCCESS)
                 }
             }

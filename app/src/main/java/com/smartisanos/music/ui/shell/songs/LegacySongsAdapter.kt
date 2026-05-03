@@ -27,6 +27,7 @@ internal class LegacySongsAdapter : BaseAdapter() {
     private var currentIsPlaying: Boolean = false
     private var displayMode: LegacySongsSortDisplayMode = LegacySongsSortDisplayMode.Name
     private var sectionMode: LegacySongsSectionMode = LegacySongsSectionMode.Name
+    private var reserveQuickBarSpace: Boolean = false
     private var editMode: Boolean = false
     private var selectedMediaIds: Set<String> = emptySet()
 
@@ -36,17 +37,19 @@ internal class LegacySongsAdapter : BaseAdapter() {
         nextCurrentIsPlaying: Boolean,
         nextDisplayMode: LegacySongsSortDisplayMode,
         nextSectionMode: LegacySongsSectionMode,
+        nextReserveQuickBarSpace: Boolean,
         nextEditMode: Boolean,
         nextSelectedMediaIds: Set<String>,
     ): Boolean {
         val contentChanged = items != nextItems ||
             displayMode != nextDisplayMode ||
             sectionMode != nextSectionMode
+        val quickBarInsetChanged = reserveQuickBarSpace != nextReserveQuickBarSpace
         val playbackChanged = currentMediaId != nextCurrentMediaId ||
             currentIsPlaying != nextCurrentIsPlaying
         val editModeChanged = editMode != nextEditMode
         val selectionChanged = selectedMediaIds != nextSelectedMediaIds
-        if (!contentChanged && !playbackChanged && !editModeChanged && !selectionChanged) {
+        if (!contentChanged && !quickBarInsetChanged && !playbackChanged && !editModeChanged && !selectionChanged) {
             return false
         }
 
@@ -55,10 +58,13 @@ internal class LegacySongsAdapter : BaseAdapter() {
         currentIsPlaying = nextCurrentIsPlaying
         displayMode = nextDisplayMode
         sectionMode = nextSectionMode
+        reserveQuickBarSpace = nextReserveQuickBarSpace
         editMode = nextEditMode
         selectedMediaIds = nextSelectedMediaIds
         if (contentChanged) {
             rows = buildLegacySongRows(nextItems, nextSectionMode)
+            notifyDataSetChanged()
+        } else if (quickBarInsetChanged) {
             notifyDataSetChanged()
         }
         return contentChanged
@@ -179,6 +185,7 @@ internal class LegacySongsAdapter : BaseAdapter() {
 
         view.isSelected = false
         view.isActivated = false
+        view.applyLegacyQuickBarInset()
         view.findViewById<TextView>(R.id.listview_item_line_one)?.apply {
             text = title
             isSelected = true
@@ -221,6 +228,17 @@ internal class LegacySongsAdapter : BaseAdapter() {
         }
         view.bindLegacySongEditState(item, animate = false)
         return view
+    }
+
+    private fun View.applyLegacyQuickBarInset() {
+        val rightInset = if (displayMode == LegacySongsSortDisplayMode.Name && reserveQuickBarSpace) {
+            resources.getDimensionPixelSize(R.dimen.quick_context_line_height)
+        } else {
+            0
+        }
+        if (paddingRight != rightInset) {
+            setPadding(paddingLeft, paddingTop, rightInset, paddingBottom)
+        }
     }
 
     private fun View.bindLegacySongEditState(

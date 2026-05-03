@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.MediaItem
 import com.smartisanos.music.playback.LocalPlaybackBrowser
+import com.smartisanos.music.playback.LocalPlaybackLibraryChildrenVersion
 import com.smartisanos.music.playback.await
 import com.smartisanos.music.ui.components.hasAudioPermission
 
@@ -18,10 +19,11 @@ internal fun rememberLegacyLibraryMediaState(
 ): LegacyLibraryMediaState {
     val context = LocalContext.current
     val browser = LocalPlaybackBrowser.current
+    val libraryChildrenVersion = LocalPlaybackLibraryChildrenVersion.current
     val hasPermission = hasAudioPermission(context)
     var state by remember(browser) { mutableStateOf(LegacyLibraryMediaState()) }
 
-    LaunchedEffect(browser, hasPermission, libraryRefreshVersion) {
+    LaunchedEffect(browser, hasPermission, libraryRefreshVersion, libraryChildrenVersion) {
         val playbackBrowser = browser ?: run {
             state = LegacyLibraryMediaState(loaded = true)
             return@LaunchedEffect

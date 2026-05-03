@@ -36,3 +36,24 @@ internal fun Player?.removeMediaItemsByMediaIds(mediaIds: Set<String>) {
         }
     }
 }
+
+internal fun Player?.removeMediaItemsMatching(predicate: (MediaItem) -> Boolean) {
+    val player = this ?: return
+    var rangeEnd = player.mediaItemCount
+    var index = rangeEnd - 1
+    while (index >= 0) {
+        if (!predicate(player.getMediaItemAt(index))) {
+            rangeEnd = index
+            index -= 1
+            continue
+        }
+
+        var rangeStart = index
+        while (rangeStart > 0 && predicate(player.getMediaItemAt(rangeStart - 1))) {
+            rangeStart -= 1
+        }
+        player.removeMediaItems(rangeStart, rangeEnd)
+        rangeEnd = rangeStart
+        index = rangeStart - 1
+    }
+}

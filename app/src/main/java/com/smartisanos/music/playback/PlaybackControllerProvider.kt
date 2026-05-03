@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -17,6 +18,7 @@ import androidx.media3.session.SessionToken
 
 val LocalPlaybackBrowser = staticCompositionLocalOf<MediaBrowser?> { null }
 val LocalPlaybackController = staticCompositionLocalOf<MediaController?> { null }
+val LocalPlaybackLibraryChildrenVersion = staticCompositionLocalOf { 0 }
 
 @Composable
 fun ProvidePlaybackController(
@@ -26,8 +28,27 @@ fun ProvidePlaybackController(
     val sessionToken = remember(context) {
         SessionToken(context, ComponentName(context, PlaybackService::class.java))
     }
-    val controllerFuture = remember(sessionToken) {
-        MediaBrowser.Builder(context, sessionToken).buildAsync()
+    var libraryChildrenVersion by remember(sessionToken) {
+        mutableIntStateOf(0)
+    }
+    val browserListener = remember(sessionToken) {
+        object : MediaBrowser.Listener {
+            override fun onChildrenChanged(
+                browser: MediaBrowser,
+                parentId: String,
+                itemCount: Int,
+                params: androidx.media3.session.MediaLibraryService.LibraryParams?,
+            ) {
+                if (parentId == LocalAudioLibrary.ROOT_ID) {
+                    libraryChildrenVersion += 1
+                }
+            }
+        }
+    }
+    val controllerFuture = remember(sessionToken, browserListener) {
+        MediaBrowser.Builder(context, sessionToken)
+            .setListener(browserListener)
+            .buildAsync()
     }
     var browser by remember(controllerFuture) {
         mutableStateOf<MediaBrowser?>(null)
@@ -36,7 +57,11 @@ fun ProvidePlaybackController(
     DisposableEffect(controllerFuture, context) {
         controllerFuture.addListener(
             {
-                browser = runCatching { controllerFuture.get() }.getOrNull()
+                browser = runCatching { controllerFuture.get() }
+                    .getOrNull()
+                    ?.also { mediaBrowser ->
+                        mediaBrowser.subscribe(LocalAudioLibrary.ROOT_ID, null)
+                    }
             },
             ContextCompat.getMainExecutor(context),
         )
@@ -50,6 +75,7 @@ fun ProvidePlaybackController(
     CompositionLocalProvider(
         LocalPlaybackBrowser provides browser,
         LocalPlaybackController provides browser,
+        LocalPlaybackLibraryChildrenVersion provides libraryChildrenVersion,
         content = content,
     )
 }
