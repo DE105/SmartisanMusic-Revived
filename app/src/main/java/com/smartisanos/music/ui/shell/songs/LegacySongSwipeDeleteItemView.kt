@@ -3,6 +3,7 @@ package com.smartisanos.music.ui.shell.songs
 import android.content.Context
 import android.util.AttributeSet
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.AbsListView
@@ -76,6 +77,16 @@ internal class LegacySongSwipeDeleteItemView @JvmOverloads constructor(
     }
 
     fun contentView(): View? = contentView
+
+    override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
+        val checkbox = findViewById<View>(R.id.cb_del) ?: return super.onInterceptTouchEvent(event)
+        if (checkbox.visibility == View.VISIBLE && checkbox.alpha > 0f) {
+            return true
+        }
+        return super.onInterceptTouchEvent(event)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean = false
 
     override fun resetLegacySwipeDelete() {
         legacySlideLayout.animate().cancel()

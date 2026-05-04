@@ -86,6 +86,8 @@ internal class LegacySlideSelectionController(
     private val handler = Handler(Looper.getMainLooper())
     private val model = LegacySlideSelectionModel()
     private val hitRect = Rect()
+    private val checkboxLocation = IntArray(2)
+    private val listLocation = IntArray(2)
     private var enabled = false
     private var selectedKeys: Set<String> = emptySet()
     private var keyAtPosition: (Int) -> String? = { null }
@@ -142,8 +144,8 @@ internal class LegacySlideSelectionController(
         return when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> onActionDown(event)
             MotionEvent.ACTION_MOVE -> onActionMove(event)
-            MotionEvent.ACTION_UP -> onActionUpOrCancel()
-            MotionEvent.ACTION_CANCEL -> onActionUpOrCancel()
+            MotionEvent.ACTION_UP -> onActionUp(event)
+            MotionEvent.ACTION_CANCEL -> onActionCancel()
             else -> activeGesture
         }
     }
@@ -185,7 +187,24 @@ internal class LegacySlideSelectionController(
         return true
     }
 
-    private fun onActionUpOrCancel(): Boolean {
+    private fun onActionUp(event: MotionEvent): Boolean {
+        if (model.active && !activeGesture && downPosition != ListView.INVALID_POSITION) {
+            cancelListPress(event)
+            clearPressedState()
+            model.changesThrough(
+                position = downPosition,
+                keyAtPosition = keyAtPosition,
+                isSelected = { key -> key in selectedKeys },
+            ).forEach { change ->
+                onSelectionChange(change.key, change.selected)
+            }
+            resetGesture()
+            return true
+        }
+        return onActionCancel()
+    }
+
+    private fun onActionCancel(): Boolean {
         val consumed = activeGesture
         resetGesture()
         return consumed
@@ -257,8 +276,14 @@ internal class LegacySlideSelectionController(
         if (checkbox.visibility != View.VISIBLE || checkbox.alpha <= 0f) {
             return false
         }
-        checkbox.getHitRect(hitRect)
-        hitRect.offset(child.left, child.top)
+        checkbox.getLocationOnScreen(checkboxLocation)
+        listView.getLocationOnScreen(listLocation)
+        hitRect.set(
+            checkboxLocation[0] - listLocation[0],
+            checkboxLocation[1] - listLocation[1],
+            checkboxLocation[0] - listLocation[0] + checkbox.width,
+            checkboxLocation[1] - listLocation[1] + checkbox.height,
+        )
         hitRect.inset(-touchSlop, -touchSlop)
         return hitRect.contains(event.x.toInt(), event.y.toInt())
     }
@@ -333,8 +358,18 @@ internal class LegacySlideSelectionController(
 
     private fun clearPressedState() {
         listView.isPressed = false
+        listView.clearFocus()
         for (index in 0 until listView.childCount) {
-            listView.getChildAt(index)?.isPressed = false
+            listView.getChildAt(index)?.clearPressedState()
+        }
+    }
+
+    private fun View.clearPressedState() {
+        isPressed = false
+        if (this is android.view.ViewGroup) {
+            for (index in 0 until childCount) {
+                getChildAt(index)?.clearPressedState()
+            }
         }
     }
 
