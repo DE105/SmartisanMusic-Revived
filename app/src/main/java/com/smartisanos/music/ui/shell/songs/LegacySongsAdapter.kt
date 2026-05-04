@@ -92,7 +92,7 @@ internal class LegacySongsAdapter : BaseAdapter() {
         for (childIndex in 0 until listView.childCount) {
             val position = listView.firstVisiblePosition + childIndex
             val mediaItem = itemAt(position)
-            val child = listView.getChildAt(childIndex)
+            val child = listView.getChildAt(childIndex)?.legacySongContentView()
             val titleView = child
                 ?.findViewById<TextView>(R.id.listview_item_line_one) as? StretchTextView
             if (mediaItem == null || child == null || titleView == null) {
@@ -165,8 +165,12 @@ internal class LegacySongsAdapter : BaseAdapter() {
         convertView: View?,
         parent: ViewGroup,
     ): View {
-        val view = convertView ?: LayoutInflater.from(parent.context)
-            .inflate(displayMode.layoutRes, parent, false)
+        val swipeRow = convertView as? LegacySongSwipeDeleteItemView
+            ?: LegacySongSwipeDeleteItemView(parent.context)
+        val view = swipeRow.contentView()
+            ?: LayoutInflater.from(parent.context)
+                .inflate(displayMode.layoutRes, swipeRow, false)
+                .also(swipeRow::setContentView)
         val metadata = item.mediaMetadata
         val selected = item.mediaId == currentMediaId
         val title = metadata.displayTitle?.toString()
@@ -227,7 +231,8 @@ internal class LegacySongsAdapter : BaseAdapter() {
             }
         }
         view.bindLegacySongEditState(item, animate = false)
-        return view
+        swipeRow.resetLegacySwipeDelete()
+        return swipeRow
     }
 
     private fun View.applyLegacyQuickBarInset() {
@@ -257,6 +262,10 @@ internal class LegacySongsAdapter : BaseAdapter() {
             animate = animate,
         )
     }
+}
+
+private fun View.legacySongContentView(): View {
+    return (this as? LegacySongSwipeDeleteItemView)?.contentView() ?: this
 }
 
 private sealed class LegacySongRow {

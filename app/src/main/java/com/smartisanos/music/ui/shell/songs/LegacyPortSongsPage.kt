@@ -38,6 +38,7 @@ internal fun LegacyPortSongsPage(
     hiddenMediaIds: Set<String>,
     onSongSelectionChange: (String, Boolean) -> Unit,
     onTrackMoreClick: (MediaItem) -> Unit,
+    onRequestSongDeleteConfirmation: (Set<String>, (() -> Unit)?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val browser = LocalPlaybackBrowser.current
@@ -168,6 +169,20 @@ internal fun LegacyPortSongsPage(
             val slideSelectionController = listView.legacySlideSelectionController(
                 startArea = LegacySlideSelectionStartArea.Checkbox,
             )
+            val swipeDeleteController = listView.legacySongSwipeDeleteController()
+            val quickBar = root.findViewById<QuickBarEx>(R.id.main_quickbar)
+            swipeDeleteController.update(
+                enabled = !editMode,
+                keyAtPosition = { position ->
+                    adapter.itemAt(position)?.mediaId
+                },
+                onDeleteClick = { mediaId, onDismiss ->
+                    onRequestSongDeleteConfirmation(setOf(mediaId), onDismiss)
+                },
+                onSwipeActiveChange = { active ->
+                    quickBar?.visibility = if (showQuickBar && !active) View.VISIBLE else View.GONE
+                },
+            )
             slideSelectionController.update(
                 enabled = editMode,
                 selectedKeys = selectedSongIds,
@@ -179,10 +194,15 @@ internal fun LegacyPortSongsPage(
                 },
             )
             listView.setOnTouchListener { _, event ->
-                slideSelectionController.handleTouch(event)
+                swipeDeleteController.handleTouch(event) ||
+                    slideSelectionController.handleTouch(event)
             }
-            root.findViewById<QuickBarEx>(R.id.main_quickbar)?.apply {
-                visibility = if (showQuickBar) View.VISIBLE else View.GONE
+            quickBar?.apply {
+                visibility = if (showQuickBar && !swipeDeleteController.isSwipeActive()) {
+                    View.VISIBLE
+                } else {
+                    View.GONE
+                }
                 (layoutParams as? FrameLayout.LayoutParams)?.let { params ->
                     params.gravity = Gravity.END
                     layoutParams = params

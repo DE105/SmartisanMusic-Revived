@@ -56,6 +56,7 @@
     <id name="legacy_album_artwork_request" />
     <id name="legacy_folder_row_height_animator" />
     <id name="legacy_folder_row_force_zero_height" />
+    <id name="legacy_song_swipe_delete_controller" />
     <id name="main_quickbar" />
     <id name="iv_right" />
     <id name="iv_right_view" />
@@ -220,6 +221,7 @@
     <dimen name="gridview_padding_top2">7.0dp</dimen>
     <dimen name="gridview_verticalSpacing">2.0dp</dimen>
     <dimen name="left_icon_area_width">60.0dp</dimen>
+    <dimen name="lv_item_shadow_width">2.0dp</dimen>
     <dimen name="listview_dividerHeight">0.6700001dp</dimen>
     <dimen name="listview_item_height">60.0dp</dimen>
     <dimen name="listview_item_image_height">48.0dp</dimen>

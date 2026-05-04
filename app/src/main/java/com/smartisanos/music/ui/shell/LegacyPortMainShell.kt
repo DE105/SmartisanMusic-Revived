@@ -161,6 +161,7 @@ private fun LegacyPortMainShellContent(
     var libraryRefreshing by remember { mutableStateOf(false) }
     var showSongDeleteConfirm by remember { mutableStateOf(false) }
     var pendingSongDeleteMediaIds by remember { mutableStateOf(emptySet<String>()) }
+    var pendingSongDeleteDismissAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var pendingSystemDeleteSongIds by remember { mutableStateOf(emptySet<String>()) }
     var pendingPlaylistPickerMediaItems by remember { mutableStateOf<List<MediaItem>?>(null) }
     var pendingTrackActionMediaId by remember { mutableStateOf<String?>(null) }
@@ -315,11 +316,23 @@ private fun LegacyPortMainShellContent(
         pendingTrackActionMediaId = null
     }
 
-    fun requestSongDeleteConfirmation(mediaIds: Set<String>) {
+    fun dismissSongDeleteConfirmation() {
+        val dismissAction = pendingSongDeleteDismissAction
+        showSongDeleteConfirm = false
+        pendingSongDeleteMediaIds = emptySet()
+        pendingSongDeleteDismissAction = null
+        dismissAction?.invoke()
+    }
+
+    fun requestSongDeleteConfirmation(
+        mediaIds: Set<String>,
+        onDismiss: (() -> Unit)? = null,
+    ) {
         if (mediaIds.isEmpty()) {
             return
         }
         pendingSongDeleteMediaIds = mediaIds
+        pendingSongDeleteDismissAction = onDismiss
         showSongDeleteConfirm = true
     }
 
@@ -614,6 +627,9 @@ private fun LegacyPortMainShellContent(
                 },
                 onMediaIdsHidden = ::reclaimHiddenMediaIds,
                 onRequestDeleteMediaIds = ::requestSystemDeleteMediaIds,
+                onRequestSongDeleteConfirmation = { mediaIds, onDismiss ->
+                    requestSongDeleteConfirmation(mediaIds, onDismiss)
+                },
                 onLibraryTrackMoreClick = { item ->
                     showTrackActions(item, LegacyTrackActionSource.Library)
                 },
@@ -902,21 +918,22 @@ private fun LegacyPortMainShellContent(
         if (showSongDeleteConfirm) {
             LegacySongDeleteConfirmOverlay(
                 onDismiss = {
-                    showSongDeleteConfirm = false
-                    pendingSongDeleteMediaIds = emptySet()
+                    dismissSongDeleteConfirmation()
                 },
                 onConfirm = {
                     val mediaIds = pendingSongDeleteMediaIds
+                    val dismissAction = pendingSongDeleteDismissAction
                     if (mediaIds.isEmpty()) {
-                        showSongDeleteConfirm = false
-                        pendingSongDeleteMediaIds = emptySet()
+                        dismissSongDeleteConfirmation()
                         return@LegacySongDeleteConfirmOverlay
                     }
                     showSongDeleteConfirm = false
                     pendingSongDeleteMediaIds = emptySet()
+                    pendingSongDeleteDismissAction = null
                     songsEditMode = false
                     selectedSongIds = emptySet()
                     requestSystemDeleteMediaIds(mediaIds)
+                    dismissAction?.invoke()
                 },
                 modifier = Modifier
                     .fillMaxSize()

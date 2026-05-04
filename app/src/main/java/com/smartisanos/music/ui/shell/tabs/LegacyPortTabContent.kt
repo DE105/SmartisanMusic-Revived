@@ -50,6 +50,7 @@ internal fun LegacyPortTabContent(
     onArtistSeparatorsChange: (Set<String>) -> Unit,
     onMediaIdsHidden: (Set<String>) -> Unit,
     onRequestDeleteMediaIds: (Set<String>) -> Unit,
+    onRequestSongDeleteConfirmation: (Set<String>, (() -> Unit)?) -> Unit,
     onLibraryTrackMoreClick: (MediaItem) -> Unit,
     onLovedSongsTrackMoreClick: (MediaItem) -> Unit,
     onPlaylistTrackMoreClick: (MediaItem) -> Unit,
@@ -81,6 +82,7 @@ internal fun LegacyPortTabContent(
                 hiddenMediaIds = hiddenMediaIds,
                 onSongSelectionChange = onSongSelectionChange,
                 onTrackMoreClick = onLibraryTrackMoreClick,
+                onRequestSongDeleteConfirmation = onRequestSongDeleteConfirmation,
                 modifier = Modifier.fillMaxSize(),
             )
         }
