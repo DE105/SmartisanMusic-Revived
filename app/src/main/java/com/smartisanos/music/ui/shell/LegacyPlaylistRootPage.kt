@@ -128,13 +128,6 @@ private class LegacyPlaylistRootView(context: Context) : FrameLayout(context) {
         primaryText = context.getString(R.string.no_playlist),
         secondaryText = context.getString(R.string.create_playlist),
     )
-    private val footer = TextView(context).apply {
-        gravity = Gravity.CENTER
-        setTextColor(PlaylistFooterTextColor)
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-        setBackgroundColor(Color.WHITE)
-        height = dpPx(30)
-    }
 
     init {
         setBackgroundResource(R.drawable.account_background)
@@ -182,7 +175,7 @@ private class LegacyPlaylistRootView(context: Context) : FrameLayout(context) {
             setBackgroundColor(Color.TRANSPARENT)
             layoutAnimation = AnimationUtils.loadLayoutAnimation(context, R.anim.list_anim_layout)
             isVerticalScrollBarEnabled = false
-            addFooterView(footer, null, false)
+            addLegacyPortListFooter()
         }
         listFrame.addView(listView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         listFrame.addView(blankView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -206,10 +199,13 @@ private class LegacyPlaylistRootView(context: Context) : FrameLayout(context) {
         }
         blankView.visibility = if (playlists.isEmpty()) View.VISIBLE else View.GONE
         listView.visibility = if (playlists.isEmpty()) View.INVISIBLE else View.VISIBLE
-        footer.visibility = if (playlists.size >= PlaylistRootFooterThreshold) View.VISIBLE else View.GONE
-        footer.text = resources.getString(R.string.playlists_count, playlists.size)
+        listView.bindLegacyPortListFooter(
+            textRes = R.string.playlists_count,
+            count = playlists.size,
+            visible = playlists.size >= PlaylistRootFooterThreshold,
+        )
 
-        val adapter = listView.adapter as? LegacyPlaylistRootAdapter
+        val adapter = listView.legacyWrappedAdapter<LegacyPlaylistRootAdapter>()
             ?: LegacyPlaylistRootAdapter().also { adapter ->
                 listView.adapter = adapter
             }

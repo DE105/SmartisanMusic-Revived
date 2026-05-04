@@ -211,6 +211,7 @@ private class LegacyPlaylistDetailRootView(context: Context) : LinearLayout(cont
             setBackgroundResource(R.drawable.account_background)
             isVerticalScrollBarEnabled = false
             layoutAnimation = AnimationUtils.loadLayoutAnimation(context, R.anim.list_anim_layout)
+            addLegacyPortListFooter()
             adapter = trackAdapter
             setOnTouchListener { _, event ->
                 dragController.handleListTouch(event) || slideSelectionController.handleTouch(event)
@@ -260,6 +261,10 @@ private class LegacyPlaylistDetailRootView(context: Context) : LinearLayout(cont
             onToggleAll = onToggleAll,
         )
         setEmptyVisible(tracks.isEmpty())
+        listView.bindLegacyPortListFooter(
+            textRes = R.string.track_count,
+            count = tracks.size,
+        )
         val previousEditMode = listView.getTag(R.id.elvitem) as? Boolean
         val animateEditMode = previousEditMode != null && previousEditMode != editMode
         listView.setTag(R.id.elvitem, editMode)
@@ -374,6 +379,7 @@ private class LegacyPlaylistAddSongsRootView(context: Context) : LinearLayout(co
             setBackgroundResource(R.drawable.account_background)
             isVerticalScrollBarEnabled = false
             layoutAnimation = AnimationUtils.loadLayoutAnimation(context, R.anim.list_anim_layout)
+            addLegacyPortListFooter()
         }
         listFrame.addView(listView, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         listFrame.addView(
@@ -400,7 +406,11 @@ private class LegacyPlaylistAddSongsRootView(context: Context) : LinearLayout(co
         blankView.visibility = if (songs.isEmpty()) View.VISIBLE else View.GONE
         listView.visibility = if (songs.isEmpty()) View.INVISIBLE else View.VISIBLE
         quickBar.visibility = if (songs.isEmpty() || selectedSortIndex != 0) View.GONE else View.VISIBLE
-        val adapter = listView.adapter as? LegacyPlaylistTrackAdapter
+        listView.bindLegacyPortListFooter(
+            textRes = R.string.track_count,
+            count = songs.size,
+        )
+        val adapter = listView.legacyWrappedAdapter<LegacyPlaylistTrackAdapter>()
             ?: LegacyPlaylistTrackAdapter().also { adapter ->
                 listView.adapter = adapter
             }
@@ -459,7 +469,7 @@ private class LegacyPlaylistAddSongsRootView(context: Context) : LinearLayout(co
     }
 
     fun bindPlayback(player: Player?) {
-        val adapter = listView.adapter as? LegacyPlaylistTrackAdapter ?: return
+        val adapter = listView.legacyWrappedAdapter<LegacyPlaylistTrackAdapter>() ?: return
         if (listView.getTag(R.id.list) !== player) {
             (listView.getTag(R.id.text) as? Player.Listener)?.let { oldListener ->
                 (listView.getTag(R.id.list) as? Player)?.removeListener(oldListener)

@@ -383,6 +383,7 @@ private class LegacyFolderRootView(context: Context) : FrameLayout(context) {
             cacheColorHint = Color.TRANSPARENT
             setBackgroundColor(Color.TRANSPARENT)
             isVerticalScrollBarEnabled = false
+            addLegacyPortListFooter()
             adapter = directoryAdapter
         }
         addView(listView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -405,6 +406,10 @@ private class LegacyFolderRootView(context: Context) : FrameLayout(context) {
         val displayCount = if (editMode) displayDirectories.size else visibleDirectories.size
         blankView.visibility = if (displayCount == 0) View.VISIBLE else View.GONE
         listView.visibility = if (displayCount == 0) View.INVISIBLE else View.VISIBLE
+        listView.bindLegacyPortListFooter(
+            textRes = R.string.folder_count,
+            count = displayCount,
+        )
 
         boundEditMode = editMode
         if (firstBind) {
@@ -821,6 +826,7 @@ private class LegacyFolderDetailRootView(context: Context) : LinearLayout(contex
             setBackgroundResource(R.drawable.account_background)
             isVerticalScrollBarEnabled = false
             layoutAnimation = AnimationUtils.loadLayoutAnimation(context, R.anim.list_anim_layout)
+            addLegacyPortListFooter()
         }
         listFrame.addView(listView, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         listFrame.addView(blankView, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -844,7 +850,11 @@ private class LegacyFolderDetailRootView(context: Context) : LinearLayout(contex
         }
         blankView.visibility = if (tracks.isEmpty()) View.VISIBLE else View.GONE
         listView.visibility = if (tracks.isEmpty()) View.INVISIBLE else View.VISIBLE
-        val adapter = listView.adapter as? LegacyFolderTrackAdapter
+        listView.bindLegacyPortListFooter(
+            textRes = R.string.track_count,
+            count = tracks.size,
+        )
+        val adapter = listView.legacyWrappedAdapter<LegacyFolderTrackAdapter>()
             ?: LegacyFolderTrackAdapter().also { adapter ->
                 listView.adapter = adapter
             }
@@ -865,7 +875,7 @@ private class LegacyFolderDetailRootView(context: Context) : LinearLayout(contex
     }
 
     fun bindPlayback(player: Player?) {
-        val adapter = listView.adapter as? LegacyFolderTrackAdapter ?: return
+        val adapter = listView.legacyWrappedAdapter<LegacyFolderTrackAdapter>() ?: return
         if (listView.getTag(R.id.list) !== player) {
             (listView.getTag(R.id.text) as? Player.Listener)?.let { oldListener ->
                 (listView.getTag(R.id.list) as? Player)?.removeListener(oldListener)

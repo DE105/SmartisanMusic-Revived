@@ -122,6 +122,10 @@ internal fun LegacyPortAlbumDetailPage(
                         }
                     },
                 )
+                root.listView.bindLegacyPortListFooter(
+                    textRes = R.string.track_count,
+                    count = album.songs.size,
+                )
 
                 val adapter = root.listView.legacyAlbumTrackAdapter()
                     ?: LegacyAlbumTrackAdapter().also { adapter ->
@@ -183,6 +187,7 @@ private class LegacyAlbumDetailRoot(context: Context) : FrameLayout(context) {
             isVerticalScrollBarEnabled = false
             setHeaderDividersEnabled(false)
             addHeaderView(header, null, false)
+            addLegacyPortListFooter()
         }
         addView(
             listView,

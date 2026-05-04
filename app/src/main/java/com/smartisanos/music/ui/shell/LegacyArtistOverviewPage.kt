@@ -31,7 +31,7 @@ internal fun LegacyPortArtistOverviewPage(
         },
         update = { root ->
             root.visibility = if (active) View.VISIBLE else View.INVISIBLE
-            val adapter = root.listView.adapter as? LegacyArtistOverviewAdapter
+            val adapter = root.listView.legacyWrappedAdapter<LegacyArtistOverviewAdapter>()
                 ?: LegacyArtistOverviewAdapter().also { adapter ->
                     root.listView.adapter = adapter
                 }

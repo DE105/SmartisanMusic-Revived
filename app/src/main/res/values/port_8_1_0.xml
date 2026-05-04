@@ -214,6 +214,8 @@
     <dimen name="float_button_margin">3.0dp</dimen>
     <dimen name="float_cover_padding_left">12.0dp</dimen>
     <dimen name="flexible_space">18.0dp</dimen>
+    <dimen name="footer_padding">22.0dp</dimen>
+    <dimen name="footer_text_size">15.0sp</dimen>
     <dimen name="gridview_horizontalSpacing">1.0px</dimen>
     <dimen name="gridview_item_ccontainer_height">116.0dp</dimen>
     <dimen name="gridview_margin">9.0dp</dimen>

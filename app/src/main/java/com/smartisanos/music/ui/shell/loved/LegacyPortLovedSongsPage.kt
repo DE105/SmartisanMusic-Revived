@@ -2,12 +2,10 @@ package com.smartisanos.music.ui.shell.loved
 
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
-import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AnimationUtils
-import android.widget.AbsListView
 import android.widget.BaseAdapter
 import android.widget.Button
 import android.widget.CheckBox
@@ -60,6 +58,8 @@ import com.smartisanos.music.ui.loved.buildLovedSongsShuffleRequest
 import com.smartisanos.music.ui.loved.sortLovedSongEntries
 import com.smartisanos.music.ui.shell.LegacyAlbumArtworkLoader
 import com.smartisanos.music.ui.shell.LegacySlideSelectionStartArea
+import com.smartisanos.music.ui.shell.addLegacyPortListFooter
+import com.smartisanos.music.ui.shell.bindLegacyPortListFooter
 import com.smartisanos.music.ui.shell.titlebar.LegacyPortTitleBarShadow
 import com.smartisanos.music.ui.shell.legacySlideSelectionController
 import com.smartisanos.music.ui.shell.songs.LegacyTitleNormalizer
@@ -182,9 +182,7 @@ internal fun LegacyPortLovedSongsPage(
                             cacheColorHint = Color.TRANSPARENT
                             setBackgroundResource(R.drawable.account_background)
                             layoutAnimation = AnimationUtils.loadLayoutAnimation(viewContext, R.anim.list_anim_layout)
-                            val footer = LovedSongsFooterView(viewContext)
-                            setTag(R.id.tv_count, footer)
-                            addFooterView(footer, null, false)
+                            addLegacyPortListFooter()
                         }
                         addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
                             override fun onViewAttachedToWindow(view: View) = Unit
@@ -542,7 +540,10 @@ private class LegacyLovedSongsAdapter(
     }
 
     fun updateFooter(listView: ListView) {
-        (listView.getTag(R.id.tv_count) as? LovedSongsFooterView)?.bind(entries.size)
+        listView.bindLegacyPortListFooter(
+            textRes = R.string.track_count,
+            count = entries.size,
+        )
     }
 
     override fun getCount(): Int = entries.size
@@ -650,24 +651,6 @@ private fun ListView.legacyLovedSongsAdapter(): LegacyLovedSongsAdapter? {
         is LegacyLovedSongsAdapter -> currentAdapter
         is HeaderViewListAdapter -> currentAdapter.wrappedAdapter as? LegacyLovedSongsAdapter
         else -> null
-    }
-}
-
-private class LovedSongsFooterView(context: android.content.Context) : TextView(context) {
-    init {
-        gravity = Gravity.CENTER
-        setTextColor(Color.rgb(0xa4, 0xa7, 0xac))
-        textSize = 13f
-        setBackgroundResource(R.drawable.account_background)
-        layoutParams = AbsListView.LayoutParams(
-            AbsListView.LayoutParams.MATCH_PARENT,
-            dp(48),
-        )
-    }
-
-    fun bind(count: Int) {
-        visibility = if (count >= 8) View.VISIBLE else View.GONE
-        text = context.getString(R.string.track_count, count)
     }
 }
 

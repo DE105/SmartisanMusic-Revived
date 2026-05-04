@@ -23,6 +23,9 @@ import com.smartisanos.music.R
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.shell.LegacySlideSelectionStartArea
+import com.smartisanos.music.ui.shell.addLegacyPortListFooter
+import com.smartisanos.music.ui.shell.bindLegacyPortListFooter
+import com.smartisanos.music.ui.shell.legacyWrappedAdapter
 import com.smartisanos.music.ui.shell.legacySlideSelectionController
 import kotlin.random.Random
 import smartisanos.widget.ActionButtonGroup
@@ -67,6 +70,7 @@ internal fun LegacyPortSongsPage(
                     selector = viewContext.getDrawable(R.drawable.listview_selector)
                     cacheColorHint = Color.TRANSPARENT
                     setBackgroundColor(Color.TRANSPARENT)
+                    addLegacyPortListFooter()
                 }
             }
         },
@@ -116,7 +120,11 @@ internal fun LegacyPortSongsPage(
                 sortDisplayMode == LegacySongsSortDisplayMode.Name &&
                 sortedSongs.size > LegacySongsQuickBarVisibilityLimit
             listView.visibility = if (hasSongs || libraryLoaded) View.VISIBLE else View.INVISIBLE
-            val adapter = listView.adapter as? LegacySongsAdapter ?: LegacySongsAdapter().also { adapter ->
+            listView.bindLegacyPortListFooter(
+                textRes = R.string.track_count,
+                count = sortedSongs.size,
+            )
+            val adapter = listView.legacyWrappedAdapter<LegacySongsAdapter>() ?: LegacySongsAdapter().also { adapter ->
                 listView.adapter = adapter
             }
             adapter.onMoreClick = { item ->
