@@ -108,7 +108,7 @@ internal class LegacySlideSelectionController(
             if (distance == 0) {
                 return
             }
-            listView.smoothScrollBy(distance, LegacySlideSelectionAutoScrollFrameMillis)
+            listView.scrollListBy(distance)
             applySelectionAt(lastMotionX, lastMotionY)
             handler.postDelayed(this, LegacySlideSelectionAutoScrollFrameMillis.toLong())
         }
@@ -135,7 +135,6 @@ internal class LegacySlideSelectionController(
 
     fun handleTouch(event: MotionEvent): Boolean {
         if (!enabled) {
-            resetGesture()
             return false
         }
         lastMotionX = event.x
@@ -367,6 +366,11 @@ internal fun AbsListView.legacySlideSelectionController(
         setTag(R.id.legacy_slide_selection_controller, controller)
     }
 }
+
+internal fun <T> Set<T>.withSelection(
+    value: T,
+    selected: Boolean,
+): Set<T> = if (selected) this + value else this - value
 
 private const val LegacySlideSelectionAutoScrollEdgeRatio = 0.18f
 private const val LegacySlideSelectionAutoScrollFrameMillis = 16

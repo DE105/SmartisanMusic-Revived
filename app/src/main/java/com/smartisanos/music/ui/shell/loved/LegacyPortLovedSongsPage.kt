@@ -299,8 +299,10 @@ internal fun LegacyPortLovedSongsPage(
                             adapter.entryAt(position)?.mediaItem?.mediaId
                         },
                         onSelectionChange = { mediaId, selected ->
-                            if ((mediaId in selectedMediaIds) != selected) {
-                                selectedMediaIds = selectedMediaIds.toggle(mediaId)
+                            selectedMediaIds = if (selected) {
+                                selectedMediaIds + mediaId
+                            } else {
+                                selectedMediaIds - mediaId
                             }
                         },
                     )

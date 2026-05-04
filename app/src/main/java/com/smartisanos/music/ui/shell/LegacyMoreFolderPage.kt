@@ -208,6 +208,9 @@ internal fun LegacyPortFolderPage(
                                 )
                             }
                         },
+                        onDirectorySelectionChange = { directoryKey, selected ->
+                            selectedDirectoryKeys = selectedDirectoryKeys.withSelection(directoryKey, selected)
+                        },
                         onDirectoryVisibilityChange = { entry, hidden ->
                             val affectedMediaIds = if (hidden) {
                                 mediaIdsInDirectory(mediaItems = mediaItems, directoryKey = entry.key)
@@ -335,6 +338,7 @@ private fun LegacyFolderRootPage(
     editMode: Boolean,
     selectedDirectoryKeys: Set<String>,
     onDirectoryClick: (DirectoryEntry) -> Unit,
+    onDirectorySelectionChange: (String, Boolean) -> Unit,
     onDirectoryVisibilityChange: (DirectoryEntry, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -350,6 +354,7 @@ private fun LegacyFolderRootPage(
                 editMode = editMode,
                 selectedDirectoryKeys = selectedDirectoryKeys,
                 onDirectoryClick = onDirectoryClick,
+                onDirectorySelectionChange = onDirectorySelectionChange,
                 onDirectoryVisibilityChange = onDirectoryVisibilityChange,
             )
         },
@@ -389,6 +394,7 @@ private class LegacyFolderRootView(context: Context) : FrameLayout(context) {
         editMode: Boolean,
         selectedDirectoryKeys: Set<String>,
         onDirectoryClick: (DirectoryEntry) -> Unit,
+        onDirectorySelectionChange: (String, Boolean) -> Unit,
         onDirectoryVisibilityChange: (DirectoryEntry, Boolean) -> Unit,
     ) {
         val visibleDirectories = filterDirectoryEntriesForDisplay(directories, editMode = false)
@@ -431,10 +437,7 @@ private class LegacyFolderRootView(context: Context) : FrameLayout(context) {
                 directoryAdapter.itemAt(position)?.key
             },
             onSelectionChange = { directoryKey, selected ->
-                if ((directoryKey in selectedDirectoryKeys) != selected) {
-                    displayDirectories.firstOrNull { entry -> entry.key == directoryKey }
-                        ?.let(onDirectoryClick)
-                }
+                onDirectorySelectionChange(directoryKey, selected)
             },
         )
         listView.setOnTouchListener { _, event ->

@@ -143,7 +143,7 @@ internal fun LegacyPlaylistAddSongsPage(
     songs: List<MediaItem>,
     selectedSongIds: Set<String>,
     browser: Player?,
-    onToggleSong: (String) -> Unit,
+    onSongSelectionChange: (String, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var selectedSortIndex by remember { mutableStateOf(0) }
@@ -166,7 +166,7 @@ internal fun LegacyPlaylistAddSongsPage(
                 onSortSelected = { index ->
                     selectedSortIndex = index
                 },
-                onToggleSong = onToggleSong,
+                onSongSelectionChange = onSongSelectionChange,
             )
             root.bindPlayback(browser)
         },
@@ -284,9 +284,7 @@ private class LegacyPlaylistDetailRootView(context: Context) : LinearLayout(cont
                 trackAdapter.itemAt(position)?.mediaId
             },
             onSelectionChange = { mediaId, selected ->
-                if ((mediaId in selectedTrackIds) != selected) {
-                    onTrackSelectionChange(mediaId, selected)
-                }
+                onTrackSelectionChange(mediaId, selected)
             },
         )
         listView.setOnItemClickListener { _, _, position, _ ->
@@ -396,7 +394,7 @@ private class LegacyPlaylistAddSongsRootView(context: Context) : LinearLayout(co
         currentIsPlaying: Boolean,
         selectedSortIndex: Int,
         onSortSelected: (Int) -> Unit,
-        onToggleSong: (String) -> Unit,
+        onSongSelectionChange: (String, Boolean) -> Unit,
     ) {
         sortHeader.setupPlaylistAddSongsSortHeader(selectedSortIndex, onSortSelected)
         blankView.visibility = if (songs.isEmpty()) View.VISIBLE else View.GONE
@@ -434,9 +432,7 @@ private class LegacyPlaylistAddSongsRootView(context: Context) : LinearLayout(co
                 adapter.itemAt(position)?.mediaId
             },
             onSelectionChange = { mediaId, selected ->
-                if ((mediaId in selectedSongIds) != selected) {
-                    onToggleSong(mediaId)
-                }
+                onSongSelectionChange(mediaId, selected)
             },
         )
         listView.setOnTouchListener { _, event ->
@@ -458,7 +454,7 @@ private class LegacyPlaylistAddSongsRootView(context: Context) : LinearLayout(co
         )
         listView.setOnItemClickListener { _, _, position, _ ->
             val item = adapter.itemAt(position) ?: return@setOnItemClickListener
-            onToggleSong(item.mediaId)
+            onSongSelectionChange(item.mediaId, item.mediaId !in selectedSongIds)
         }
     }
 

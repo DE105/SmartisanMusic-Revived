@@ -94,6 +94,7 @@ internal fun LegacyPlaylistRootPage(
     onCreatePlaylist: () -> Unit,
     onRenamePlaylist: (UserPlaylistSummary) -> Unit,
     onPlaylistClick: (UserPlaylistSummary) -> Unit,
+    onPlaylistSelectionChange: (UserPlaylistSummary, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     AndroidView(
@@ -110,6 +111,7 @@ internal fun LegacyPlaylistRootPage(
                 onCreatePlaylist = onCreatePlaylist,
                 onRenamePlaylist = onRenamePlaylist,
                 onPlaylistClick = onPlaylistClick,
+                onPlaylistSelectionChange = onPlaylistSelectionChange,
             )
         },
     )
@@ -193,6 +195,7 @@ private class LegacyPlaylistRootView(context: Context) : FrameLayout(context) {
         onCreatePlaylist: () -> Unit,
         onRenamePlaylist: (UserPlaylistSummary) -> Unit,
         onPlaylistClick: (UserPlaylistSummary) -> Unit,
+        onPlaylistSelectionChange: (UserPlaylistSummary, Boolean) -> Unit,
     ) {
         addRow.alpha = if (editMode) 0.35f else 1f
         addRow.isEnabled = !editMode
@@ -250,10 +253,8 @@ private class LegacyPlaylistRootView(context: Context) : FrameLayout(context) {
                 adapter.itemAt(position)?.id
             },
             onSelectionChange = { playlistId, selected ->
-                if ((playlistId in selectedPlaylistIds) != selected) {
-                    playlists.firstOrNull { playlist -> playlist.id == playlistId }
-                        ?.let(onPlaylistClick)
-                }
+                playlists.firstOrNull { playlist -> playlist.id == playlistId }
+                    ?.let { playlist -> onPlaylistSelectionChange(playlist, selected) }
             },
         )
         listView.setOnTouchListener { _, event ->

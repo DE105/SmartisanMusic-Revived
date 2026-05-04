@@ -36,7 +36,7 @@ internal fun LegacyPortSongsPage(
     editMode: Boolean,
     selectedSongIds: Set<String>,
     hiddenMediaIds: Set<String>,
-    onToggleSongSelected: (String) -> Unit,
+    onSongSelectionChange: (String, Boolean) -> Unit,
     onTrackMoreClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -175,9 +175,7 @@ internal fun LegacyPortSongsPage(
                     adapter.itemAt(position)?.mediaId
                 },
                 onSelectionChange = { mediaId, selected ->
-                    if ((mediaId in selectedSongIds) != selected) {
-                        onToggleSongSelected(mediaId)
-                    }
+                    onSongSelectionChange(mediaId, selected)
                 },
             )
             listView.setOnTouchListener { _, event ->
@@ -207,7 +205,7 @@ internal fun LegacyPortSongsPage(
             listView.setOnItemClickListener { _, _, position, _ ->
                 val item = adapter.itemAt(position) ?: return@setOnItemClickListener
                 if (editMode) {
-                    onToggleSongSelected(item.mediaId)
+                    onSongSelectionChange(item.mediaId, item.mediaId !in selectedSongIds)
                     return@setOnItemClickListener
                 }
                 val songIndex = adapter.songIndexAt(position) ?: return@setOnItemClickListener

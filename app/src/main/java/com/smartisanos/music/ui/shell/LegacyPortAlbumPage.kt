@@ -79,7 +79,7 @@ internal fun LegacyPortAlbumPage(
     selectedAlbumIds: Set<String>,
     hiddenMediaIds: Set<String>,
     onAlbumSelected: (String, String) -> Unit,
-    onToggleAlbumSelected: (String) -> Unit,
+    onAlbumSelectionChange: (String, Boolean) -> Unit,
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
     onRequestAddToQueue: (List<MediaItem>) -> Unit,
     onTrackMoreClick: (MediaItem) -> Unit,
@@ -134,7 +134,7 @@ internal fun LegacyPortAlbumPage(
                 editMode = editMode,
                 selectedAlbumIds = selectedAlbumIds,
                 onAlbumSelected = onAlbumSelected,
-                onToggleAlbumSelected = onToggleAlbumSelected,
+                onAlbumSelectionChange = onAlbumSelectionChange,
                 switchAnimator = switchAnimator,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -162,7 +162,7 @@ private fun LegacyPortAlbumOverviewPage(
     editMode: Boolean,
     selectedAlbumIds: Set<String>,
     onAlbumSelected: (String, String) -> Unit,
-    onToggleAlbumSelected: (String) -> Unit,
+    onAlbumSelectionChange: (String, Boolean) -> Unit,
     switchAnimator: LegacyAlbumViewSwitchAnimator,
     modifier: Modifier = Modifier,
 ) {
@@ -229,9 +229,7 @@ private fun LegacyPortAlbumOverviewPage(
                     listAdapter.itemAt(position)?.id
                 },
                 onSelectionChange = { albumId, selected ->
-                    if ((albumId in selectedAlbumIds) != selected) {
-                        onToggleAlbumSelected(albumId)
-                    }
+                    onAlbumSelectionChange(albumId, selected)
                 },
             )
             root.listView.setOnTouchListener { _, event ->
@@ -248,9 +246,7 @@ private fun LegacyPortAlbumOverviewPage(
                     gridAdapter.itemAt(position)?.id
                 },
                 onSelectionChange = { albumId, selected ->
-                    if ((albumId in selectedAlbumIds) != selected) {
-                        onToggleAlbumSelected(albumId)
-                    }
+                    onAlbumSelectionChange(albumId, selected)
                 },
                 startArea = LegacySlideSelectionStartArea.FullItem,
                 activation = LegacySlideSelectionActivation.HorizontalBeforeVertical,
@@ -262,7 +258,7 @@ private fun LegacyPortAlbumOverviewPage(
             root.listView.setOnItemClickListener { _, _, position, _ ->
                 val album = listAdapter.itemAt(position) ?: return@setOnItemClickListener
                 if (editMode) {
-                    onToggleAlbumSelected(album.id)
+                    onAlbumSelectionChange(album.id, album.id !in selectedAlbumIds)
                     return@setOnItemClickListener
                 }
                 onAlbumSelected(album.id, album.title)
@@ -270,7 +266,7 @@ private fun LegacyPortAlbumOverviewPage(
             root.gridView.setOnItemClickListener { _, _, position, _ ->
                 val album = gridAdapter.itemAt(position) ?: return@setOnItemClickListener
                 if (editMode) {
-                    onToggleAlbumSelected(album.id)
+                    onAlbumSelectionChange(album.id, album.id !in selectedAlbumIds)
                     return@setOnItemClickListener
                 }
                 onAlbumSelected(album.id, album.title)

@@ -298,6 +298,9 @@ internal fun LegacyPortPlaylistPage(
                                 )
                             }
                         },
+                        onPlaylistSelectionChange = { playlist, selected ->
+                            selectedPlaylistIds = selectedPlaylistIds.withSelection(playlist.id, selected)
+                        },
                         modifier = Modifier.fillMaxSize(),
                     )
                 },
@@ -349,9 +352,7 @@ internal fun LegacyPortPlaylistPage(
                             }
                         },
                         onTrackSelectionChange = { mediaId, selected ->
-                            if ((mediaId in selectedTrackIds) != selected) {
-                                selectedTrackIds = selectedTrackIds.togglePlaylistSelection(mediaId)
-                            }
+                            selectedTrackIds = selectedTrackIds.withSelection(mediaId, selected)
                         },
                         onTrackClick = { item, index ->
                             if (detailEditMode) {
@@ -388,8 +389,8 @@ internal fun LegacyPortPlaylistPage(
                     songs = addableSongs,
                     selectedSongIds = selectedAddSongIds,
                     browser = browser,
-                    onToggleSong = { mediaId ->
-                        selectedAddSongIds = selectedAddSongIds.togglePlaylistSelection(mediaId)
+                    onSongSelectionChange = { mediaId, selected ->
+                        selectedAddSongIds = selectedAddSongIds.withSelection(mediaId, selected)
                     },
                     modifier = Modifier.fillMaxSize(),
                 )

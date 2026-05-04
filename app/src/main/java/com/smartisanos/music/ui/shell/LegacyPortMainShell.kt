@@ -627,19 +627,11 @@ private fun LegacyPortMainShellContent(
                 onMoreSettingsPageActiveChanged = { active ->
                     moreSettingsPageActive = active
                 },
-                onToggleSongSelected = { mediaId ->
-                    selectedSongIds = if (mediaId in selectedSongIds) {
-                        selectedSongIds - mediaId
-                    } else {
-                        selectedSongIds + mediaId
-                    }
+                onSongSelectionChange = { mediaId, selected ->
+                    selectedSongIds = selectedSongIds.withSelection(mediaId, selected)
                 },
-                onToggleAlbumSelected = { albumId ->
-                    selectedAlbumIds = if (albumId in selectedAlbumIds) {
-                        selectedAlbumIds - albumId
-                    } else {
-                        selectedAlbumIds + albumId
-                    }
+                onAlbumSelectionChange = { albumId, selected ->
+                    selectedAlbumIds = selectedAlbumIds.withSelection(albumId, selected)
                 },
                 onAlbumSelected = { albumId, albumTitle ->
                     albumEditMode = false
