@@ -2,6 +2,7 @@ package com.smartisanos.music.ui.artist
 
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import com.smartisanos.music.data.settings.ArtistSettings
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -90,6 +91,96 @@ class ArtistModelsTest {
 
         assertEquals("未知艺术家", summaries.single().name)
         assertEquals(1, summaries.single().albumCount)
+    }
+
+    @Test
+    fun buildArtistSummariesKeepsCompoundArtistByDefault() {
+        val summaries = buildArtistSummaries(
+            mediaItems = listOf(
+                mediaItem(
+                    id = "duet",
+                    title = "Track",
+                    artist = "Singer A/Singer B",
+                    album = "Single",
+                ),
+            ),
+            unknownArtistTitle = "未知艺术家",
+            unknownAlbumTitle = "未知专辑",
+        )
+
+        assertEquals(listOf("Singer A/Singer B"), summaries.map { it.name })
+    }
+
+    @Test
+    fun buildArtistSummariesSplitsArtistsByConfiguredSeparators() {
+        val summaries = buildArtistSummaries(
+            mediaItems = listOf(
+                mediaItem(
+                    id = "duet",
+                    title = "Track",
+                    artist = "Singer A/Singer B; Singer C、Singer D,Singer E",
+                    album = "Single",
+                ),
+            ),
+            unknownArtistTitle = "未知艺术家",
+            unknownAlbumTitle = "未知专辑",
+            artistSettings = ArtistSettings(
+                separators = setOf("/", ";", "、", ","),
+            ),
+        )
+
+        assertEquals(
+            setOf("Singer A", "Singer B", "Singer C", "Singer D", "Singer E"),
+            summaries.map { it.name }.toSet(),
+        )
+        summaries.forEach { summary ->
+            assertEquals(listOf("duet"), summary.songs.map { it.mediaId })
+        }
+    }
+
+    @Test
+    fun buildArtistSummariesDropsBlankAndDuplicateSplitArtists() {
+        val summaries = buildArtistSummaries(
+            mediaItems = listOf(
+                mediaItem(
+                    id = "duplicate",
+                    title = "Track",
+                    artist = " Singer A / / singer a / Singer B ",
+                    album = "Single",
+                ),
+            ),
+            unknownArtistTitle = "未知艺术家",
+            unknownAlbumTitle = "未知专辑",
+            artistSettings = ArtistSettings(
+                separators = setOf("/"),
+            ),
+        )
+
+        assertEquals(setOf("Singer A", "Singer B"), summaries.map { it.name }.toSet())
+        summaries.forEach { summary ->
+            assertEquals(listOf("duplicate"), summary.songs.map { it.mediaId })
+        }
+    }
+
+    @Test
+    fun buildArtistSummariesUsesUnknownArtistWhenSplitLeavesNoNames() {
+        val summaries = buildArtistSummaries(
+            mediaItems = listOf(
+                mediaItem(
+                    id = "blank",
+                    title = "Track",
+                    artist = " / / ",
+                    album = "Single",
+                ),
+            ),
+            unknownArtistTitle = "未知艺术家",
+            unknownAlbumTitle = "未知专辑",
+            artistSettings = ArtistSettings(
+                separators = setOf("/"),
+            ),
+        )
+
+        assertEquals(listOf("未知艺术家"), summaries.map { it.name })
     }
 
     private fun mediaItem(

@@ -40,6 +40,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
+import com.smartisanos.music.data.settings.ArtistSettings
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.album.AlbumSummary
@@ -117,6 +118,7 @@ internal fun LegacyPortArtistPage(
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
     onRequestAddToQueue: (List<MediaItem>) -> Unit,
     onTrackMoreClick: (MediaItem) -> Unit,
+    artistSettings: ArtistSettings = ArtistSettings(),
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -124,11 +126,12 @@ internal fun LegacyPortArtistPage(
     val visibleSongs = remember(mediaItems, hiddenMediaIds) {
         mediaItems.filterNot { mediaItem -> mediaItem.mediaId in hiddenMediaIds }
     }
-    val artists = remember(visibleSongs, context) {
+    val artists = remember(visibleSongs, context, artistSettings) {
         buildArtistSummaries(
             mediaItems = visibleSongs,
             unknownArtistTitle = context.getString(R.string.unknown_artist),
             unknownAlbumTitle = context.getString(R.string.unknown_album),
+            artistSettings = artistSettings,
         )
     }
     val selectedArtist = remember(artists, selectedTarget) {
@@ -136,8 +139,11 @@ internal fun LegacyPortArtistPage(
             artists.firstOrNull { artist -> artist.id == artistId }
         }
     }
-    val selectedArtistAlbums = remember(selectedArtist, context) {
-        selectedArtist?.albumSummaries(context).orEmpty()
+    val selectedArtistAlbums = remember(selectedArtist, context, artistSettings) {
+        selectedArtist?.albumSummaries(
+            context = context,
+            artistSettings = artistSettings,
+        ).orEmpty()
     }
     val selectedArtistState = remember(selectedArtist, selectedArtistAlbums, selectedTarget) {
         if (selectedArtist != null && selectedTarget != null) {
@@ -161,7 +167,10 @@ internal fun LegacyPortArtistPage(
                 active = active,
                 artists = artists,
                 onArtistSelected = { artist ->
-                    val albums = artist.albumSummaries(context)
+                    val albums = artist.albumSummaries(
+                        context = context,
+                        artistSettings = artistSettings,
+                    )
                     val target = if (albums.size > 1) {
                         LegacyArtistTarget.Albums(
                             artistId = artist.id,
@@ -193,7 +202,12 @@ internal fun LegacyPortArtistPage(
         secondaryContent = { state ->
             LegacyPortSelectedArtistPage(
                 artist = state.artist,
-                albums = state.albums.ifEmpty { state.artist.albumSummaries(context) },
+                albums = state.albums.ifEmpty {
+                    state.artist.albumSummaries(
+                        context = context,
+                        artistSettings = artistSettings,
+                    )
+                },
                 target = selectedTarget?.takeIf { target -> target.artistId == state.artist.id } ?: state.target,
                 browser = browser,
                 albumViewMode = albumViewMode,
@@ -201,6 +215,7 @@ internal fun LegacyPortArtistPage(
                 onRequestAddToPlaylist = onRequestAddToPlaylist,
                 onRequestAddToQueue = onRequestAddToQueue,
                 onTrackMoreClick = onTrackMoreClick,
+                artistSettings = artistSettings,
                 switchAnimator = switchAnimator,
                 modifier = Modifier.fillMaxSize(),
             )

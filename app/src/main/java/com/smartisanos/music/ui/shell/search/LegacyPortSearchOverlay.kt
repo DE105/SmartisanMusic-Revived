@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.media3.common.MediaItem
 import com.smartisanos.music.R
+import com.smartisanos.music.data.settings.ArtistSettings
 import com.smartisanos.music.ui.album.AlbumViewMode
 import com.smartisanos.music.ui.album.buildAlbumSummaries
 import com.smartisanos.music.ui.navigation.MusicDestination
@@ -70,6 +71,7 @@ internal fun LegacyPortSearchOverlay(
     onDrilldownTargetChanged: (LegacySearchDrilldownTarget?) -> Unit,
     onAlbumClick: (String, String) -> Unit,
     onArtistClick: (String, String) -> Unit,
+    artistSettings: ArtistSettings = ArtistSettings(),
     modifier: Modifier = Modifier,
 ) {
     AnimatedVisibility(
@@ -105,6 +107,7 @@ internal fun LegacyPortSearchOverlay(
                     onOpenPlayback = onOpenPlayback,
                     onAlbumClick = onAlbumClick,
                     onArtistClick = onArtistClick,
+                    artistSettings = artistSettings,
                     modifier = Modifier.fillMaxSize(),
                 )
             },
@@ -127,6 +130,7 @@ internal fun LegacyPortSearchOverlay(
                     onRequestAddToPlaylist = onRequestAddToPlaylist,
                     onRequestAddToQueue = onRequestAddToQueue,
                     onTrackMoreClick = onTrackMoreClick,
+                    artistSettings = artistSettings,
                     onArtistTargetChanged = { artistTarget ->
                         onDrilldownTargetChanged(
                             artistTarget?.let(LegacySearchDrilldownTarget::Artist),
@@ -149,6 +153,7 @@ private fun LegacyPortSearchDrilldownPage(
     onRequestAddToQueue: (List<MediaItem>) -> Unit,
     onTrackMoreClick: (MediaItem) -> Unit,
     onArtistTargetChanged: (LegacyArtistTarget?) -> Unit,
+    artistSettings: ArtistSettings,
     modifier: Modifier = Modifier,
 ) {
     BackHandler(onBack = onBack)
@@ -157,11 +162,12 @@ private fun LegacyPortSearchDrilldownPage(
     val visibleSongs = remember(mediaItems, hiddenMediaIds) {
         mediaItems.filterNot { mediaItem -> mediaItem.mediaId in hiddenMediaIds }
     }
-    val albums = remember(visibleSongs, context) {
+    val albums = remember(visibleSongs, context, artistSettings) {
         buildAlbumSummaries(
             mediaItems = visibleSongs,
             unknownAlbumTitle = context.getString(R.string.unknown_album),
             multipleArtistsTitle = context.getString(R.string.many_artist),
+            artistSettings = artistSettings,
         )
     }
     val titleContentHeight = dimensionResource(R.dimen.title_bar_height)
@@ -190,6 +196,7 @@ private fun LegacyPortSearchDrilldownPage(
                         onRequestAddToPlaylist = onRequestAddToPlaylist,
                         onRequestAddToQueue = onRequestAddToQueue,
                         onTrackMoreClick = onTrackMoreClick,
+                        artistSettings = artistSettings,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
@@ -228,6 +235,7 @@ private fun LegacyPortSearchDrilldownPage(
                     onRequestAddToPlaylist = onRequestAddToPlaylist,
                     onRequestAddToQueue = onRequestAddToQueue,
                     onTrackMoreClick = onTrackMoreClick,
+                    artistSettings = artistSettings,
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),

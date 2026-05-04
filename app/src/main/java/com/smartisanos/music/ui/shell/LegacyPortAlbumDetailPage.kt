@@ -34,10 +34,13 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
+import com.smartisanos.music.data.settings.ArtistSettings
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.album.AlbumSummary
 import com.smartisanos.music.ui.album.displayTrackNumber
+import com.smartisanos.music.ui.artist.artistNormalizedKey
+import com.smartisanos.music.ui.artist.toArtistDisplayNames
 import com.smartisanos.music.ui.widgets.StretchTextView
 import java.util.Locale
 
@@ -50,6 +53,7 @@ internal fun LegacyPortAlbumDetailPage(
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
     onRequestAddToQueue: (List<MediaItem>) -> Unit,
     onTrackMoreClick: (MediaItem) -> Unit,
+    artistSettings: ArtistSettings = ArtistSettings(),
     modifier: Modifier = Modifier,
 ) {
     val browser = LocalPlaybackBrowser.current
@@ -128,7 +132,8 @@ internal fun LegacyPortAlbumDetailPage(
                     nextItems = album.songs,
                     nextCurrentMediaId = currentMediaId,
                     nextCurrentIsPlaying = currentIsPlaying,
-                    nextShowTrackArtists = album.songs.hasMultipleArtists(),
+                    nextShowTrackArtists = album.songs.hasMultipleArtists(artistSettings),
+                    nextArtistSettings = artistSettings,
                 )
                 if (!contentChanged) {
                     adapter.updateVisibleRows(root.listView)
@@ -501,6 +506,7 @@ internal class LegacyAlbumTrackAdapter : BaseAdapter() {
     private var currentMediaId: String? = null
     private var currentIsPlaying: Boolean = false
     private var showTrackArtists: Boolean = false
+    private var artistSettings: ArtistSettings = ArtistSettings()
     private var forceSequentialTrackNumbers: Boolean = false
 
     fun updateItems(
@@ -508,12 +514,14 @@ internal class LegacyAlbumTrackAdapter : BaseAdapter() {
         nextCurrentMediaId: String?,
         nextCurrentIsPlaying: Boolean,
         nextShowTrackArtists: Boolean,
+        nextArtistSettings: ArtistSettings,
         nextForceSequentialTrackNumbers: Boolean = false,
     ): Boolean {
         val contentChanged = items != nextItems
         val stateChanged = currentMediaId != nextCurrentMediaId ||
             currentIsPlaying != nextCurrentIsPlaying ||
             showTrackArtists != nextShowTrackArtists ||
+            artistSettings != nextArtistSettings ||
             forceSequentialTrackNumbers != nextForceSequentialTrackNumbers
         if (!contentChanged && !stateChanged) {
             return false
@@ -522,6 +530,7 @@ internal class LegacyAlbumTrackAdapter : BaseAdapter() {
         currentMediaId = nextCurrentMediaId
         currentIsPlaying = nextCurrentIsPlaying
         showTrackArtists = nextShowTrackArtists
+        artistSettings = nextArtistSettings
         forceSequentialTrackNumbers = nextForceSequentialTrackNumbers
         if (contentChanged) {
             notifyDataSetChanged()
@@ -554,6 +563,7 @@ internal class LegacyAlbumTrackAdapter : BaseAdapter() {
                 selected = item.mediaId == currentMediaId,
                 playing = currentIsPlaying,
                 showArtist = showTrackArtists,
+                artistSettings = artistSettings,
                 forceSequentialTrackNumber = forceSequentialTrackNumbers,
             )
         }
@@ -575,6 +585,7 @@ internal class LegacyAlbumTrackAdapter : BaseAdapter() {
             selected = item.mediaId == currentMediaId,
             playing = currentIsPlaying,
             showArtist = showTrackArtists,
+            artistSettings = artistSettings,
             forceSequentialTrackNumber = forceSequentialTrackNumbers,
         )
         holder.more.setOnClickListener {
@@ -729,6 +740,7 @@ private data class LegacyAlbumTrackViewHolder(
         selected: Boolean,
         playing: Boolean,
         showArtist: Boolean,
+        artistSettings: ArtistSettings,
         forceSequentialTrackNumber: Boolean,
     ) {
         val metadata = item.mediaMetadata
@@ -747,16 +759,34 @@ private data class LegacyAlbumTrackViewHolder(
         } else {
             title.setShowingPlayImage(false)
         }
-        artist.text = metadata.artist ?: metadata.albumArtist ?: ""
+        artist.text = item.albumDetailArtistText(artistSettings)
         artist.visibility = if (showArtist) View.VISIBLE else View.GONE
         duration.text = metadata.durationMs?.formatLegacyDuration().orEmpty()
     }
 }
 
-private fun List<MediaItem>.hasMultipleArtists(): Boolean {
-    return mapNotNull { item ->
-        item.mediaMetadata.artist?.toString()?.trim()?.takeIf { it.isNotEmpty() }
-    }.distinctBy { it.lowercase(Locale.ROOT) }.size > 1
+private fun List<MediaItem>.hasMultipleArtists(artistSettings: ArtistSettings): Boolean {
+    return flatMap { item ->
+        item.mediaMetadata.artist.toArtistDisplayNames(
+            artistSettings = artistSettings,
+            unknownArtistTitle = "",
+        )
+    }
+        .filter { it.isNotBlank() }
+        .distinctBy { it.artistNormalizedKey() }
+        .size > 1
+}
+
+private fun MediaItem.albumDetailArtistText(artistSettings: ArtistSettings): String {
+    return mediaMetadata.artist.toArtistDisplayNames(
+        artistSettings = artistSettings,
+        unknownArtistTitle = "",
+    )
+        .filter { it.isNotBlank() }
+        .joinToString(" / ")
+        .takeIf { it.isNotBlank() }
+        ?: mediaMetadata.albumArtist?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+        ?: ""
 }
 
 private fun TextView.legacyAlbumHeaderText(

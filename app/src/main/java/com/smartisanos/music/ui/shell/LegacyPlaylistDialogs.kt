@@ -137,8 +137,8 @@ private class LegacyPlaylistNameDialog(
                 text = title
                 gravity = Gravity.CENTER
                 setTextColor(context.getColor(R.color.title_color))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-                typeface = Typeface.DEFAULT_BOLD
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 19f)
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, context.dpPx(53)),
         )
@@ -251,7 +251,7 @@ private class LegacyPlaylistNameDialog(
             this.text = text
             setTextColor(color)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = Typeface.DEFAULT
             isClickable = true
             isFocusable = true
         }

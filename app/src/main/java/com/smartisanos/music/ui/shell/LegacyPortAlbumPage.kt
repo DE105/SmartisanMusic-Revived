@@ -36,6 +36,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
+import com.smartisanos.music.data.settings.ArtistSettings
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.album.AlbumSummary
@@ -82,6 +83,7 @@ internal fun LegacyPortAlbumPage(
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
     onRequestAddToQueue: (List<MediaItem>) -> Unit,
     onTrackMoreClick: (MediaItem) -> Unit,
+    artistSettings: ArtistSettings = ArtistSettings(),
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -89,11 +91,12 @@ internal fun LegacyPortAlbumPage(
     val visibleSongs = remember(mediaItems, hiddenMediaIds) {
         mediaItems.filterNot { mediaItem -> mediaItem.mediaId in hiddenMediaIds }
     }
-    val albums = remember(visibleSongs, context) {
+    val albums = remember(visibleSongs, context, artistSettings) {
         buildAlbumSummaries(
             mediaItems = visibleSongs,
             unknownAlbumTitle = context.getString(R.string.unknown_album),
             multipleArtistsTitle = context.getString(R.string.many_artist),
+            artistSettings = artistSettings,
         )
     }
     val selectedAlbum = remember(albums, selectedAlbumId) {
@@ -142,6 +145,7 @@ internal fun LegacyPortAlbumPage(
                 onRequestAddToPlaylist = onRequestAddToPlaylist,
                 onRequestAddToQueue = onRequestAddToQueue,
                 onTrackMoreClick = onTrackMoreClick,
+                artistSettings = artistSettings,
                 modifier = Modifier.fillMaxSize(),
             )
         },

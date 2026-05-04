@@ -68,6 +68,7 @@ import androidx.media3.common.Player
 import com.smartisanos.music.R
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.data.search.SearchHistoryStore
+import com.smartisanos.music.data.settings.ArtistSettings
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.artworkRequestKey
 import com.smartisanos.music.playback.await
@@ -144,6 +145,7 @@ fun GlobalSearchScreen(
     onOpenPlayback: () -> Unit,
     onAlbumClick: (String, String) -> Unit,
     onArtistClick: (String, String) -> Unit,
+    artistSettings: ArtistSettings = ArtistSettings(),
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -233,13 +235,14 @@ fun GlobalSearchScreen(
     val unknownAlbumTitle = stringResource(R.string.unknown_album)
     val unknownArtistTitle = stringResource(R.string.unknown_artist)
     val multipleArtistsTitle = stringResource(R.string.many_artist)
-    val results = remember(query, songs, unknownAlbumTitle, unknownArtistTitle, multipleArtistsTitle) {
+    val results = remember(query, songs, unknownAlbumTitle, unknownArtistTitle, multipleArtistsTitle, artistSettings) {
         buildSearchResults(
             query = query,
             songs = songs,
             unknownAlbumTitle = unknownAlbumTitle,
             unknownArtistTitle = unknownArtistTitle,
             multipleArtistsTitle = multipleArtistsTitle,
+            artistSettings = artistSettings,
         )
     }
     val showPlaybackBar = currentMediaId != null

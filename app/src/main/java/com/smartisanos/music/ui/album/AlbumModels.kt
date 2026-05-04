@@ -1,6 +1,10 @@
 package com.smartisanos.music.ui.album
 
 import androidx.media3.common.MediaItem
+import com.smartisanos.music.data.settings.ArtistSettings
+import com.smartisanos.music.ui.artist.artistNormalizedKey
+import com.smartisanos.music.ui.artist.toArtistDisplayNames
+import com.smartisanos.music.ui.artist.toArtistDisplayText
 import java.util.Locale
 
 enum class AlbumViewMode {
@@ -24,16 +28,17 @@ internal fun buildAlbumSummaries(
     mediaItems: List<MediaItem>,
     unknownAlbumTitle: String,
     multipleArtistsTitle: String,
+    artistSettings: ArtistSettings = ArtistSettings(),
 ): List<AlbumSummary> {
     val groups = linkedMapOf<String, MutableAlbumGroup>()
 
     mediaItems.forEach { item ->
         val metadata = item.mediaMetadata
-        val albumTitle = metadata.albumTitle.toDisplayText() ?: unknownAlbumTitle
-        val albumArtist = metadata.albumArtist.toDisplayText()
+        val albumTitle = metadata.albumTitle.toArtistDisplayText() ?: unknownAlbumTitle
+        val albumArtist = metadata.albumArtist.toArtistDisplayText()
         val albumId = metadata.extras?.getLong(AlbumIdExtraKey)?.takeIf { it > 0L }
         val groupingKey = albumId?.let { "album:$it" }
-            ?: "${albumTitle.normalizedKey()}|${albumArtist?.normalizedKey().orEmpty()}"
+            ?: "${albumTitle.normalizedKey()}|${albumArtist?.artistNormalizedKey().orEmpty()}"
         val group = groups.getOrPut(groupingKey) {
             MutableAlbumGroup(
                 id = groupingKey,
@@ -53,7 +58,10 @@ internal fun buildAlbumSummaries(
             AlbumSummary(
                 id = group.id,
                 title = group.title,
-                artist = group.albumArtist ?: group.songs.distinctArtistName(multipleArtistsTitle),
+                artist = group.albumArtist ?: group.songs.distinctArtistName(
+                    multipleArtistsTitle = multipleArtistsTitle,
+                    artistSettings = artistSettings,
+                ),
                 songs = sortedSongs,
                 year = sortedSongs.firstNotNullOfOrNull { item ->
                     item.mediaMetadata.releaseYear ?: item.mediaMetadata.recordingYear
@@ -76,14 +84,19 @@ private data class MutableAlbumGroup(
     val songs: MutableList<MediaItem> = mutableListOf(),
 )
 
-private fun List<MediaItem>.distinctArtistName(multipleArtistsTitle: String): String {
-    val artists = mapNotNull { it.mediaMetadata.artist.toDisplayText() }
-        .distinctBy { it.normalizedKey() }
+private fun List<MediaItem>.distinctArtistName(
+    multipleArtistsTitle: String,
+    artistSettings: ArtistSettings,
+): String {
+    val artists = flatMap { item ->
+        item.mediaMetadata.artist.toArtistDisplayNames(
+            artistSettings = artistSettings,
+            unknownArtistTitle = "",
+        )
+    }
+        .filter { it.isNotBlank() }
+        .distinctBy { it.artistNormalizedKey() }
     return artists.singleOrNull() ?: multipleArtistsTitle
-}
-
-private fun CharSequence?.toDisplayText(): String? {
-    return this?.toString()?.trim()?.takeIf { it.isNotEmpty() }
 }
 
 private fun String.normalizedKey(): String {

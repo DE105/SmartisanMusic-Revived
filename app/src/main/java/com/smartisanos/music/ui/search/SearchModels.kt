@@ -1,10 +1,12 @@
 package com.smartisanos.music.ui.search
 
 import androidx.media3.common.MediaItem
+import com.smartisanos.music.data.settings.ArtistSettings
 import com.smartisanos.music.ui.album.AlbumSummary
 import com.smartisanos.music.ui.album.buildAlbumSummaries
 import com.smartisanos.music.ui.artist.ArtistSummary
 import com.smartisanos.music.ui.artist.buildArtistSummaries
+import com.smartisanos.music.ui.artist.toArtistDisplayNames
 import java.util.Locale
 
 internal data class SearchResults(
@@ -22,6 +24,7 @@ internal fun buildSearchResults(
     unknownAlbumTitle: String,
     unknownArtistTitle: String,
     multipleArtistsTitle: String,
+    artistSettings: ArtistSettings = ArtistSettings(),
 ): SearchResults {
     val normalizedQuery = normalizeSearchQuery(query)
     if (normalizedQuery.isEmpty()) {
@@ -42,8 +45,12 @@ internal fun buildSearchResults(
         mediaItems = songs,
         unknownAlbumTitle = unknownAlbumTitle,
         multipleArtistsTitle = multipleArtistsTitle,
+        artistSettings = artistSettings,
     ).filter { album ->
-        album.searchableAlbumFields().any { field ->
+        album.searchableAlbumFields(
+            artistSettings = artistSettings,
+            unknownArtistTitle = unknownArtistTitle,
+        ).any { field ->
             field.contains(normalizedQuery)
         }
     }
@@ -51,6 +58,7 @@ internal fun buildSearchResults(
         mediaItems = songs,
         unknownArtistTitle = unknownArtistTitle,
         unknownAlbumTitle = unknownAlbumTitle,
+        artistSettings = artistSettings,
     ).filter { artist ->
         artist.searchableArtistFields().any { field ->
             field.contains(normalizedQuery)
@@ -80,8 +88,22 @@ private fun MediaItem.searchableSongFields(): List<String> {
     ).map(::normalizeSearchQuery)
 }
 
-private fun AlbumSummary.searchableAlbumFields(): List<String> {
-    return listOf(title, artist).map(::normalizeSearchQuery)
+private fun AlbumSummary.searchableAlbumFields(
+    artistSettings: ArtistSettings,
+    unknownArtistTitle: String,
+): List<String> {
+    if (artistSettings.separators.isEmpty()) {
+        return listOf(title, artist).map(::normalizeSearchQuery)
+    }
+    val songArtistNames = songs.flatMap { item ->
+        item.mediaMetadata.artist.toArtistDisplayNames(
+            artistSettings = artistSettings,
+            unknownArtistTitle = unknownArtistTitle,
+        )
+    }
+    return (listOf(title, artist) + songArtistNames)
+        .distinctBy(::normalizeSearchQuery)
+        .map(::normalizeSearchQuery)
 }
 
 private fun ArtistSummary.searchableArtistFields(): List<String> {

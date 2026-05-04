@@ -1,6 +1,7 @@
 package com.smartisanos.music.ui.artist
 
 import androidx.media3.common.MediaItem
+import com.smartisanos.music.data.settings.ArtistSettings
 import com.smartisanos.music.playback.LocalAudioLibrary
 import java.text.Collator
 import java.util.Locale
@@ -19,21 +20,27 @@ internal fun buildArtistSummaries(
     mediaItems: List<MediaItem>,
     unknownArtistTitle: String,
     unknownAlbumTitle: String,
+    artistSettings: ArtistSettings = ArtistSettings(),
 ): List<ArtistSummary> {
     val groups = linkedMapOf<String, MutableArtistGroup>()
 
     mediaItems.forEach { item ->
         val metadata = item.mediaMetadata
-        val artistName = metadata.artist.toDisplayText() ?: unknownArtistTitle
-        val artistKey = artistName.normalizedKey()
-        val group = groups.getOrPut(artistKey) {
-            MutableArtistGroup(
-                id = "artist:$artistKey",
-                name = artistName,
-            )
+        val artistNames = metadata.artist.toArtistDisplayNames(
+            artistSettings = artistSettings,
+            unknownArtistTitle = unknownArtistTitle,
+        )
+        artistNames.forEach { artistName ->
+            val artistKey = artistName.artistNormalizedKey()
+            val group = groups.getOrPut(artistKey) {
+                MutableArtistGroup(
+                    id = "artist:$artistKey",
+                    name = artistName,
+                )
+            }
+            group.songs += item
+            group.albumKeys += item.albumGroupingKey(unknownAlbumTitle)
         }
-        group.songs += item
-        group.albumKeys += item.albumGroupingKey(unknownAlbumTitle)
     }
 
     return groups.values
@@ -43,10 +50,10 @@ internal fun buildArtistSummaries(
                 name = group.name,
                 songs = group.songs.sortedWith(
                     compareBy<MediaItem> {
-                        it.mediaMetadata.albumTitle.toDisplayText()?.normalizedKey().orEmpty()
+                        it.mediaMetadata.albumTitle.toArtistDisplayText()?.artistNormalizedKey().orEmpty()
                     }
                         .thenBy { it.mediaMetadata.trackNumber ?: Int.MAX_VALUE }
-                        .thenBy { it.mediaMetadata.title?.toString().orEmpty().normalizedKey() },
+                        .thenBy { it.mediaMetadata.title?.toString().orEmpty().artistNormalizedKey() },
                 ),
                 albumCount = group.albumKeys.size,
             )
@@ -66,7 +73,7 @@ private fun MediaItem.albumGroupingKey(unknownAlbumTitle: String): String {
         ?.getLong(LocalAudioLibrary.AlbumIdExtraKey)
         ?.takeIf { it > 0L }
     return albumId?.let { "album:$it" }
-        ?: (mediaMetadata.albumTitle.toDisplayText() ?: unknownAlbumTitle).normalizedKey()
+        ?: (mediaMetadata.albumTitle.toArtistDisplayText() ?: unknownAlbumTitle).artistNormalizedKey()
 }
 
 private fun artistNameComparator(): Comparator<ArtistSummary> {
@@ -78,15 +85,7 @@ private fun artistNameComparator(): Comparator<ArtistSummary> {
         if (localizedOrder != 0) {
             localizedOrder
         } else {
-            left.name.normalizedKey().compareTo(right.name.normalizedKey())
+            left.name.artistNormalizedKey().compareTo(right.name.artistNormalizedKey())
         }
     }
-}
-
-private fun CharSequence?.toDisplayText(): String? {
-    return this?.toString()?.trim()?.takeIf { it.isNotEmpty() }
-}
-
-private fun String.normalizedKey(): String {
-    return lowercase(Locale.ROOT)
 }

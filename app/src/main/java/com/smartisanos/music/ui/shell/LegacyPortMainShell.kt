@@ -48,6 +48,8 @@ import com.smartisanos.music.data.library.LibraryExclusions
 import com.smartisanos.music.data.library.LibraryExclusionsStore
 import com.smartisanos.music.data.playlist.PlaylistCreateResult
 import com.smartisanos.music.data.playlist.PlaylistRepository
+import com.smartisanos.music.data.settings.ArtistSettings
+import com.smartisanos.music.data.settings.ArtistSettingsStore
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.data.settings.PlaybackSettingsStore
 import com.smartisanos.music.isExternalAudioLaunchItem
@@ -130,9 +132,13 @@ private fun LegacyPortMainShellContent(
     val playbackSettingsStore = remember(context.applicationContext) {
         PlaybackSettingsStore(context.applicationContext)
     }
+    val artistSettingsStore = remember(context.applicationContext) {
+        ArtistSettingsStore(context.applicationContext)
+    }
     val favoriteIds by favoriteRepository.observeFavoriteIds().collectAsState(initial = emptySet())
     val libraryExclusions by libraryExclusionsStore.exclusions.collectAsState(initial = LibraryExclusions())
     val playbackSettings by playbackSettingsStore.settings.collectAsState(initial = PlaybackSettings())
+    val artistSettings by artistSettingsStore.settings.collectAsState(initial = ArtistSettings())
     val favoriteRecords by favoriteRepository.observeFavorites().collectAsState(initial = emptyList())
     val playlists by playlistRepository.playlists.collectAsState(initial = emptyList())
     var playbackVisible by remember { mutableStateOf(false) }
@@ -580,6 +586,7 @@ private fun LegacyPortMainShellContent(
                 libraryRefreshVersion = libraryRefreshVersion,
                 libraryRefreshing = libraryRefreshing,
                 playbackSettings = playbackSettings,
+                artistSettings = artistSettings,
                 onRefreshLibrary = ::refreshLegacyLibrary,
                 onRequestAddToPlaylist = ::requestAddToPlaylist,
                 onRequestAddToQueue = ::enqueueMediaItems,
@@ -597,6 +604,13 @@ private fun LegacyPortMainShellContent(
                     scope.launch {
                         playbackSettingsStore.setPopcornSoundEnabled(enabled)
                     }
+                },
+                onArtistSeparatorsChange = { separators ->
+                    scope.launch {
+                        artistSettingsStore.setSeparators(separators)
+                    }
+                    selectedArtistTarget = null
+                    searchDrilldownTarget = null
                 },
                 onMediaIdsHidden = ::reclaimHiddenMediaIds,
                 onRequestDeleteMediaIds = ::requestSystemDeleteMediaIds,
@@ -800,6 +814,7 @@ private fun LegacyPortMainShellContent(
             hiddenMediaIds = libraryExclusions.hiddenMediaIds,
             drilldownTarget = searchDrilldownTarget,
             libraryRefreshVersion = libraryRefreshVersion,
+            artistSettings = artistSettings,
             onQueryChange = { value ->
                 searchQuery = value
             },

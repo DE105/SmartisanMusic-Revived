@@ -33,6 +33,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
+import com.smartisanos.music.data.settings.ArtistSettings
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.replaceQueueAndPlay
 import com.smartisanos.music.ui.album.AlbumSummary
@@ -54,6 +55,7 @@ internal fun LegacyPortSelectedArtistPage(
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
     onRequestAddToQueue: (List<MediaItem>) -> Unit,
     onTrackMoreClick: (MediaItem) -> Unit,
+    artistSettings: ArtistSettings = ArtistSettings(),
     switchAnimator: LegacyArtistAlbumViewSwitchAnimator,
     modifier: Modifier = Modifier,
 ) {
@@ -66,6 +68,7 @@ internal fun LegacyPortSelectedArtistPage(
                 onRequestAddToPlaylist = onRequestAddToPlaylist,
                 onRequestAddToQueue = onRequestAddToQueue,
                 onTrackMoreClick = onTrackMoreClick,
+                artistSettings = artistSettings,
                 modifier = modifier,
             )
             return
@@ -104,6 +107,7 @@ internal fun LegacyPortSelectedArtistPage(
                         artistName = artist.name,
                         songs = artist.songs,
                         onTrackMoreClick = onTrackMoreClick,
+                        artistSettings = artistSettings,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -114,6 +118,7 @@ internal fun LegacyPortSelectedArtistPage(
                             onRequestAddToPlaylist = onRequestAddToPlaylist,
                             onRequestAddToQueue = onRequestAddToQueue,
                             onTrackMoreClick = onTrackMoreClick,
+                            artistSettings = artistSettings,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -495,6 +500,7 @@ private fun LegacyPortArtistAllSongsPage(
     artistName: String,
     songs: List<MediaItem>,
     onTrackMoreClick: (MediaItem) -> Unit,
+    artistSettings: ArtistSettings,
     modifier: Modifier = Modifier,
 ) {
     val browser = LocalPlaybackBrowser.current
@@ -533,6 +539,7 @@ private fun LegacyPortArtistAllSongsPage(
                 nextCurrentMediaId = browser?.currentMediaItem?.mediaId,
                 nextCurrentIsPlaying = browser?.isPlaying == true,
                 nextShowTrackArtists = true,
+                nextArtistSettings = artistSettings,
                 nextForceSequentialTrackNumbers = true,
             )
             root.bindPlayback(browser, adapter)
@@ -825,11 +832,15 @@ private fun LegacyArtistAlbumEntry.toTarget(
     }
 }
 
-internal fun ArtistSummary.albumSummaries(context: Context): List<AlbumSummary> {
+internal fun ArtistSummary.albumSummaries(
+    context: Context,
+    artistSettings: ArtistSettings = ArtistSettings(),
+): List<AlbumSummary> {
     return buildAlbumSummaries(
         mediaItems = songs,
         unknownAlbumTitle = context.getString(R.string.unknown_album),
         multipleArtistsTitle = context.getString(R.string.many_artist),
+        artistSettings = artistSettings,
     )
 }
 

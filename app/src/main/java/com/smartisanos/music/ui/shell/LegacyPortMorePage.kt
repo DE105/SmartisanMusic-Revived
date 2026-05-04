@@ -50,6 +50,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
 import com.smartisanos.music.data.favorite.FavoriteSongRecord
+import com.smartisanos.music.data.settings.ArtistSettings
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.data.library.LibraryExclusions
 import com.smartisanos.music.data.library.LibraryExclusionsStore
@@ -104,6 +105,7 @@ internal fun LegacyPortMorePage(
     favoriteRecords: List<FavoriteSongRecord>,
     hiddenMediaIds: Set<String>,
     playbackSettings: PlaybackSettings,
+    artistSettings: ArtistSettings,
     libraryLoaded: Boolean,
     libraryRefreshVersion: Int,
     libraryRefreshing: Boolean,
@@ -111,6 +113,7 @@ internal fun LegacyPortMorePage(
     onScratchEnabledChange: (Boolean) -> Unit,
     onHidePlayerAxisEnabledChange: (Boolean) -> Unit,
     onPopcornSoundEnabledChange: (Boolean) -> Unit,
+    onArtistSeparatorsChange: (Set<String>) -> Unit,
     onMediaIdsHidden: (Set<String>) -> Unit,
     onRequestDeleteMediaIds: (Set<String>) -> Unit,
     onLovedSongsTrackMoreClick: (MediaItem) -> Unit,
@@ -195,12 +198,14 @@ internal fun LegacyPortMorePage(
                 LegacyMoreSecondaryTarget.Settings -> LegacyPortSettingsPage(
                     active = active,
                     playbackSettings = playbackSettings,
+                    artistSettings = artistSettings,
                     onClose = {
                         secondaryTarget = null
                     },
                     onScratchEnabledChange = onScratchEnabledChange,
                     onHidePlayerAxisEnabledChange = onHidePlayerAxisEnabledChange,
                     onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,
+                    onArtistSeparatorsChange = onArtistSeparatorsChange,
                     modifier = Modifier.fillMaxSize(),
                 )
             }

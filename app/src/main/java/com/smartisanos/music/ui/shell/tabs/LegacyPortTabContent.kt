@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.media3.common.MediaItem
 import com.smartisanos.music.data.favorite.FavoriteSongRecord
+import com.smartisanos.music.data.settings.ArtistSettings
 import com.smartisanos.music.data.settings.PlaybackSettings
 import com.smartisanos.music.ui.album.AlbumViewMode
 import com.smartisanos.music.ui.navigation.MusicDestination
@@ -39,12 +40,14 @@ internal fun LegacyPortTabContent(
     libraryRefreshVersion: Int,
     libraryRefreshing: Boolean,
     playbackSettings: PlaybackSettings,
+    artistSettings: ArtistSettings,
     onRefreshLibrary: () -> Unit,
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
     onRequestAddToQueue: (List<MediaItem>) -> Unit,
     onScratchEnabledChange: (Boolean) -> Unit,
     onHidePlayerAxisEnabledChange: (Boolean) -> Unit,
     onPopcornSoundEnabledChange: (Boolean) -> Unit,
+    onArtistSeparatorsChange: (Set<String>) -> Unit,
     onMediaIdsHidden: (Set<String>) -> Unit,
     onRequestDeleteMediaIds: (Set<String>) -> Unit,
     onLibraryTrackMoreClick: (MediaItem) -> Unit,
@@ -97,6 +100,7 @@ internal fun LegacyPortTabContent(
                 onRequestAddToPlaylist = onRequestAddToPlaylist,
                 onRequestAddToQueue = onRequestAddToQueue,
                 onTrackMoreClick = onLibraryTrackMoreClick,
+                artistSettings = artistSettings,
                 modifier = Modifier.fillMaxSize(),
             )
             MusicDestination.Artist -> LegacyPortArtistPage(
@@ -109,6 +113,7 @@ internal fun LegacyPortTabContent(
                 onRequestAddToPlaylist = onRequestAddToPlaylist,
                 onRequestAddToQueue = onRequestAddToQueue,
                 onTrackMoreClick = onLibraryTrackMoreClick,
+                artistSettings = artistSettings,
                 modifier = Modifier.fillMaxSize(),
             )
             MusicDestination.Playlist -> LegacyPortPlaylistPage(
@@ -126,6 +131,7 @@ internal fun LegacyPortTabContent(
                 favoriteRecords = favoriteRecords,
                 hiddenMediaIds = hiddenMediaIds,
                 playbackSettings = playbackSettings,
+                artistSettings = artistSettings,
                 libraryLoaded = libraryLoaded,
                 libraryRefreshVersion = libraryRefreshVersion,
                 libraryRefreshing = libraryRefreshing,
@@ -133,6 +139,7 @@ internal fun LegacyPortTabContent(
                 onScratchEnabledChange = onScratchEnabledChange,
                 onHidePlayerAxisEnabledChange = onHidePlayerAxisEnabledChange,
                 onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,
+                onArtistSeparatorsChange = onArtistSeparatorsChange,
                 onMediaIdsHidden = onMediaIdsHidden,
                 onRequestDeleteMediaIds = onRequestDeleteMediaIds,
                 onLovedSongsTrackMoreClick = onLovedSongsTrackMoreClick,

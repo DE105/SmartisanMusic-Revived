@@ -2,6 +2,7 @@ package com.smartisanos.music.ui.album
 
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import com.smartisanos.music.data.settings.ArtistSettings
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -68,6 +69,27 @@ class AlbumModelsTest {
 
         assertEquals(2, summaries.size)
         assertEquals(listOf("Singer A", "Singer B"), summaries.map { it.artist })
+    }
+
+    @Test
+    fun buildAlbumSummariesUsesSplitArtistForFallbackDisplay() {
+        val summaries = buildAlbumSummaries(
+            mediaItems = listOf(
+                mediaItem(
+                    id = "duet",
+                    title = "Track",
+                    album = "Single",
+                    artist = "Singer A/Singer B",
+                ),
+            ),
+            unknownAlbumTitle = "未知专辑",
+            multipleArtistsTitle = "多位艺术家",
+            artistSettings = ArtistSettings(
+                separators = setOf("/"),
+            ),
+        )
+
+        assertEquals("多位艺术家", summaries.single().artist)
     }
 
     @Test
