@@ -80,7 +80,19 @@ class AlbumModelsTest {
             trackNumber = 2007,
         )
 
-        assertEquals("7", item.displayTrackNumber(fallback = 1))
+        assertEquals("7", item.displayTrackNumber())
+    }
+
+    @Test
+    fun displayTrackNumberUsesSymbolWhenMetadataIsMissing() {
+        val item = mediaItem(
+            id = "missing-track",
+            title = "Track",
+            album = "Album",
+            artist = "Artist",
+        )
+
+        assertEquals(MissingAlbumTrackNumberSymbol, item.displayTrackNumber())
     }
 
     private fun mediaItem(

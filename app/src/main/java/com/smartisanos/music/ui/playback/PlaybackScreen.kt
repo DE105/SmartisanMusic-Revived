@@ -845,6 +845,7 @@ fun PlaybackScreen(
                 onRepeatClick = {
                     val nextRepeatMode = nextPlaybackRepeatMode(state.repeatMode)
                     controller?.repeatMode = nextRepeatMode
+                    state = state.copy(repeatMode = nextRepeatMode)
                     context.toast(repeatToastRes(nextRepeatMode))
                 },
                 onPreviousClick = {
@@ -863,6 +864,7 @@ fun PlaybackScreen(
                 onShuffleClick = {
                     val shuffleEnabled = !state.shuffleEnabled
                     controller?.shuffleModeEnabled = shuffleEnabled
+                    state = state.copy(shuffleEnabled = shuffleEnabled)
                     context.toast(shuffleToastRes(shuffleEnabled))
                 },
                 onVolumeChange = { volume ->
@@ -987,12 +989,16 @@ fun PlaybackScreen(
         PlaybackQueueOverlayHost(
             showQueueOverlay = showQueueOverlay,
             currentTrackProvider = {
-                state.mediaItem?.toPlaybackQueueTrack(context)
+                state.mediaItem?.toPlaybackQueueTrack(
+                    context = context,
+                    queueIndex = controller?.currentMediaItemIndex ?: -1,
+                )
             },
             upcomingItemsProvider = {
                 controller?.upcomingQueueTracks(context).orEmpty()
             },
             isCurrentFavorite = favoriteEnabled,
+            reorderEnabled = state.canReorderUpcomingQueue,
             onExitFullScreenClick = {
                 showQueueOverlay = false
                 onCollapse()
@@ -1000,9 +1006,11 @@ fun PlaybackScreen(
             onReturnToPlaybackClick = {
                 showQueueOverlay = false
             },
-            onItemClick = { index ->
-                val totalIndex = (controller?.currentMediaItemIndex ?: -1) + 1 + index
-                controller?.seekToDefaultPosition(totalIndex)
+            onItemClick = { queueIndex ->
+                val playbackController = controller ?: return@PlaybackQueueOverlayHost
+                if (queueIndex in 0 until playbackController.mediaItemCount) {
+                    playbackController.seekToDefaultPosition(queueIndex)
+                }
                 showQueueOverlay = false
             },
             onFavoriteCurrentClick = {
@@ -1016,28 +1024,34 @@ fun PlaybackScreen(
             },
             onClearUpcomingClick = {
                 val playbackController = controller ?: return@PlaybackQueueOverlayHost
-                val playingIndex = playbackController.currentMediaItemIndex
-                val itemCount = playbackController.mediaItemCount
-                if (playingIndex >= 0 && playingIndex + 1 < itemCount) {
-                    playbackController.removeMediaItems(playingIndex + 1, itemCount)
+                val currentIndex = playbackController.currentMediaItemIndex
+                val upcomingIndexes = playbackController.upcomingQueueTracks(context)
+                    .map { track -> track.queueIndex }
+                    .filter { index -> index >= 0 && index != currentIndex }
+                    .distinct()
+                    .sortedDescending()
+                upcomingIndexes.forEach { index ->
+                    if (index in 0 until playbackController.mediaItemCount) {
+                        playbackController.removeMediaItem(index)
+                    }
                 }
             },
-            onMoveRequest = { from, to ->
-                if (from == to) {
+            onMoveRequest = { fromIndex, toIndex ->
+                if (!state.canReorderUpcomingQueue) {
+                    return@PlaybackQueueOverlayHost
+                }
+                if (fromIndex == toIndex) {
                     return@PlaybackQueueOverlayHost
                 }
                 val playbackController = controller ?: return@PlaybackQueueOverlayHost
-                val playingIndex = playbackController.currentMediaItemIndex
                 val itemCount = playbackController.mediaItemCount
-                if (playingIndex < 0) {
-                    return@PlaybackQueueOverlayHost
-                }
-                val absoluteFrom = playingIndex + 1 + from
-                val absoluteTo = playingIndex + 1 + to
-                if (absoluteFrom in 0 until itemCount && absoluteTo in 0 until itemCount) {
-                    playbackController.moveMediaItem(absoluteFrom, absoluteTo)
+                if (fromIndex in 0 until itemCount && toIndex in 0 until itemCount) {
+                    playbackController.moveMediaItem(fromIndex, toIndex)
                 }
             },
         )
     }
 }
+
+private val PlaybackScreenState.canReorderUpcomingQueue: Boolean
+    get() = !shuffleEnabled && repeatMode != Player.REPEAT_MODE_ALL

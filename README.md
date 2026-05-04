@@ -50,9 +50,9 @@ Compose 版虽然能跑，但很多细节始终达不到我满意的程度。
 
 当前视觉基准来自 People-11 的 [SmartisanOS_APP_Port](https://github.com/People-11/SmartisanOS_APP_Port/) 项目里的 `Music_8.1.0.apk`。
 
-Smartisan OS 的系统应用不是普通 Android APK。它们依赖很多私有框架和系统组件，比如数据库结构、Telephony Intent、双卡逻辑、弹窗、动效、样式、验证码识别、系统资源引用等。很多东西只拆音乐 APK 是看不全的，因为真正的逻辑和样式在系统框架里。
+Smartisan OS 的系统应用不是普通 Android APK。音乐应用依赖系统媒体库、私有资源、旧控件、弹窗、动效、样式和系统服务对接等环境。很多东西只拆音乐 APK 是看不全的，因为真正的逻辑和样式有一部分在系统框架和配套组件里。
 
-People-11 做移植时已经手动补了大量缺口，让这些原版应用能在非 Smartisan 系统上尽可能跑起来。音乐 8.1.0 也额外支持了 MediaSession，优化过媒体扫描效率和播放队列展开效果。这个工作量很大，也让它成为一个非常可靠的视觉和交互基准。
+People-11 做移植时已经手动补了大量缺口，去掉或替换了音乐 APK 和 Smartisan OS 媒体库、私有系统能力之间的耦合，让它能在非 Smartisan 系统上尽可能跑起来。这个工作量很大，也让它成为一个非常可靠的视觉和交互基准。
 
 我又逆向解包了 Smartisan Music 8.1.0 APK 和部分 Smartisan 系统组件，用来对照 XML、drawable、values、anim、私有控件引用和系统资源关系。People-11 的移植版提供接近可运行原版的事实基准，本仓库则在这个基准上重建现代播放链路和功能体验。
 

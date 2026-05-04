@@ -12,6 +12,7 @@ import androidx.annotation.DrawableRes
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisanos.music.R
@@ -63,18 +64,41 @@ private fun Uri.isMediaStoreUri(): Boolean {
 }
 
 internal fun Player.upcomingQueueTracks(context: Context): List<PlaybackQueueTrack> {
-    val startIndex = currentMediaItemIndex + 1
-    if (currentMediaItemIndex < 0 || startIndex >= mediaItemCount) {
+    val currentIndex = currentMediaItemIndex
+    if (currentIndex !in 0 until mediaItemCount || mediaItemCount <= 1 || currentTimeline.isEmpty) {
         return emptyList()
     }
-    return buildList(mediaItemCount - startIndex) {
-        for (index in startIndex until mediaItemCount) {
-            add(getMediaItemAt(index).toPlaybackQueueTrack(context))
+
+    val timeline = currentTimeline
+    val effectiveRepeatMode = repeatMode.takeUnless { it == Player.REPEAT_MODE_ONE }
+        ?: Player.REPEAT_MODE_OFF
+    val visitedIndexes = mutableSetOf(currentIndex)
+    return buildList {
+        var nextIndex = timeline.getNextWindowIndex(
+            currentIndex,
+            effectiveRepeatMode,
+            shuffleModeEnabled,
+        )
+        while (
+            nextIndex != C.INDEX_UNSET &&
+            nextIndex in 0 until mediaItemCount &&
+            nextIndex !in visitedIndexes
+        ) {
+            visitedIndexes += nextIndex
+            add(getMediaItemAt(nextIndex).toPlaybackQueueTrack(context, queueIndex = nextIndex))
+            nextIndex = timeline.getNextWindowIndex(
+                nextIndex,
+                effectiveRepeatMode,
+                shuffleModeEnabled,
+            )
         }
     }
 }
 
-internal fun MediaItem.toPlaybackQueueTrack(context: Context): PlaybackQueueTrack {
+internal fun MediaItem.toPlaybackQueueTrack(
+    context: Context,
+    queueIndex: Int = -1,
+): PlaybackQueueTrack {
     return PlaybackQueueTrack(
         id = mediaId,
         title = mediaMetadata.displayTitle?.toString()
@@ -84,6 +108,7 @@ internal fun MediaItem.toPlaybackQueueTrack(context: Context): PlaybackQueueTrac
             ?: mediaMetadata.artist?.toString()
             ?: context.getString(R.string.unknown_artist),
         mediaItem = this,
+        queueIndex = queueIndex,
     )
 }
 

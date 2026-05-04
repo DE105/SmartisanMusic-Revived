@@ -22,11 +22,12 @@ class PlaybackScreenUtilsTest {
             )
             .build()
 
-        val track = mediaItem.toPlaybackQueueTrack(ContextWrapper(null))
+        val track = mediaItem.toPlaybackQueueTrack(ContextWrapper(null), queueIndex = 7)
 
         assertEquals("42", track.id)
         assertEquals("Displayed title", track.title)
         assertEquals("Displayed artist", track.artist)
+        assertEquals(7, track.queueIndex)
     }
 
     @Test

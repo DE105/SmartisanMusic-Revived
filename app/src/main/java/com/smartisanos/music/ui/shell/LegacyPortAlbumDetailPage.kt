@@ -704,7 +704,7 @@ private data class LegacyAlbumTrackViewHolder(
         index.text = if (forceSequentialTrackNumber) {
             fallbackIndex.toString()
         } else {
-            item.displayTrackNumber(fallbackIndex)
+            item.displayTrackNumber()
         }
         title.text = metadata.displayTitle
             ?: metadata.title

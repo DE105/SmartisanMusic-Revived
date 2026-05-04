@@ -44,6 +44,7 @@ import androidx.core.content.ContextCompat
 import com.smartisanos.music.R
 import com.smartisanos.music.ui.components.SmartisanTitleBarSurface
 import com.smartisanos.music.ui.components.SmartisanTitleBarSurfaceStyle
+import com.smartisanos.music.ui.widgets.ThumbOnlySeekBar
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
@@ -402,7 +403,7 @@ internal fun PlaybackVolumeBar(
     val latestOnValueChange = rememberUpdatedState(onValueChange)
     AndroidView(
         factory = { context ->
-            SeekBar(context).apply {
+            ThumbOnlySeekBar(context).apply {
                 max = 100
                 splitTrack = false
                 contentDescription = context.getString(R.string.volume)

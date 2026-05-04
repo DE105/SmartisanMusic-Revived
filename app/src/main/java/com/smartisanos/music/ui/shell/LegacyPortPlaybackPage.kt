@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.SessionResult
@@ -191,16 +192,32 @@ internal fun LegacyPortPlaybackPage(
             onClearUpcomingClick = {
                 val playbackController = controller
                 if (playbackController != null) {
-                    val playingIndex = playbackController.currentMediaItemIndex
-                    val itemCount = playbackController.mediaItemCount
-                    if (playingIndex >= 0 && playingIndex + 1 < itemCount) {
-                        playbackController.removeMediaItems(playingIndex + 1, itemCount)
+                    val currentIndex = playbackController.currentMediaItemIndex
+                    val upcomingIndexes = playbackController
+                        .toLegacyPlaybackQueueSnapshot(
+                            context = context,
+                            favoriteIds = favoriteIds,
+                            ratingOverrides = ratingOverrides,
+                        )
+                        .upcoming
+                        .map { track -> track.queueIndex }
+                        .filter { index -> index >= 0 && index != currentIndex }
+                        .distinct()
+                        .sortedDescending()
+                    upcomingIndexes.forEach { index ->
+                        if (index in 0 until playbackController.mediaItemCount) {
+                            playbackController.removeMediaItem(index)
+                        }
                     }
                 }
             },
             onMoveRequest = { fromIndex, toIndex ->
                 val playbackController = controller
-                if (playbackController != null && fromIndex != toIndex) {
+                if (
+                    playbackController != null &&
+                    fromIndex != toIndex &&
+                    playbackController.canReorderUpcomingQueue
+                ) {
                     val itemCount = playbackController.mediaItemCount
                     if (fromIndex in 0 until itemCount && toIndex in 0 until itemCount) {
                         playbackController.moveMediaItem(fromIndex, toIndex)
@@ -405,6 +422,7 @@ private data class LegacyPlaybackQueueSnapshot(
     val current: LegacyPlaybackQueueTrack? = null,
     val upcoming: List<LegacyPlaybackQueueTrack> = emptyList(),
     val isCurrentFavorite: Boolean = false,
+    val reorderEnabled: Boolean = true,
 )
 
 private data class LegacyPlaybackQueueTrack(
@@ -474,9 +492,61 @@ private fun Player?.toLegacyPlaybackQueueSnapshot(
     return LegacyPlaybackQueueSnapshot(
         history = tracks.filter { it.queueIndex < currentIndex }.takeLast(LegacyQueueHistoryLimit),
         current = current,
-        upcoming = tracks.filter { it.queueIndex > currentIndex },
+        upcoming = player.toLegacyUpcomingQueueTracks(
+            context = context,
+            currentIndex = currentIndex,
+            ratingOverrides = ratingOverrides,
+        ),
         isCurrentFavorite = current?.mediaId?.let(favoriteIds::contains) == true,
+        reorderEnabled = player.canReorderUpcomingQueue,
     )
+}
+
+private val Player.canReorderUpcomingQueue: Boolean
+    get() = !shuffleModeEnabled && repeatMode != Player.REPEAT_MODE_ALL
+
+private fun Player.toLegacyUpcomingQueueTracks(
+    context: Context,
+    currentIndex: Int,
+    ratingOverrides: Map<String, Int>,
+): List<LegacyPlaybackQueueTrack> {
+    if (currentIndex !in 0 until mediaItemCount || mediaItemCount <= 1 || currentTimeline.isEmpty) {
+        return emptyList()
+    }
+
+    val timeline = currentTimeline
+    val effectiveRepeatMode = repeatMode.takeUnless { it == Player.REPEAT_MODE_ONE }
+        ?: Player.REPEAT_MODE_OFF
+    val visitedIndexes = mutableSetOf(currentIndex)
+    return buildList {
+        var nextIndex = timeline.getNextWindowIndex(
+            currentIndex,
+            effectiveRepeatMode,
+            shuffleModeEnabled,
+        )
+        while (
+            nextIndex != C.INDEX_UNSET &&
+            nextIndex in 0 until mediaItemCount &&
+            nextIndex !in visitedIndexes
+        ) {
+            visitedIndexes += nextIndex
+            val track = runCatching {
+                getMediaItemAt(nextIndex).toLegacyPlaybackQueueTrack(
+                    context = context,
+                    queueIndex = nextIndex,
+                    ratingOverrides = ratingOverrides,
+                )
+            }.getOrNull()
+            if (track != null) {
+                add(track)
+            }
+            nextIndex = timeline.getNextWindowIndex(
+                nextIndex,
+                effectiveRepeatMode,
+                shuffleModeEnabled,
+            )
+        }
+    }
 }
 
 private fun MediaItem.toLegacyPlaybackQueueTrack(
@@ -586,6 +656,7 @@ private class LegacyPlaybackQueueAdapter(
         onMoveRequest = { _, _ -> },
     )
     private var currentFavorite = false
+    private var reorderEnabled = true
 
     fun bind(
         snapshot: LegacyPlaybackQueueSnapshot,
@@ -593,6 +664,7 @@ private class LegacyPlaybackQueueAdapter(
     ) {
         this.callbacks = callbacks
         currentFavorite = snapshot.isCurrentFavorite
+        reorderEnabled = snapshot.reorderEnabled
         rows = buildList {
             if (snapshot.history.isNotEmpty()) {
                 add(LegacyPlaybackQueueRow.Header(appContext.getString(R.string.history_title), false))
@@ -649,6 +721,9 @@ private class LegacyPlaybackQueueAdapter(
     }
 
     override fun reorderableItemAt(position: Int): LegacyPlaybackQueueTrack? {
+        if (!reorderEnabled) {
+            return null
+        }
         return (rows.getOrNull(position) as? LegacyPlaybackQueueRow.Track)
             ?.takeIf { it.section == LegacyPlaybackQueueSection.Upcoming }
             ?.track
@@ -778,7 +853,7 @@ private class LegacyPlaybackQueueAdapter(
         view.isClickable = false
         view.isFocusable = false
         view.findViewById<View>(R.id.iv_right).apply {
-            if (row.section == LegacyPlaybackQueueSection.Upcoming) {
+            if (row.section == LegacyPlaybackQueueSection.Upcoming && reorderEnabled) {
                 visibility = View.VISIBLE
             } else {
                 visibility = View.INVISIBLE

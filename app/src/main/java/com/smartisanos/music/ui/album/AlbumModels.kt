@@ -63,8 +63,8 @@ internal fun buildAlbumSummaries(
         .sortedBy { it.title.normalizedKey() }
 }
 
-internal fun MediaItem.displayTrackNumber(fallback: Int): String {
-    val rawTrackNumber = mediaMetadata.trackNumber ?: return fallback.toString()
+internal fun MediaItem.displayTrackNumber(): String {
+    val rawTrackNumber = mediaMetadata.trackNumber ?: return MissingAlbumTrackNumberSymbol
     val trackNumber = rawTrackNumber % 1000
     return (trackNumber.takeIf { it > 0 } ?: rawTrackNumber).toString()
 }
@@ -91,3 +91,4 @@ private fun String.normalizedKey(): String {
 }
 
 private const val AlbumIdExtraKey = "com.smartisanos.music.extra.ALBUM_ID"
+internal const val MissingAlbumTrackNumberSymbol = "•"

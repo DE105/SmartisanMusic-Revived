@@ -14,9 +14,13 @@ import androidx.media3.common.MediaMetadata
 import com.smartisanos.music.R
 import com.smartisanos.music.data.playback.PlaybackStatsRecord
 import java.io.File
+import java.nio.CharBuffer
+import java.nio.charset.CodingErrorAction
+import java.nio.charset.Charset
+import java.nio.charset.StandardCharsets
 import java.text.Normalizer
-import java.util.concurrent.CountDownLatch
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -78,13 +82,18 @@ class LocalAudioLibrary(
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idColumn)
                     val title = cursor.getString(titleColumn)
+                        ?.fixLegacyMetadataEncoding()
                         ?.takeIf { it.isNotBlank() }
                         ?: context.getString(R.string.unknown_song_title)
                     val artist = cursor.getString(artistColumn)
+                        ?.fixLegacyMetadataEncoding()
                         ?.takeIf { it.isNotBlank() && it != MediaStore.UNKNOWN_STRING }
                         ?: context.getString(R.string.unknown_artist)
-                    val album = cursor.getString(albumColumn)?.takeIf { it.isNotBlank() }
+                    val album = cursor.getString(albumColumn)
+                        ?.fixLegacyMetadataEncoding()
+                        ?.takeIf { it.isNotBlank() }
                     val albumArtist = cursor.getString(albumArtistColumn)
+                        ?.fixLegacyMetadataEncoding()
                         ?.takeIf { it.isNotBlank() && it != MediaStore.UNKNOWN_STRING }
                     val albumId = cursor.getLong(albumIdColumn).takeIf { it > 0L }
                     val durationMs = cursor.getLong(durationColumn)
@@ -618,6 +627,60 @@ private object LegacyLibraryTitleNormalizer {
             .trim()
     }
 }
+
+internal fun String.fixLegacyMetadataEncoding(): String {
+    if (isEmpty() || !looksLikeLegacyMojibake()) {
+        return this
+    }
+    return LegacyMetadataRepairCharsets.firstNotNullOfOrNull { charset ->
+        repairLegacyMojibake(charset)
+    } ?: this
+}
+
+private fun String.repairLegacyMojibake(charset: Charset): String? {
+    return toByteArrayOrNull(charset)
+        ?.let { bytes -> String(bytes, StandardCharsets.UTF_8) }
+        ?.takeIf { repaired ->
+            repaired.isNotEmpty() &&
+                repaired != this &&
+                ReplacementCharacter !in repaired &&
+                (repaired.containsCjkOrFullWidth() || !repaired.looksLikeLegacyMojibake())
+        }
+}
+
+private fun String.toByteArrayOrNull(charset: Charset): ByteArray? {
+    return runCatching {
+        val encoder = charset.newEncoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+        val buffer = encoder.encode(CharBuffer.wrap(this))
+        ByteArray(buffer.remaining()).also(buffer::get)
+    }.getOrNull()
+}
+
+private fun String.looksLikeLegacyMojibake(): Boolean {
+    return LegacyMojibakeMarkers.any(::contains)
+}
+
+private fun String.containsCjkOrFullWidth(): Boolean {
+    return any { char ->
+        val code = char.code
+        code in 0x3040..0x30FF ||
+            code in 0x3400..0x9FFF ||
+            code in 0x1100..0x11FF ||
+            code in 0xAC00..0xD7AF ||
+            code in 0xFF01..0xFFEF
+    }
+}
+
+private val LegacyMetadataRepairCharsets = listOf(
+    StandardCharsets.ISO_8859_1,
+    Charset.forName("windows-1252"),
+    Charset.forName("windows-1250"),
+)
+
+private val LegacyMojibakeMarkers = listOf("Ã", "Â", "ã", "ď", "ï", "æ", "å", "¤", "½", "ž")
+private const val ReplacementCharacter = '\uFFFD'
 
 private fun String.legacyLibraryTitleSection(): String {
     val firstLetter = firstOrNull { char ->

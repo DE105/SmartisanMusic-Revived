@@ -107,6 +107,7 @@ data class PlaybackQueueTrack(
     val title: String,
     val artist: String,
     val mediaItem: MediaItem? = null,
+    val queueIndex: Int = -1,
 )
 
 data class PlaybackQueueUiState(
@@ -114,6 +115,7 @@ data class PlaybackQueueUiState(
     val upcomingTracks: List<PlaybackQueueTrack> = emptyList(),
     val isCurrentFavorite: Boolean = false,
     val showHeaderAction: Boolean = true,
+    val reorderEnabled: Boolean = true,
 )
 
 @Composable
@@ -134,24 +136,34 @@ fun PlaybackQueueScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var upcomingTracks by remember { mutableStateOf(state.upcomingTracks) }
-    var draggingTrackId by remember { mutableStateOf<String?>(null) }
+    var draggingTrackKey by remember { mutableStateOf<String?>(null) }
     var draggingIndex by remember { mutableIntStateOf(-1) }
     var draggingOffsetY by remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(state.upcomingTracks) {
-        if (draggingTrackId == null) {
+        if (draggingTrackKey == null) {
             upcomingTracks = state.upcomingTracks
         }
     }
 
     fun endDragging() {
-        draggingTrackId = null
+        draggingTrackKey = null
         draggingIndex = -1
         draggingOffsetY = 0f
     }
 
+    LaunchedEffect(state.reorderEnabled) {
+        if (!state.reorderEnabled) {
+            upcomingTracks = state.upcomingTracks
+            endDragging()
+        }
+    }
+
     fun updateDragging(deltaY: Float) {
-        val activeTrackId = draggingTrackId ?: return
+        if (!state.reorderEnabled) {
+            return
+        }
+        val activeTrackKey = draggingTrackKey ?: return
         val fromIndex = draggingIndex
         if (fromIndex !in upcomingTracks.indices) {
             endDragging()
@@ -162,7 +174,7 @@ fun PlaybackQueueScreen(
 
         val visibleItems = listState.layoutInfo.visibleItemsInfo
         val currentItemInfo = visibleItems.firstOrNull { item ->
-            item.key == playbackQueueTrackKey(activeTrackId)
+            item.key == activeTrackKey
         } ?: return
 
         val draggedTop = currentItemInfo.offset.toFloat() + draggingOffsetY
@@ -181,17 +193,29 @@ fun PlaybackQueueScreen(
         if (targetItemInfo != null) {
             val targetKey = targetItemInfo.key as? String
             val toIndex = upcomingTracks.indexOfFirst { track ->
-                playbackQueueTrackKey(track.id) == targetKey
+                playbackQueueTrackKey(track) == targetKey
             }
             if (toIndex >= 0 && toIndex != fromIndex) {
+                val movedTrack = upcomingTracks[fromIndex]
+                val targetTrack = upcomingTracks[toIndex]
                 val oldOffset = currentItemInfo.offset
                 val newOffset = targetItemInfo.offset
-                upcomingTracks = upcomingTracks.toMutableList().apply {
+                val reorderedTracks = upcomingTracks.toMutableList().apply {
                     add(toIndex, removeAt(fromIndex))
                 }
+                val updatedTracks = reorderedTracks.map { track ->
+                    track.withQueueIndexAfterMove(
+                        fromIndex = movedTrack.queueIndex,
+                        toIndex = targetTrack.queueIndex,
+                    )
+                }
+                upcomingTracks = updatedTracks
                 draggingIndex = toIndex
+                draggingTrackKey = updatedTracks.getOrNull(toIndex)?.let(::playbackQueueTrackKey)
                 draggingOffsetY += oldOffset - newOffset
-                onMoveRequest(fromIndex, toIndex)
+                if (movedTrack.queueIndex >= 0 && targetTrack.queueIndex >= 0) {
+                    onMoveRequest(movedTrack.queueIndex, targetTrack.queueIndex)
+                }
             }
         }
 
@@ -259,19 +283,26 @@ fun PlaybackQueueScreen(
                 }
                 itemsIndexed(
                     items = upcomingTracks,
-                    key = { _, track -> playbackQueueTrackKey(track.id) },
+                    key = { _, track -> playbackQueueTrackKey(track) },
                     contentType = { _, _ -> "track_item" },
                 ) { index, track ->
-                    val isDragging = draggingTrackId == track.id
+                    val trackKey = playbackQueueTrackKey(track)
+                    val isDragging = draggingTrackKey == trackKey
                     UpcomingTrackItem(
                         track = track,
+                        dragKey = trackKey,
+                        reorderEnabled = state.reorderEnabled,
                         isDragging = isDragging,
                         dragOffsetY = if (isDragging) draggingOffsetY else 0f,
-                        onClick = { onItemClick(index) },
+                        onClick = {
+                            onItemClick(track.queueIndex.takeIf { it >= 0 } ?: index)
+                        },
                         onDragStart = {
-                            draggingTrackId = track.id
-                            draggingIndex = index
-                            draggingOffsetY = 0f
+                            if (state.reorderEnabled) {
+                                draggingTrackKey = trackKey
+                                draggingIndex = index
+                                draggingOffsetY = 0f
+                            }
                         },
                         onDrag = ::updateDragging,
                         onDragEnd = ::endDragging,
@@ -462,6 +493,8 @@ private fun CurrentPlayingCard(
 @Composable
 private fun UpcomingTrackItem(
     track: PlaybackQueueTrack,
+    dragKey: String,
+    reorderEnabled: Boolean,
     isDragging: Boolean,
     dragOffsetY: Float,
     onClick: () -> Unit,
@@ -514,20 +547,22 @@ private fun UpcomingTrackItem(
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
-        QueueDragHandle(
-            modifier = Modifier.pointerInput(track.id) {
-                detectDragGestures(
-                    onDragStart = {
-                        onDragStart()
-                    },
-                    onDragEnd = onDragEnd,
-                    onDragCancel = onDragEnd,
-                ) { change, dragAmount ->
-                    change.consume()
-                    onDrag(dragAmount.y)
-                }
-            },
-        )
+        if (reorderEnabled) {
+            QueueDragHandle(
+                modifier = Modifier.pointerInput(dragKey) {
+                    detectDragGestures(
+                        onDragStart = {
+                            onDragStart()
+                        },
+                        onDragEnd = onDragEnd,
+                        onDragCancel = onDragEnd,
+                    ) { change, dragAmount ->
+                        change.consume()
+                        onDrag(dragAmount.y)
+                    }
+                },
+            )
+        }
     }
 }
 
@@ -586,8 +621,28 @@ private fun QueueDragHandle(
 
 private const val PlaybackQueueTrackKeyPrefix = "upcoming_"
 
-private fun playbackQueueTrackKey(trackId: String): String {
-    return "$PlaybackQueueTrackKeyPrefix$trackId"
+private fun playbackQueueTrackKey(track: PlaybackQueueTrack): String {
+    return "$PlaybackQueueTrackKeyPrefix${track.queueIndex}_${track.id}"
+}
+
+private fun PlaybackQueueTrack.withQueueIndexAfterMove(
+    fromIndex: Int,
+    toIndex: Int,
+): PlaybackQueueTrack {
+    if (queueIndex < 0 || fromIndex < 0 || toIndex < 0 || fromIndex == toIndex) {
+        return this
+    }
+    val nextQueueIndex = when {
+        queueIndex == fromIndex -> toIndex
+        fromIndex < toIndex && queueIndex in (fromIndex + 1)..toIndex -> queueIndex - 1
+        fromIndex > toIndex && queueIndex in toIndex until fromIndex -> queueIndex + 1
+        else -> queueIndex
+    }
+    return if (nextQueueIndex == queueIndex) {
+        this
+    } else {
+        copy(queueIndex = nextQueueIndex)
+    }
 }
 
 @Preview(showBackground = true, backgroundColor = 0xFFF7F7F7, widthDp = 360)
