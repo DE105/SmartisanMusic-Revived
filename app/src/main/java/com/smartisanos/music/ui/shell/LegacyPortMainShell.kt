@@ -885,7 +885,7 @@ private fun LegacyPortMainShellContent(
             },
             modifier = Modifier
                 .fillMaxSize()
-                .zIndex(2f),
+                .zIndex(4f),
         )
         if (showPlaybackPlaylistCreateDialog) {
             PlaylistNameDialog(
