@@ -80,14 +80,14 @@ internal class LegacyAlbumArtworkLoader(context: Context) {
             return
         }
 
-        imageView.setTag(R.id.legacy_album_artwork_request, request.viewTag)
+        imageView.setTag(R.id.legacy_album_artwork_request, request.jobKey)
         cache.get(request.cacheKey)?.let { cached ->
             imageView.setImageBitmap(cached)
             if (cached.width >= request.sizePx && cached.height >= request.sizePx) {
                 return
             }
         } ?: run {
-            if (previousKey != request.viewTag || imageView.drawable == null) {
+            if (previousKey != request.jobKey || imageView.drawable == null) {
                 imageView.setImageResource(fallbackRes)
             }
         }
@@ -103,11 +103,14 @@ internal class LegacyAlbumArtworkLoader(context: Context) {
             jobs.remove(request.jobKey)
             if (bitmap != null) {
                 bitmap.prepareToDraw()
-                cache.put(request.cacheKey, bitmap)
+                val cached = cache.get(request.cacheKey)
+                if (cached == null || cached.width < bitmap.width || cached.height < bitmap.height) {
+                    cache.put(request.cacheKey, bitmap)
+                }
             }
             val views = pendingViews.remove(request.jobKey).orEmpty()
             views.forEach { pendingImageView ->
-                if (pendingImageView.getTag(R.id.legacy_album_artwork_request) == request.viewTag) {
+                if (pendingImageView.getTag(R.id.legacy_album_artwork_request) == request.jobKey) {
                     if (bitmap != null) {
                         pendingImageView.setImageBitmap(bitmap)
                     } else {

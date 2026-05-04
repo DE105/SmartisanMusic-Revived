@@ -20,6 +20,9 @@ import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.RelativeLayout
 import android.widget.TextView
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -56,6 +59,13 @@ internal fun LegacyPortAlbumDetailPage(
     var currentIsPlaying by remember(browser) {
         mutableStateOf(browser?.isPlaying == true)
     }
+    var artworkBrowserState by remember {
+        mutableStateOf<LegacyAlbumArtworkBrowserState?>(null)
+    }
+
+    BackHandler(enabled = artworkBrowserState != null) {
+        artworkBrowserState = null
+    }
 
     DisposableEffect(browser) {
         val playbackBrowser = browser ?: return@DisposableEffect onDispose { }
@@ -71,61 +81,76 @@ internal fun LegacyPortAlbumDetailPage(
         }
     }
 
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            LegacyAlbumDetailRoot(context)
-        },
-        update = { root ->
-            root.bindHeader(
-                album = album,
-                enabled = album.songs.isNotEmpty(),
-                onPlayAll = {
-                    browser.replaceQueueAndPlay(album.songs)
-                },
-                onShuffle = {
-                    val shuffledSongs = album.songs.shuffled()
-                    browser.replaceQueueAndPlay(
-                        mediaItems = shuffledSongs,
-                        shuffleModeEnabled = true,
-                    )
-                },
-                onAddToPlaylist = {
-                    if (album.songs.isNotEmpty()) {
-                        onRequestAddToPlaylist(album.songs)
-                    }
-                },
-                onAddToQueue = {
-                    if (album.songs.isNotEmpty()) {
-                        onRequestAddToQueue(album.songs)
-                    }
-                },
-            )
+    Box(modifier = modifier) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { context ->
+                LegacyAlbumDetailRoot(context)
+            },
+            update = { root ->
+                root.bindHeader(
+                    album = album,
+                    enabled = album.songs.isNotEmpty(),
+                    onCoverClick = { sourceView ->
+                        artworkBrowserState = LegacyAlbumArtworkBrowserState(
+                            album = album,
+                            sourceView = sourceView,
+                        )
+                    },
+                    onPlayAll = {
+                        browser.replaceQueueAndPlay(album.songs)
+                    },
+                    onShuffle = {
+                        val shuffledSongs = album.songs.shuffled()
+                        browser.replaceQueueAndPlay(
+                            mediaItems = shuffledSongs,
+                            shuffleModeEnabled = true,
+                        )
+                    },
+                    onAddToPlaylist = {
+                        if (album.songs.isNotEmpty()) {
+                            onRequestAddToPlaylist(album.songs)
+                        }
+                    },
+                    onAddToQueue = {
+                        if (album.songs.isNotEmpty()) {
+                            onRequestAddToQueue(album.songs)
+                        }
+                    },
+                )
 
-            val adapter = root.listView.legacyAlbumTrackAdapter()
-                ?: LegacyAlbumTrackAdapter().also { adapter ->
-                    root.listView.adapter = adapter
+                val adapter = root.listView.legacyAlbumTrackAdapter()
+                    ?: LegacyAlbumTrackAdapter().also { adapter ->
+                        root.listView.adapter = adapter
+                    }
+                adapter.onMoreClick = onTrackMoreClick
+                val contentChanged = adapter.updateItems(
+                    nextItems = album.songs,
+                    nextCurrentMediaId = currentMediaId,
+                    nextCurrentIsPlaying = currentIsPlaying,
+                    nextShowTrackArtists = album.songs.hasMultipleArtists(),
+                )
+                if (!contentChanged) {
+                    adapter.updateVisibleRows(root.listView)
                 }
-            adapter.onMoreClick = onTrackMoreClick
-            val contentChanged = adapter.updateItems(
-                nextItems = album.songs,
-                nextCurrentMediaId = currentMediaId,
-                nextCurrentIsPlaying = currentIsPlaying,
-                nextShowTrackArtists = album.songs.hasMultipleArtists(),
-            )
-            if (!contentChanged) {
-                adapter.updateVisibleRows(root.listView)
-            }
-            root.listView.setOnItemClickListener { _, _, position, _ ->
-                val trackIndex = position - root.listView.headerViewsCount
-                if (trackIndex < 0) {
-                    return@setOnItemClickListener
+                root.listView.setOnItemClickListener { _, _, position, _ ->
+                    val trackIndex = position - root.listView.headerViewsCount
+                    if (trackIndex < 0) {
+                        return@setOnItemClickListener
+                    }
+                    adapter.itemAt(trackIndex) ?: return@setOnItemClickListener
+                    browser.replaceQueueAndPlay(album.songs, trackIndex)
                 }
-                adapter.itemAt(trackIndex) ?: return@setOnItemClickListener
-                browser.replaceQueueAndPlay(album.songs, trackIndex)
-            }
-        },
-    )
+            },
+        )
+        LegacyAlbumArtworkBrowserOverlay(
+            state = artworkBrowserState,
+            onDismissRequest = {
+                artworkBrowserState = null
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
 }
 
 internal fun ListView.legacyAlbumTrackAdapter(): LegacyAlbumTrackAdapter? {
@@ -166,6 +191,7 @@ private class LegacyAlbumDetailRoot(context: Context) : FrameLayout(context) {
     fun bindHeader(
         album: AlbumSummary,
         enabled: Boolean,
+        onCoverClick: (View) -> Unit,
         onPlayAll: () -> Unit,
         onShuffle: () -> Unit,
         onAddToPlaylist: () -> Unit,
@@ -175,6 +201,7 @@ private class LegacyAlbumDetailRoot(context: Context) : FrameLayout(context) {
             album = album,
             artworkLoader = artworkLoader,
             enabled = enabled,
+            onCoverClick = onCoverClick,
             onPlayAll = onPlayAll,
             onShuffle = onShuffle,
             onAddToPlaylist = onAddToPlaylist,
@@ -410,6 +437,7 @@ private class LegacyAlbumDetailHeader(context: Context) : LinearLayout(context) 
         onShuffle: () -> Unit,
         onAddToPlaylist: () -> Unit,
         onAddToQueue: () -> Unit,
+        onCoverClick: (View) -> Unit,
     ) {
         albumImage.bindLegacyAlbumArtwork(
             album = album,
@@ -417,6 +445,9 @@ private class LegacyAlbumDetailHeader(context: Context) : LinearLayout(context) 
             sizePx = resources.getDimensionPixelSize(R.dimen.gridview_item_ccontainer_height),
             artworkLoader = artworkLoader,
         )
+        albumImage.setOnClickListener { view ->
+            onCoverClick(view)
+        }
         albumName.text = album.title
         albumName.isSelected = true
         albumArtist.text = album.artist
