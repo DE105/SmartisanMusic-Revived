@@ -100,6 +100,7 @@ internal fun LegacyPlaylistDetailPage(
     onAddOrRemoveClick: () -> Unit,
     onToggleAll: (Boolean) -> Unit,
     onReorderTracks: (List<String>) -> Unit,
+    onTrackSelectionChange: (String, Boolean) -> Unit,
     onTrackClick: (MediaItem, Int) -> Unit,
     onTrackMoreClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
@@ -124,6 +125,7 @@ internal fun LegacyPlaylistDetailPage(
                 onAddOrRemoveClick = onAddOrRemoveClick,
                 onToggleAll = onToggleAll,
                 onReorderTracks = onReorderTracks,
+                onTrackSelectionChange = onTrackSelectionChange,
                 onTrackClick = onTrackClick,
                 onTrackMoreClick = onTrackMoreClick,
             )
@@ -186,6 +188,9 @@ private class LegacyPlaylistDetailRootView(context: Context) : LinearLayout(cont
             onReorderTracksCallback(trackAdapter.orderedSongMediaIds())
         },
     )
+    private val slideSelectionController = listView.legacySlideSelectionController(
+        startArea = LegacySlideSelectionStartArea.Checkbox,
+    )
     private val blankView = LegacyPlaylistBlankView(
         context = context,
         iconRes = R.drawable.blank_song,
@@ -208,7 +213,7 @@ private class LegacyPlaylistDetailRootView(context: Context) : LinearLayout(cont
             layoutAnimation = AnimationUtils.loadLayoutAnimation(context, R.anim.list_anim_layout)
             adapter = trackAdapter
             setOnTouchListener { _, event ->
-                dragController.handleListTouch(event)
+                dragController.handleListTouch(event) || slideSelectionController.handleTouch(event)
             }
         }
         listFrame.addView(listView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -234,6 +239,7 @@ private class LegacyPlaylistDetailRootView(context: Context) : LinearLayout(cont
         onAddOrRemoveClick: () -> Unit,
         onToggleAll: (Boolean) -> Unit,
         onReorderTracks: (List<String>) -> Unit,
+        onTrackSelectionChange: (String, Boolean) -> Unit,
         onTrackClick: (MediaItem, Int) -> Unit,
         onTrackMoreClick: (MediaItem) -> Unit,
     ) {
@@ -271,6 +277,18 @@ private class LegacyPlaylistDetailRootView(context: Context) : LinearLayout(cont
         } else {
             trackAdapter.updateVisibleRows(listView, animateEditMode)
         }
+        slideSelectionController.update(
+            enabled = editMode,
+            selectedKeys = selectedTrackIds,
+            keyAtPosition = { position ->
+                trackAdapter.itemAt(position)?.mediaId
+            },
+            onSelectionChange = { mediaId, selected ->
+                if ((mediaId in selectedTrackIds) != selected) {
+                    onTrackSelectionChange(mediaId, selected)
+                }
+            },
+        )
         listView.setOnItemClickListener { _, _, position, _ ->
             val item = trackAdapter.itemAt(position) ?: return@setOnItemClickListener
             onTrackClick(item, position)
@@ -405,6 +423,24 @@ private class LegacyPlaylistAddSongsRootView(context: Context) : LinearLayout(co
         if (selectedSortIndex != lastSortIndex) {
             listView.setSelection(0)
             lastSortIndex = selectedSortIndex
+        }
+        val slideSelectionController = listView.legacySlideSelectionController(
+            startArea = LegacySlideSelectionStartArea.Checkbox,
+        )
+        slideSelectionController.update(
+            enabled = true,
+            selectedKeys = selectedSongIds,
+            keyAtPosition = { position ->
+                adapter.itemAt(position)?.mediaId
+            },
+            onSelectionChange = { mediaId, selected ->
+                if ((mediaId in selectedSongIds) != selected) {
+                    onToggleSong(mediaId)
+                }
+            },
+        )
+        listView.setOnTouchListener { _, event ->
+            slideSelectionController.handleTouch(event)
         }
         quickBar.setLetters(QuickBarEx.DefaultLetters)
         quickBar.setLongPressEnabled(false)

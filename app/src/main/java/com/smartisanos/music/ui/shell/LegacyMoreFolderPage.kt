@@ -421,6 +421,25 @@ private class LegacyFolderRootView(context: Context) : FrameLayout(context) {
         if (animateEditMode) {
             scheduleHiddenRowsTransition(editMode)
         }
+        val slideSelectionController = listView.legacySlideSelectionController(
+            startArea = LegacySlideSelectionStartArea.Checkbox,
+        )
+        slideSelectionController.update(
+            enabled = editMode,
+            selectedKeys = selectedDirectoryKeys,
+            keyAtPosition = { position ->
+                directoryAdapter.itemAt(position)?.key
+            },
+            onSelectionChange = { directoryKey, selected ->
+                if ((directoryKey in selectedDirectoryKeys) != selected) {
+                    displayDirectories.firstOrNull { entry -> entry.key == directoryKey }
+                        ?.let(onDirectoryClick)
+                }
+            },
+        )
+        listView.setOnTouchListener { _, event ->
+            slideSelectionController.handleTouch(event)
+        }
         listView.setOnItemClickListener { _, _, position, _ ->
             val entry = directoryAdapter.itemAt(position) ?: return@setOnItemClickListener
             onDirectoryClick(entry)

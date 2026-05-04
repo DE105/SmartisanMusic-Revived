@@ -240,6 +240,25 @@ private class LegacyPlaylistRootView(context: Context) : FrameLayout(context) {
                 animateEditMode = false,
             )
         }
+        val slideSelectionController = listView.legacySlideSelectionController(
+            startArea = LegacySlideSelectionStartArea.Checkbox,
+        )
+        slideSelectionController.update(
+            enabled = editMode,
+            selectedKeys = selectedPlaylistIds,
+            keyAtPosition = { position ->
+                adapter.itemAt(position)?.id
+            },
+            onSelectionChange = { playlistId, selected ->
+                if ((playlistId in selectedPlaylistIds) != selected) {
+                    playlists.firstOrNull { playlist -> playlist.id == playlistId }
+                        ?.let(onPlaylistClick)
+                }
+            },
+        )
+        listView.setOnTouchListener { _, event ->
+            slideSelectionController.handleTouch(event)
+        }
         listView.setOnItemClickListener { _, _, position, _ ->
             if (position >= adapter.count) {
                 return@setOnItemClickListener

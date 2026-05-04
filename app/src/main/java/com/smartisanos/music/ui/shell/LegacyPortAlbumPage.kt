@@ -215,6 +215,45 @@ private fun LegacyPortAlbumOverviewPage(
             if (!gridContentChanged) {
                 gridAdapter.updateVisibleRows(root.gridView)
             }
+            val listSlideSelectionController = root.listView.legacySlideSelectionController(
+                startArea = LegacySlideSelectionStartArea.Checkbox,
+            )
+            listSlideSelectionController.update(
+                enabled = editMode,
+                selectedKeys = selectedAlbumIds,
+                keyAtPosition = { position ->
+                    listAdapter.itemAt(position)?.id
+                },
+                onSelectionChange = { albumId, selected ->
+                    if ((albumId in selectedAlbumIds) != selected) {
+                        onToggleAlbumSelected(albumId)
+                    }
+                },
+            )
+            root.listView.setOnTouchListener { _, event ->
+                listSlideSelectionController.handleTouch(event)
+            }
+            val gridSlideSelectionController = root.gridView.legacySlideSelectionController(
+                startArea = LegacySlideSelectionStartArea.FullItem,
+                activation = LegacySlideSelectionActivation.HorizontalBeforeVertical,
+            )
+            gridSlideSelectionController.update(
+                enabled = editMode,
+                selectedKeys = selectedAlbumIds,
+                keyAtPosition = { position ->
+                    gridAdapter.itemAt(position)?.id
+                },
+                onSelectionChange = { albumId, selected ->
+                    if ((albumId in selectedAlbumIds) != selected) {
+                        onToggleAlbumSelected(albumId)
+                    }
+                },
+                startArea = LegacySlideSelectionStartArea.FullItem,
+                activation = LegacySlideSelectionActivation.HorizontalBeforeVertical,
+            )
+            root.gridView.setOnTouchListener { _, event ->
+                gridSlideSelectionController.handleTouch(event)
+            }
 
             root.listView.setOnItemClickListener { _, _, position, _ ->
                 val album = listAdapter.itemAt(position) ?: return@setOnItemClickListener

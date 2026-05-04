@@ -59,7 +59,9 @@ import com.smartisanos.music.ui.loved.buildLovedSongsPlayRequest
 import com.smartisanos.music.ui.loved.buildLovedSongsShuffleRequest
 import com.smartisanos.music.ui.loved.sortLovedSongEntries
 import com.smartisanos.music.ui.shell.LegacyAlbumArtworkLoader
+import com.smartisanos.music.ui.shell.LegacySlideSelectionStartArea
 import com.smartisanos.music.ui.shell.titlebar.LegacyPortTitleBarShadow
+import com.smartisanos.music.ui.shell.legacySlideSelectionController
 import com.smartisanos.music.ui.shell.songs.LegacyTitleNormalizer
 import com.smartisanos.music.ui.widgets.EditableLayout
 import com.smartisanos.music.ui.widgets.StretchTextView
@@ -286,6 +288,24 @@ internal fun LegacyPortLovedSongsPage(
                             listView.setTag(R.id.text, null)
                         }
                         listView.setTag(R.id.list, browser)
+                    }
+                    val slideSelectionController = listView.legacySlideSelectionController(
+                        startArea = LegacySlideSelectionStartArea.Checkbox,
+                    )
+                    slideSelectionController.update(
+                        enabled = editMode,
+                        selectedKeys = selectedMediaIds,
+                        keyAtPosition = { position ->
+                            adapter.entryAt(position)?.mediaItem?.mediaId
+                        },
+                        onSelectionChange = { mediaId, selected ->
+                            if ((mediaId in selectedMediaIds) != selected) {
+                                selectedMediaIds = selectedMediaIds.toggle(mediaId)
+                            }
+                        },
+                    )
+                    listView.setOnTouchListener { _, event ->
+                        slideSelectionController.handleTouch(event)
                     }
                     listView.setOnItemClickListener { _, _, position, _ ->
                         val entry = adapter.entryAt(position) ?: return@setOnItemClickListener

@@ -22,6 +22,8 @@ import androidx.media3.common.Player
 import com.smartisanos.music.R
 import com.smartisanos.music.playback.LocalPlaybackBrowser
 import com.smartisanos.music.playback.replaceQueueAndPlay
+import com.smartisanos.music.ui.shell.LegacySlideSelectionStartArea
+import com.smartisanos.music.ui.shell.legacySlideSelectionController
 import kotlin.random.Random
 import smartisanos.widget.ActionButtonGroup
 import smartisanos.widget.letters.QuickBarEx
@@ -162,6 +164,24 @@ internal fun LegacyPortSongsPage(
                     listView.setTag(R.id.text, null)
                 }
                 listView.setTag(R.id.list, browser)
+            }
+            val slideSelectionController = listView.legacySlideSelectionController(
+                startArea = LegacySlideSelectionStartArea.Checkbox,
+            )
+            slideSelectionController.update(
+                enabled = editMode,
+                selectedKeys = selectedSongIds,
+                keyAtPosition = { position ->
+                    adapter.itemAt(position)?.mediaId
+                },
+                onSelectionChange = { mediaId, selected ->
+                    if ((mediaId in selectedSongIds) != selected) {
+                        onToggleSongSelected(mediaId)
+                    }
+                },
+            )
+            listView.setOnTouchListener { _, event ->
+                slideSelectionController.handleTouch(event)
             }
             root.findViewById<QuickBarEx>(R.id.main_quickbar)?.apply {
                 visibility = if (showQuickBar) View.VISIBLE else View.GONE

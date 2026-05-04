@@ -348,6 +348,11 @@ internal fun LegacyPortPlaylistPage(
                                 playlistRepository.reorderVisibleMediaIds(playlistId, orderedMediaIds)
                             }
                         },
+                        onTrackSelectionChange = { mediaId, selected ->
+                            if ((mediaId in selectedTrackIds) != selected) {
+                                selectedTrackIds = selectedTrackIds.togglePlaylistSelection(mediaId)
+                            }
+                        },
                         onTrackClick = { item, index ->
                             if (detailEditMode) {
                                 selectedTrackIds = selectedTrackIds.togglePlaylistSelection(item.mediaId)
