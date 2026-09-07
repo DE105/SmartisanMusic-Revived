@@ -66,8 +66,6 @@ Smartisan OS 已经退出历史舞台，本项目因此以锤子音乐 8.1.0 为
 
 ## 真机截图
 
-以下截图来自此前已校准的版本，用于展示应用的视觉设计。
-
 <p align="center">
   <img src="docs/images/screenshot-playback.jpg" width="200" alt="锤子音乐播放页面" />
   <img src="docs/images/screenshot-lyrics.jpg" width="200" alt="锤子音乐歌词页面" />

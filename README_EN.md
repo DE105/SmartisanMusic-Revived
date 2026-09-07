@@ -66,8 +66,6 @@ The final app manifest does not contain the `INTERNET` permission. The app does 
 
 ## Screenshots
 
-These screenshots are from an earlier calibrated build and serve as visual references.
-
 <p align="center">
   <img src="docs/images/screenshot-playback.jpg" width="200" alt="Smartisan Music playback screen" />
   <img src="docs/images/screenshot-lyrics.jpg" width="200" alt="Smartisan Music lyrics screen" />
