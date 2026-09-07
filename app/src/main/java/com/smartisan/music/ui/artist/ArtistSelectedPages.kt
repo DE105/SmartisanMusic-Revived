@@ -51,9 +51,6 @@ internal fun SelectedArtistPage(
     browser: Player?,
     albumViewMode: AlbumViewMode,
     modifier: Modifier = Modifier,
-    predictiveBackProgress: Float? = null,
-    predictiveBackExitConsumed: Boolean = false,
-    onPredictiveBackExitConsumedReset: (() -> Unit)? = null,
     onTargetChanged: (ArtistTarget?) -> Unit,
     onRequestAddToPlaylist: (List<MediaItem>) -> Unit,
     onRequestAddToQueue: (List<MediaItem>) -> Unit,
@@ -93,9 +90,6 @@ internal fun SelectedArtistPage(
         secondaryKey = nestedTarget,
         modifier = modifier,
         label = "selected artist transition",
-        predictiveBackProgress = predictiveBackProgress,
-        predictiveBackExitConsumed = predictiveBackExitConsumed,
-        onPredictiveBackExitConsumedReset = onPredictiveBackExitConsumedReset,
         primaryContent = {
             ArtistAlbumsPage(
                 artist = artist,

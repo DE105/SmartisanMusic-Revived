@@ -378,7 +378,6 @@ private fun PlaybackCoverPage(
             }
 
     val needleAnimatable = remember { Animatable(targetNeedleRotation) }
-    var prevMediaId by remember { mutableStateOf(mediaId) }
     val needleSeekDragging = coverDragMode == CoverDragMode.NeedleSeek
     var needleLiftHeldAfterSeek by remember { mutableStateOf(false) }
 
@@ -401,10 +400,6 @@ private fun PlaybackCoverPage(
         )
 
     LaunchedEffect(mediaId, targetNeedleRotation, needleSeekDragging) {
-        if (prevMediaId != mediaId) {
-            prevMediaId = mediaId
-            return@LaunchedEffect
-        }
         if (needleSeekDragging) {
             needleAnimatable.snapTo(targetNeedleRotation)
         } else {

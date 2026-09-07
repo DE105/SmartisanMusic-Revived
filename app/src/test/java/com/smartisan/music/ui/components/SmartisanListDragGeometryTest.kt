@@ -47,7 +47,7 @@ class SmartisanListDragGeometryTest {
 
     @Test
     fun floatingRowPreservesPointerOffsetAndBothShadowBounds() {
-        assertEquals(76f, smartisanDragFloatingY(100.9f, 24, 300, 60, 4, 6), 0f)
+        assertEquals(76.9f, smartisanDragFloatingY(100.9f, 24, 300, 60, 4, 6), .0001f)
         assertEquals(-4f, smartisanDragFloatingY(-100f, 24, 300, 60, 4, 6), 0f)
         assertEquals(230f, smartisanDragFloatingY(500f, 24, 300, 60, 4, 6), 0f)
         assertEquals(-4f, smartisanDragFloatingY(500f, 24, 40, 60, 4, 6), 0f)

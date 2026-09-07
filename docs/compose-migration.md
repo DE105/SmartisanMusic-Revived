@@ -13,9 +13,9 @@
 
 | 区域 | 当前实现 | 保留的主要行为 |
 | --- | --- | --- |
-| 主壳与导航 | [ui/shell](../app/src/main/java/com/smartisan/music/ui/shell/) | Tab 切换、底部播放条、导航长按编辑、标题栈、横向子页、纵向覆盖层、预测性返回 |
+| 主壳与导航 | [ui/shell](../app/src/main/java/com/smartisan/music/ui/shell/) | Tab 切换、底部播放条、导航长按编辑、标题栈、横向子页与整页覆盖层；9 月 7 日改为普通返回 |
 | 歌曲、收藏与播放列表 | [ui/songs](../app/src/main/java/com/smartisan/music/ui/songs/)、[ui/loved](../app/src/main/java/com/smartisan/music/ui/loved/)、[ui/playlist](../app/src/main/java/com/smartisan/music/ui/playlist/) | 排序分组、多选滑选、边缘自动滚动、滑动删除、播放列表管理与歌曲操作 |
-| 专辑与艺术家 | [ui/album](../app/src/main/java/com/smartisan/music/ui/album/)、[ui/artist](../app/src/main/java/com/smartisan/music/ui/artist/)、[ui/library](../app/src/main/java/com/smartisan/music/ui/library/) | 列表/网格、封面切换轨迹、歌曲详情、艺术家子页与播放顺序 |
+| 专辑与艺术家 | [ui/album](../app/src/main/java/com/smartisan/music/ui/album/)、[ui/artist](../app/src/main/java/com/smartisan/music/ui/artist/)、[ui/library](../app/src/main/java/com/smartisan/music/ui/library/) | 列表/网格、歌曲详情、艺术家子页与播放顺序；布局切换动效见下方后续调整 |
 | 文件夹与流派 | [ui/folder](../app/src/main/java/com/smartisan/music/ui/folder/)、[ui/genre](../app/src/main/java/com/smartisan/music/ui/genre/) | 文件夹隐藏/显示、刷新、系统授权删除、详情播放与空态 |
 | 搜索、更多与设置 | [ui/search](../app/src/main/java/com/smartisan/music/ui/search/)、[ui/more](../app/src/main/java/com/smartisan/music/ui/more/)、[ui/settings](../app/src/main/java/com/smartisan/music/ui/settings/) | 搜索历史和分组结果、动态入口、设置页栈、主题/图标选择及现有设置存储 |
 | 播放页 | [ui/playback](../app/src/main/java/com/smartisan/music/ui/playback/) | 黑胶/歌词舞台、唱针、搓碟、爆豆音、进度/音量、队列重排、评分、音效和睡眠滚轮 |
@@ -23,7 +23,7 @@
 
 字母快捷栏保留竖向 A–Z/# 定位和可横向拉出的字母网格，沿用原拖动判定、释放方向与动画。短屏压缩只改变显示字母，触摸仍能定位全部分组；修复了原实现极短高度下步长溢出的问题。
 
-资源 Painter 在配置变化时重新解析资源，维护 Drawable 状态和回调，保留 ColorStateList、9-patch 拉伸区及分组阴影。标题绘制使用公开 `TextPaint` / 文字布局 API 维持原伪粗体和字体基线；睡眠滚轮使用公开 `Scroller` 计算运动。这些对象在 Compose 的绘制和手势流程中工作，不创建 View 页面。
+资源 Painter 在配置变化时重新解析资源，维护 Drawable 状态和回调，保留 ColorStateList、9-patch 拉伸区及分组阴影。标题绘制使用公开 `TextPaint` / 文字布局 API 维持原伪粗体和字体基线；睡眠滚轮使用 Compose 动画计算运动。这些对象在 Compose 的绘制和手势流程中工作，不创建 View 页面。
 
 封面加载器保留原受限 LRU 和解析优先级，增加 Compose 使用的缓存读取与 suspend 入口。同一加载器内相同请求合并，已有缓存先显示，解析在 IO 线程运行，所属页面离开后取消任务。
 
@@ -75,9 +75,9 @@ adb shell am instrument -w app.smartisanmusic.revived.test/androidx.test.runner.
 
 | 范围 | 待验收内容 |
 | --- | --- |
-| 导航与页面栈 | 快速切 Tab、长按导航排序/固定、更多入口更新、子页进退、返回手势取消/完成、播放页展开/收起与返回后的滚动位置 |
+| 导航与页面栈 | 快速切 Tab、长按导航排序/固定、更多入口更新、子页进退、系统返回与标题返回、播放页展开/收起与返回后的滚动位置 |
 | 歌曲与快捷栏 | 排序/分组切换、竖向字母定位、横向拉出和收起网格、短屏字母压缩、多选范围回退、跨标题/页脚自动滚动、滑删与垂直滚动仲裁 |
-| 专辑与艺术家 | 列表/网格反复切换、半行滚动下封面飞行轨迹、封面放大/收起、缺失或失效封面、艺术家全部歌曲/专辑页栈和播放顺序 |
+| 专辑与艺术家 | 列表/网格反复切换及中断、半行滚动后的条目定位、封面放大/收起、缺失或失效封面、艺术家全部歌曲/专辑页栈和播放顺序 |
 | 文件夹与流派 | 首次加载、空态、隐藏/显示眼睛动画、编辑态进退、排除项持久化、刷新、系统删除确认/取消及权限撤销 |
 | 收藏、播放列表与搜索 | 收藏更新、列表创建/重命名/删除、添加/移除歌曲、多选和排序、搜索输入/清除/历史、结果详情及 IME 避让 |
 | 播放与队列 | 播放/暂停/切歌、随机/循环、seek、队列展开及跨屏拖拽、当前项标记、队列更新后索引和持久化一致性 |
@@ -106,6 +106,20 @@ adb shell am instrument -w app.smartisanmusic.revived.test/androidx.test.runner.
 剩余 Lint 项涉及版本/target 更新建议、已有 Manifest 声明、像素与图片配置、KTX 建议及两个原有状态装箱提示。6 个未直接引用的开关位图仍是夜间资源生成脚本的必要输入。没有通过禁用检查掩盖 Compose 问题；原 `AppCompatCustomView` 全局豁免已移除。
 
 本轮真机界面检查确认歌曲页和艺术家页列表、更多与设置入口恢复布局；设置输入弹窗可避开键盘。截图与界面树仅留作本机临时诊断，不将设备上的实际媒体信息写入仓库。37 项设备测试全部执行通过，参考测试使用合成数据；这不等同于上方全部页面、听感、触觉和设备组合已完成 1:1 验收。
+
+## 后续动效优化
+
+2026-09-06 按用户授权优化动效：列表/网格取消旧坐标驱动的逐封面飞行，改用 90ms 淡出与 180ms 淡入；切换从当前透明度继续，避免快速反向时重置闪跳。移除与布局切换叠加的列表入场动画。拖拽保留小数指针坐标，使用无回弹弹簧让位，修复提交后旧位移再次回零、取消时空位延迟归位，以及状态失效后停留在 settling 的问题。
+
+新增 3 项专辑切换及 2 项拖拽设备回归用例；本轮未连接到 ADB 设备，不能沿用前次 37 项真机通过结果证明本轮动效已验收。需要在设备上检查快速反复切换、滚动中切换、拖拽释放/取消，以及关闭系统动画时的最终状态。
+
+本轮执行 `testDebugUnitTest assembleDebug lintDebug assembleDebugAndroidTest assembleRelease` 全部通过：171 项单元测试零失败，设备测试 APK 包含 42 项用例，Lint 为 0 错误、62 条警告和 2 条提示。新增设备用例只完成编译，尚未运行。
+
+动效 API 于 2026-09-06 查阅 [Compose 动画指南](https://developer.android.com/develop/ui/compose/animation/quick-guide) 和 [动画组件与修饰符](https://developer.android.com/develop/ui/compose/animation/composables-modifiers)。采用现有依赖提供的 `Animatable`、`spring` 与 `requestScrollToItem`，未新增依赖。
+
+同日继续核查并修复页面/标题中断、预测性返回、设置退出生命周期、弹层透明度、资料库入场、开关快速反向和唱盘/睡眠滚轮的时间驱动问题。范围、依据及设备待测项见 [动效核查记录](ui-motion-audit.md)；前次真机测试结果不代表这些后续修改已经实测。
+
+2026-09-07：用户要求恢复专辑原有动效、取消预测性返回，并参考便签统一标题过渡。已替换上面的整页淡入淡出方案，清除预测性返回实现；当前实现与验证边界以 [统一导航动效](navigation-motion.md) 为准。
 
 ## 官方资料
 

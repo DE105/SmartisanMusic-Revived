@@ -16,12 +16,6 @@ internal data class SelectedArtistState(
 internal fun ArtistTitleStack(
     selectedTarget: ArtistTarget?,
     modifier: Modifier = Modifier,
-    rootPredictiveBackProgress: Float? = null,
-    rootPredictiveBackExitConsumed: Boolean = false,
-    onRootPredictiveBackExitConsumedReset: (() -> Unit)? = null,
-    nestedPredictiveBackProgress: Float? = null,
-    nestedPredictiveBackExitConsumed: Boolean = false,
-    onNestedPredictiveBackExitConsumedReset: (() -> Unit)? = null,
     content: @Composable (ArtistTarget?, Modifier) -> Unit,
 ) {
     val titleEntry = selectedTarget?.toTitleStackEntry()
@@ -29,9 +23,6 @@ internal fun ArtistTitleStack(
         secondaryKey = titleEntry,
         modifier = modifier,
         label = "artist title transition",
-        predictiveBackProgress = rootPredictiveBackProgress,
-        predictiveBackExitConsumed = rootPredictiveBackExitConsumed,
-        onPredictiveBackExitConsumedReset = onRootPredictiveBackExitConsumedReset,
         primaryContent = {
             content(null, Modifier.fillMaxSize())
         },
@@ -48,9 +39,6 @@ internal fun ArtistTitleStack(
                         secondaryKey = nestedTarget,
                         modifier = Modifier.fillMaxSize(),
                         label = "artist nested title transition",
-                        predictiveBackProgress = nestedPredictiveBackProgress,
-                        predictiveBackExitConsumed = nestedPredictiveBackExitConsumed,
-                        onPredictiveBackExitConsumedReset = onNestedPredictiveBackExitConsumedReset,
                         primaryContent = {
                             content(
                                 ArtistTarget.Albums(

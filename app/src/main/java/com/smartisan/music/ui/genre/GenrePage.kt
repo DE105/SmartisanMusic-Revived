@@ -31,9 +31,6 @@ import com.smartisan.music.ui.library.libraryListEntrance
 import com.smartisan.music.ui.library.libraryTexture
 import com.smartisan.music.ui.library.rememberLibraryListEntrance
 import com.smartisan.music.ui.shell.PageStackTransition
-import com.smartisan.music.ui.shell.PredictiveBackHandler
-import com.smartisan.music.ui.shell.PredictiveBackState
-import com.smartisan.music.ui.shell.rememberPredictiveBackState
 import com.smartisan.music.ui.shell.titlebar.TitleBarShadow
 import com.smartisan.music.ui.shell.titlebar.TitleBarTransition
 
@@ -44,7 +41,6 @@ internal fun GenrePage(
     hiddenMediaIds: Set<String>,
     libraryLoaded: Boolean,
     onClose: (() -> Unit)?,
-    closePredictiveBackState: PredictiveBackState?,
     onTrackMoreClick: (MediaItem) -> Unit,
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -77,7 +73,6 @@ internal fun GenrePage(
             }
         }
     val selectedGenre = genres.firstOrNull { it.id == selectedGenreId }
-    val detailPredictiveBackState = rememberPredictiveBackState()
 
     LaunchedEffect(active, libraryLoaded, visibleItems) {
         if (!active) {
@@ -99,19 +94,10 @@ internal fun GenrePage(
         }
     }
 
-    PredictiveBackHandler(
-        enabled = active && selectedGenre != null,
-        state = detailPredictiveBackState,
-    ) {
+    BackHandler(enabled = active && selectedGenre != null) {
         selectedGenreId = null
     }
-    if (closePredictiveBackState != null && onClose != null) {
-        PredictiveBackHandler(
-            enabled = active && selectedGenre == null,
-            state = closePredictiveBackState,
-            onBack = onClose,
-        )
-    } else if (onClose != null) {
+    if (onClose != null) {
         BackHandler(enabled = active && selectedGenre == null) {
             onClose()
         }
@@ -128,9 +114,6 @@ internal fun GenrePage(
                 secondaryKey = selectedGenre,
                 modifier = Modifier.fillMaxWidth().height(titleAreaHeight),
                 label = "genre title stack",
-                predictiveBackProgress = detailPredictiveBackState.progress,
-                predictiveBackExitConsumed = detailPredictiveBackState.exitConsumed,
-                onPredictiveBackExitConsumedReset = detailPredictiveBackState::reset,
                 primaryContent = {
                     GenreTitleBar(
                         modifier = Modifier.fillMaxSize(),
@@ -152,9 +135,6 @@ internal fun GenrePage(
                 secondaryKey = selectedGenre,
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 label = "genre detail stack",
-                predictiveBackProgress = detailPredictiveBackState.progress,
-                predictiveBackExitConsumed = detailPredictiveBackState.exitConsumed,
-                onPredictiveBackExitConsumedReset = detailPredictiveBackState::reset,
                 primaryContent = {
                     GenreRootPage(
                         active = active,

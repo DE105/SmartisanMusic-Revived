@@ -57,8 +57,6 @@ import com.smartisan.music.ui.library.libraryListEntrance
 import com.smartisan.music.ui.library.libraryTexture
 import com.smartisan.music.ui.library.rememberAlbumArtworkLoader
 import com.smartisan.music.ui.library.rememberLibraryListEntrance
-import com.smartisan.music.ui.shell.PredictiveBackHandler
-import com.smartisan.music.ui.shell.PredictiveBackState
 import com.smartisan.music.ui.songs.SmartisanPlayingTitle
 import com.smartisan.music.ui.songs.SongPlaybackState
 import com.smartisan.music.ui.songs.SongTitleNormalizer
@@ -74,7 +72,6 @@ internal fun LovedSongsPage(
     hiddenMediaIds: Set<String>,
     libraryLoaded: Boolean,
     onClose: (() -> Unit)?,
-    closePredictiveBackState: PredictiveBackState?,
     onTrackMoreClick: (MediaItem) -> Unit,
     onRemoveFavoriteMediaIds: (Set<String>) -> Unit,
     modifier: Modifier = Modifier,
@@ -120,9 +117,7 @@ internal fun LovedSongsPage(
         selectedIds = if (selected) selectedIds + key else selectedIds - key
     }
     BackHandler(active && editMode) { exitEdit() }
-    if (closePredictiveBackState != null && onClose != null) {
-        PredictiveBackHandler(active && !editMode, closePredictiveBackState, onClose)
-    } else if (onClose != null) BackHandler(active && !editMode) { onClose() }
+    if (onClose != null) BackHandler(active && !editMode) { onClose() }
     if (!active) return
     val density = LocalDensity.current
     val touchSlop = LocalViewConfiguration.current.touchSlop

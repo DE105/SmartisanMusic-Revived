@@ -11,9 +11,9 @@ import androidx.compose.ui.res.integerResource
 import com.smartisan.music.R
 
 @Stable
-internal class LibraryListEntrance(val duration: Int) {
+internal class LibraryListEntrance(val duration: Int, initiallyComplete: Boolean = false) {
     val elapsed = Animatable(0f)
-    var complete by mutableStateOf(true)
+    var complete by mutableStateOf(initiallyComplete)
 }
 
 internal fun Modifier.libraryListEntrance(state: LibraryListEntrance, order: () -> Int): Modifier =
@@ -27,7 +27,7 @@ internal fun Modifier.libraryListEntrance(state: LibraryListEntrance, order: () 
         alpha = fraction * fraction
     }
 
-/** The existing list_anim_layout/fade_in sequence: 30 ms, 20% stagger, quadratic acceleration. */
+/** Enter once per mounted page; live metadata and ordering updates must not flash every row. */
 @Composable
 internal fun rememberLibraryListEntrance(
     contentKey: Any?,
@@ -35,21 +35,22 @@ internal fun rememberLibraryListEntrance(
     visibleCount: () -> Int,
 ): LibraryListEntrance {
     val duration = integerResource(R.integer.item_flip)
-    val state = remember(duration) { LibraryListEntrance(duration) }
     val preview = LocalInspectionMode.current
-    var lastKey by remember { mutableStateOf<Any?>(null) }
-    var initialized by remember { mutableStateOf(false) }
-    LaunchedEffect(contentKey, active) {
-        if (!active || preview || (initialized && contentKey == lastKey && state.complete))
+    // Establish opacity before the first draw; LaunchedEffect is too late to hide an opaque frame.
+    val state =
+        remember(duration, preview) { LibraryListEntrance(duration, initiallyComplete = preview) }
+    var initialized by remember(state) { mutableStateOf(false) }
+    LaunchedEffect(state, contentKey, active, preview) {
+        if (preview || initialized) {
+            state.complete = true
             return@LaunchedEffect
-        state.complete = false
-        state.elapsed.snapTo(0f)
+        }
+        if (!active) return@LaunchedEffect
+        initialized = true
         withFrameNanos {}
         val total = duration + (visibleCount() - 1).coerceAtLeast(0) * (duration * .2f).toInt()
         state.elapsed.animateTo(total.toFloat(), tween(total, easing = LinearEasing))
         state.complete = true
-        lastKey = contentKey
-        initialized = true
     }
     return state
 }

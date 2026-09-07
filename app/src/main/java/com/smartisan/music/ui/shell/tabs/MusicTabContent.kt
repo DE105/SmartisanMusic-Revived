@@ -30,7 +30,6 @@ import com.smartisan.music.ui.loved.LovedSongsPage
 import com.smartisan.music.ui.more.MorePage
 import com.smartisan.music.ui.navigation.MusicDestination
 import com.smartisan.music.ui.playlist.PlaylistPage
-import com.smartisan.music.ui.shell.PredictiveBackState
 import com.smartisan.music.ui.songs.SongsPage
 
 @Composable
@@ -47,18 +46,8 @@ internal fun MusicTabContent(
     albumEditMode: Boolean,
     selectedAlbumId: String?,
     selectedAlbumIds: Set<String>,
-    albumPredictiveBackProgress: Float?,
-    albumPredictiveBackExitConsumed: Boolean,
-    onAlbumPredictiveBackExitConsumedReset: () -> Unit,
     artistAlbumViewMode: AlbumViewMode,
     selectedArtistTarget: ArtistTarget?,
-    artistRootPredictiveBackProgress: Float?,
-    artistRootPredictiveBackExitConsumed: Boolean,
-    onArtistRootPredictiveBackExitConsumedReset: () -> Unit,
-    artistNestedPredictiveBackProgress: Float?,
-    artistNestedPredictiveBackExitConsumed: Boolean,
-    onArtistNestedPredictiveBackExitConsumedReset: () -> Unit,
-    moreDestinationPredictiveBackState: PredictiveBackState,
     modifier: Modifier = Modifier,
     playbackBarOverlayHeight: Dp = 0.dp,
     hiddenMediaIds: Set<String>,
@@ -133,9 +122,6 @@ internal fun MusicTabContent(
             editMode = albumEditMode,
             selectedAlbumId = selectedAlbumId,
             selectedAlbumIds = selectedAlbumIds,
-            predictiveBackProgress = albumPredictiveBackProgress,
-            predictiveBackExitConsumed = albumPredictiveBackExitConsumed,
-            onPredictiveBackExitConsumedReset = onAlbumPredictiveBackExitConsumedReset,
             hiddenMediaIds = hiddenMediaIds,
             onAlbumSelected = onAlbumSelected,
             onAlbumSelectionChange = onAlbumSelectionChange,
@@ -158,14 +144,6 @@ internal fun MusicTabContent(
                     active = true,
                     selectedTarget = selectedArtistTarget,
                     albumViewMode = artistAlbumViewMode,
-                    rootPredictiveBackProgress = artistRootPredictiveBackProgress,
-                    rootPredictiveBackExitConsumed = artistRootPredictiveBackExitConsumed,
-                    onRootPredictiveBackExitConsumedReset =
-                        onArtistRootPredictiveBackExitConsumedReset,
-                    nestedPredictiveBackProgress = artistNestedPredictiveBackProgress,
-                    nestedPredictiveBackExitConsumed = artistNestedPredictiveBackExitConsumed,
-                    onNestedPredictiveBackExitConsumedReset =
-                        onArtistNestedPredictiveBackExitConsumedReset,
                     hiddenMediaIds = hiddenMediaIds,
                     onTargetChanged = onArtistTargetChanged,
                     onRequestAddToPlaylist = onRequestAddToPlaylist,
@@ -184,8 +162,6 @@ internal fun MusicTabContent(
                     onAddModeActiveChanged = onPlaylistAddModeActiveChanged,
                     onSearchClick = onSearchClick,
                     onClose = onReturnToMore.takeIf { presentedFromMore },
-                    closePredictiveBackState =
-                        moreDestinationPredictiveBackState.takeIf { presentedFromMore },
                     modifier = activePageModifier,
                 )
             MusicDestination.More ->
@@ -217,8 +193,6 @@ internal fun MusicTabContent(
                     hiddenMediaIds = hiddenMediaIds,
                     libraryLoaded = libraryLoaded,
                     onClose = onReturnToMore.takeIf { presentedFromMore },
-                    closePredictiveBackState =
-                        moreDestinationPredictiveBackState.takeIf { presentedFromMore },
                     onTrackMoreClick = onLibraryTrackMoreClick,
                     onSearchClick = onSearchClick,
                     modifier = activePageModifier,
@@ -231,8 +205,6 @@ internal fun MusicTabContent(
                     hiddenMediaIds = hiddenMediaIds,
                     libraryLoaded = libraryLoaded,
                     onClose = onReturnToMore.takeIf { presentedFromMore },
-                    closePredictiveBackState =
-                        moreDestinationPredictiveBackState.takeIf { presentedFromMore },
                     onTrackMoreClick = onLovedSongsTrackMoreClick,
                     onRemoveFavoriteMediaIds = onRemoveFavoriteMediaIds,
                     modifier = activePageModifier,
@@ -243,8 +215,6 @@ internal fun MusicTabContent(
                     libraryRefreshVersion = libraryRefreshVersion,
                     libraryRefreshing = libraryRefreshing,
                     onClose = onReturnToMore.takeIf { presentedFromMore },
-                    closePredictiveBackState =
-                        moreDestinationPredictiveBackState.takeIf { presentedFromMore },
                     onRefreshLibrary = onRefreshLibrary,
                     onMediaIdsHidden = onMediaIdsHidden,
                     onRequestDeleteMediaIds = onRequestDeleteMediaIds,

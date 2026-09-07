@@ -2,6 +2,7 @@ package com.smartisan.music.ui.shell
 
 import android.graphics.Bitmap
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -291,10 +292,6 @@ private fun MusicAppShellContent(
             value = peekArtworkBitmap(mediaItem) ?: value
             value = loadArtworkBitmap(context.applicationContext, mediaItem)
         }
-    val albumPredictiveBackState = rememberPredictiveBackState()
-    val artistRootPredictiveBackState = rememberPredictiveBackState()
-    val artistNestedPredictiveBackState = rememberPredictiveBackState()
-    val moreDestinationPredictiveBackState = rememberPredictiveBackState()
     val playbackBarRequestedVisible = snapshot.mediaItem != null
     val playbackBarHeight = 67.dp
     var playbackBarComposed by remember { mutableStateOf(false) }
@@ -554,25 +551,21 @@ private fun MusicAppShellContent(
         dismissTrackActions()
     }
 
-    PredictiveBackHandler(
-        enabled = currentDestination == MusicDestination.Album && selectedAlbumId != null,
-        state = albumPredictiveBackState,
-    ) {
+    BackHandler(enabled = currentDestination == MusicDestination.Album && selectedAlbumId != null) {
         closeAlbumDetail()
     }
 
     val selectedArtistParentTarget = selectedArtistTarget?.parentTarget()
-    PredictiveBackHandler(
+    BackHandler(
         enabled =
             currentDestination == MusicDestination.Artist &&
                 selectedArtistTarget != null &&
-                selectedArtistParentTarget == null,
-        state = artistRootPredictiveBackState,
+                selectedArtistParentTarget == null
     ) {
         closeArtistDetail()
     }
 
-    PredictiveBackHandler(
+    BackHandler(
         enabled =
             presentedFromMore &&
                 when (currentDestination) {
@@ -580,17 +573,15 @@ private fun MusicAppShellContent(
                     MusicDestination.Album -> selectedAlbumId == null && !albumEditMode
                     MusicDestination.Artist -> selectedArtistTarget == null
                     else -> false
-                },
-        state = moreDestinationPredictiveBackState,
+                }
     ) {
         returnToMore()
     }
-    PredictiveBackHandler(
+    BackHandler(
         enabled =
             currentDestination == MusicDestination.Artist &&
                 selectedArtistTarget != null &&
-                selectedArtistParentTarget != null,
-        state = artistNestedPredictiveBackState,
+                selectedArtistParentTarget != null
     ) {
         closeArtistDetail()
     }
@@ -734,11 +725,6 @@ private fun MusicAppShellContent(
                                         secondaryKey = selectedAlbumTitle,
                                         modifier = Modifier.fillMaxWidth().height(titleAreaHeight),
                                         label = "album title transition",
-                                        predictiveBackProgress = albumPredictiveBackState.progress,
-                                        predictiveBackExitConsumed =
-                                            albumPredictiveBackState.exitConsumed,
-                                        onPredictiveBackExitConsumedReset =
-                                            albumPredictiveBackState::reset,
                                         primaryContent = {
                                             titleBarContent(null, null, Modifier.fillMaxSize())
                                         },
@@ -753,18 +739,6 @@ private fun MusicAppShellContent(
                                 MusicDestination.Artist ->
                                     ArtistTitleStack(
                                         selectedTarget = selectedArtistTarget,
-                                        rootPredictiveBackProgress =
-                                            artistRootPredictiveBackState.progress,
-                                        rootPredictiveBackExitConsumed =
-                                            artistRootPredictiveBackState.exitConsumed,
-                                        onRootPredictiveBackExitConsumedReset =
-                                            artistRootPredictiveBackState::reset,
-                                        nestedPredictiveBackProgress =
-                                            artistNestedPredictiveBackState.progress,
-                                        nestedPredictiveBackExitConsumed =
-                                            artistNestedPredictiveBackState.exitConsumed,
-                                        onNestedPredictiveBackExitConsumedReset =
-                                            artistNestedPredictiveBackState::reset,
                                         modifier = Modifier.fillMaxWidth().height(titleAreaHeight),
                                     ) { artistTarget, titleModifier ->
                                         titleBarContent(null, artistTarget, titleModifier)
@@ -785,25 +759,8 @@ private fun MusicAppShellContent(
                             albumEditMode = destination == MusicDestination.Album && albumEditMode,
                             selectedAlbumId = selectedAlbumId,
                             selectedAlbumIds = selectedAlbumIds,
-                            albumPredictiveBackProgress = albumPredictiveBackState.progress,
-                            albumPredictiveBackExitConsumed = albumPredictiveBackState.exitConsumed,
-                            onAlbumPredictiveBackExitConsumedReset =
-                                albumPredictiveBackState::reset,
                             artistAlbumViewMode = artistAlbumViewMode,
                             selectedArtistTarget = selectedArtistTarget,
-                            artistRootPredictiveBackProgress =
-                                artistRootPredictiveBackState.progress,
-                            artistRootPredictiveBackExitConsumed =
-                                artistRootPredictiveBackState.exitConsumed,
-                            onArtistRootPredictiveBackExitConsumedReset =
-                                artistRootPredictiveBackState::reset,
-                            artistNestedPredictiveBackProgress =
-                                artistNestedPredictiveBackState.progress,
-                            artistNestedPredictiveBackExitConsumed =
-                                artistNestedPredictiveBackState.exitConsumed,
-                            onArtistNestedPredictiveBackExitConsumedReset =
-                                artistNestedPredictiveBackState::reset,
-                            moreDestinationPredictiveBackState = moreDestinationPredictiveBackState,
                             playbackBarOverlayHeight =
                                 if (hideBottomChrome) 0.dp else playbackBarOverlayHeight,
                             hiddenMediaIds = libraryExclusions.hiddenMediaIds,
@@ -923,9 +880,8 @@ private fun MusicAppShellContent(
             secondaryKey = currentDestination.takeIf { presentedFromMore },
             modifier = Modifier.fillMaxSize(),
             label = "more destination stack",
-            predictiveBackProgress = moreDestinationPredictiveBackState.progress,
-            predictiveBackExitConsumed = moreDestinationPredictiveBackState.exitConsumed,
-            onPredictiveBackExitConsumedReset = moreDestinationPredictiveBackState::reset,
+            projectTitles = !playlistAddModeActive,
+            titleProjectionEnabled = !moreSettingsPageActive,
             primaryContent = {
                 destinationSurface(
                     if (presentedFromMore) MusicDestination.More else currentDestination,
@@ -936,62 +892,65 @@ private fun MusicAppShellContent(
                 destinationSurface(destination, true)
             },
         )
-        if (!hideBottomChrome) {
-            Column(modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter)) {
-                if (playbackBarComposed) {
-                    PlaybackBar(
-                        snapshot = playbackBarContentSnapshot,
-                        shown = playbackBarRequestedVisible,
-                        favoriteIds = favoriteIds,
-                        artworkBitmap = artworkBitmap,
-                        onHidden = {
-                            if (!playbackBarRequestedVisible) {
-                                playbackBarComposed = false
-                            }
-                        },
-                        onOpenPlayback = {
-                            playbackVisible = true
-                        },
-                        onToggleFavorite = { mediaItem ->
-                            toggleFavorite(mediaItem)
-                        },
-                        onPrevious = {
-                            controller?.seekToPrevious()
-                        },
-                        onPlayPause = {
-                            if (snapshot.isPlaybackActive) {
-                                controller?.pause()
-                            } else {
-                                controller?.play()
-                            }
-                        },
-                        onNext = {
-                            controller?.seekToNext()
-                        },
-                        modifier = Modifier.fillMaxWidth().height(playbackBarHeight),
-                        bottomDividerVisible = true,
-                    )
-                }
-                MusicBottomBar(
-                    currentDestination =
-                        when {
-                            playlistAddModeActive -> MusicDestination.Songs
-                            presentedFromMore -> MusicDestination.More
-                            else -> currentDestination
-                        },
-                    destinations = bottomDestinations,
-                    onDestinationSelected = { destination ->
-                        presentedFromMore = false
-                        currentDestination = destination
-                    },
-                    onEditRequested = {
-                        if (!playlistAddModeActive) {
-                            navigationEditorVisible = true
+        Column(
+            modifier =
+                Modifier.fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .retainedChromeVisibility(!hideBottomChrome)
+        ) {
+            if (playbackBarComposed) {
+                PlaybackBar(
+                    snapshot = playbackBarContentSnapshot,
+                    shown = playbackBarRequestedVisible,
+                    favoriteIds = favoriteIds,
+                    artworkBitmap = artworkBitmap,
+                    onHidden = {
+                        if (!playbackBarRequestedVisible) {
+                            playbackBarComposed = false
                         }
                     },
-                    topChromeVisible = !playbackBarComposed,
+                    onOpenPlayback = {
+                        playbackVisible = true
+                    },
+                    onToggleFavorite = { mediaItem ->
+                        toggleFavorite(mediaItem)
+                    },
+                    onPrevious = {
+                        controller?.seekToPrevious()
+                    },
+                    onPlayPause = {
+                        if (snapshot.isPlaybackActive) {
+                            controller?.pause()
+                        } else {
+                            controller?.play()
+                        }
+                    },
+                    onNext = {
+                        controller?.seekToNext()
+                    },
+                    modifier = Modifier.fillMaxWidth().height(playbackBarHeight),
+                    bottomDividerVisible = true,
                 )
             }
+            MusicBottomBar(
+                currentDestination =
+                    when {
+                        playlistAddModeActive -> MusicDestination.Songs
+                        presentedFromMore -> MusicDestination.More
+                        else -> currentDestination
+                    },
+                destinations = bottomDestinations,
+                onDestinationSelected = { destination ->
+                    presentedFromMore = false
+                    currentDestination = destination
+                },
+                onEditRequested = {
+                    if (!playlistAddModeActive) {
+                        navigationEditorVisible = true
+                    }
+                },
+                topChromeVisible = !playbackBarComposed,
+            )
         }
         val trackActionItems =
             pendingTrackActionItem

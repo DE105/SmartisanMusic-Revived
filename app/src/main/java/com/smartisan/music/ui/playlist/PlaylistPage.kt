@@ -44,9 +44,6 @@ import com.smartisan.music.playback.replaceQueueAndPlay
 import com.smartisan.music.playback.replaceQueueAndPlayShuffled
 import com.smartisan.music.ui.components.withSelection
 import com.smartisan.music.ui.shell.PageStackTransition
-import com.smartisan.music.ui.shell.PredictiveBackHandler
-import com.smartisan.music.ui.shell.PredictiveBackState
-import com.smartisan.music.ui.shell.rememberPredictiveBackState
 import com.smartisan.music.ui.shell.titlebar.TitleBarShadow
 import com.smartisan.music.ui.songs.SongsPage
 import kotlinx.coroutines.flow.flowOf
@@ -101,7 +98,6 @@ internal fun PlaylistPage(
     onAddModeActiveChanged: (Boolean) -> Unit,
     onSearchClick: () -> Unit,
     onClose: (() -> Unit)?,
-    closePredictiveBackState: PredictiveBackState?,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -132,7 +128,6 @@ internal fun PlaylistPage(
     var selectedAddSongIds by remember { mutableStateOf(emptySet<String>()) }
     var nameDialogRequest by remember { mutableStateOf<PlaylistNameDialogRequest?>(null) }
     var deleteRequest by remember { mutableStateOf<PlaylistDeleteRequest?>(null) }
-    val detailPredictiveBackState = rememberPredictiveBackState()
 
     val activePlaylistId = target?.playlistId
     val activePlaylistFlow =
@@ -227,21 +222,12 @@ internal fun PlaylistPage(
         rootEditMode = false
         selectedPlaylistIds = emptySet()
     }
-    if (closePredictiveBackState != null && onClose != null) {
-        PredictiveBackHandler(
-            enabled = active && target == null && !rootEditMode && !addModeVisible,
-            state = closePredictiveBackState,
-            onBack = onClose,
-        )
-    } else if (onClose != null) {
+    if (onClose != null) {
         BackHandler(enabled = active && target == null && !rootEditMode && !addModeVisible) {
             onClose()
         }
     }
-    PredictiveBackHandler(
-        enabled = !addModeVisible && !detailEditMode && target != null,
-        state = detailPredictiveBackState,
-    ) {
+    BackHandler(enabled = !addModeVisible && !detailEditMode && target != null) {
         target = null
     }
 
@@ -258,9 +244,6 @@ internal fun PlaylistPage(
                 rootEditMode = rootEditMode,
                 rootSelectedCount = selectedPlaylistIds.size,
                 detailEditMode = detailEditMode,
-                predictiveBackProgress = detailPredictiveBackState.progress,
-                predictiveBackExitConsumed = detailPredictiveBackState.exitConsumed,
-                onPredictiveBackExitConsumedReset = detailPredictiveBackState::reset,
                 onRootEnterEdit = {
                     rootEditMode = true
                     selectedPlaylistIds = emptySet()
@@ -300,9 +283,6 @@ internal fun PlaylistPage(
                     secondaryKey = target,
                     modifier = Modifier.fillMaxSize(),
                     label = "playlist transition",
-                    predictiveBackProgress = detailPredictiveBackState.progress,
-                    predictiveBackExitConsumed = detailPredictiveBackState.exitConsumed,
-                    onPredictiveBackExitConsumedReset = detailPredictiveBackState::reset,
                     primaryContent = {
                         PlaylistRootPage(
                             active = active,

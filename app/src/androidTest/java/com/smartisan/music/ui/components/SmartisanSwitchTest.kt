@@ -120,6 +120,22 @@ class SmartisanSwitchTest {
     }
 
     @Test
+    fun rapidSecondToggleReversesThePendingTarget() {
+        setContent()
+        compose.runOnIdle {
+            state.toggle()
+            state.toggle()
+        }
+        compose.mainClock.advanceTimeBy(300)
+        compose.runOnIdle {
+            assertFalse(checked)
+            assertTrue(changes.isEmpty())
+            assertEquals(0, haptics)
+            assertEquals(0f, state.position, 0f)
+        }
+    }
+
+    @Test
     fun ownerCanRejectAChangeAndDisposalCancelsPendingCallbacks() {
         setContent(acceptChange = false)
         compose.runOnIdle { state.toggle() }

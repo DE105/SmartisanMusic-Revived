@@ -3,7 +3,7 @@ package com.smartisan.music.ui.artist
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -14,9 +14,7 @@ import com.smartisan.music.ui.components.smartisanVerticalScrollbar
 import com.smartisan.music.ui.library.LibraryDivider
 import com.smartisan.music.ui.library.LibraryFooter
 import com.smartisan.music.ui.library.LibrarySummaryRow
-import com.smartisan.music.ui.library.libraryListEntrance
 import com.smartisan.music.ui.library.libraryTexture
-import com.smartisan.music.ui.library.rememberLibraryListEntrance
 
 @Composable
 internal fun ArtistOverviewPage(
@@ -26,20 +24,14 @@ internal fun ArtistOverviewPage(
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
-    val entrance =
-        rememberLibraryListEntrance(artists, active) { listState.layoutInfo.visibleItemsInfo.size }
     Box(modifier.fillMaxSize().libraryTexture()) {
         if (active)
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize().smartisanVerticalScrollbar(listState),
             ) {
-                itemsIndexed(artists, key = { _, artist -> artist.id }) { index, artist ->
+                items(artists, key = { artist -> artist.id }) { artist ->
                     LibrarySummaryRow(
-                        modifier =
-                            Modifier.libraryListEntrance(entrance) {
-                                index - listState.firstVisibleItemIndex
-                            },
                         title = artist.name,
                         subtitle =
                             stringResource(

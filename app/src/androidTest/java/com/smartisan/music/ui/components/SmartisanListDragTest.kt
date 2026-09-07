@@ -94,6 +94,40 @@ class SmartisanListDragTest {
     }
 
     @Test
+    fun cancellationReturnsTheGapBeforeLanding() {
+        setContent()
+        compose.runOnIdle {
+            release(released = false)
+            assertEquals(state.drag?.source, state.drag?.target)
+            assertTrue(state.settling)
+        }
+        compose.mainClock.advanceTimeBy(300)
+        compose.runOnIdle {
+            assertNull(state.drag)
+            assertTrue(commits.isEmpty())
+        }
+    }
+
+    @Test
+    fun invalidatedOwnerCannotLeaveTheDragStuckSettling() {
+        setContent()
+        compose.runOnIdle {
+            assertTrue(state.start(1, 60, 60, 90f, 4))
+            state.move(220f, 300, 4, 6, 8f) { 3 }
+            state.settle(true, 4, { it * 60 }, { false }) { from, to ->
+                commits += from to to
+            }
+        }
+        compose.mainClock.advanceTimeBy(300)
+        compose.runOnIdle {
+            assertNull(state.drag)
+            assertFalse(state.settling)
+            assertTrue(commits.isEmpty())
+            assertTrue(state.start(1, 60, 60, 90f, 4))
+        }
+    }
+
+    @Test
     fun replacementContentDisposesPendingCommit() {
         setContent()
         compose.runOnIdle { release() }

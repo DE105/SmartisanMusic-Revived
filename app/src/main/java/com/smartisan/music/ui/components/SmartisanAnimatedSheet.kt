@@ -33,14 +33,20 @@ internal fun SmartisanAnimatedSheet(
     AnimatedVisibility(
         transition,
         modifier,
-        enter = fadeIn(tween(showDuration, easing = scrimEasing)),
-        exit = fadeOut(tween(hideDuration, easing = scrimEasing)),
+        enter = EnterTransition.None,
+        exit = ExitTransition.None,
     ) {
-        Box(
-            Modifier.fillMaxSize()
-                .background(scrim)
-                .clickable(remember { MutableInteractionSource() }, null, onClick = onDismiss)
-        ) {
+        Box(Modifier.fillMaxSize()) {
+            // Animate the scrim independently; a parent fade would also multiply panel opacity.
+            Box(
+                Modifier.matchParentSize()
+                    .animateEnterExit(
+                        enter = fadeIn(tween(showDuration, easing = scrimEasing)),
+                        exit = fadeOut(tween(hideDuration, easing = scrimEasing)),
+                    )
+                    .background(scrim)
+                    .clickable(remember { MutableInteractionSource() }, null, onClick = onDismiss)
+            )
             Column(
                 Modifier.align(Alignment.BottomCenter)
                     .fillMaxWidth()

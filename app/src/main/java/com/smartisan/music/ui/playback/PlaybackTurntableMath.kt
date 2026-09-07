@@ -10,13 +10,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntSize
-import kotlinx.coroutines.isActive
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.roundToLong
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlinx.coroutines.isActive
 
 internal data class OriginalNeedleMetrics(
     val widthDp: Float,
@@ -29,34 +32,37 @@ internal data class OriginalNeedleMetrics(
     val pivotYDp: Float,
 )
 
-private val OriginalNeedleBaseMetrics = OriginalNeedleMetrics(
-    widthDp = OriginalNeedleWidthBaseDp,
-    heightDp = OriginalNeedleHeightBaseDp,
-    topWidthDp = OriginalNeedleTopWidthBaseDp,
-    topMarginDp = OriginalNeedleTopMarginBaseDp,
-    rightMarginDp = OriginalNeedleRightMarginDp,
-    shadowRightMarginDp = OriginalNeedleShadowRightMarginDp,
-    pivotXDp = OriginalNeedlePivotXDp,
-    pivotYDp = OriginalNeedlePivotYDp,
-)
+private val OriginalNeedleBaseMetrics =
+    OriginalNeedleMetrics(
+        widthDp = OriginalNeedleWidthBaseDp,
+        heightDp = OriginalNeedleHeightBaseDp,
+        topWidthDp = OriginalNeedleTopWidthBaseDp,
+        topMarginDp = OriginalNeedleTopMarginBaseDp,
+        rightMarginDp = OriginalNeedleRightMarginDp,
+        shadowRightMarginDp = OriginalNeedleShadowRightMarginDp,
+        pivotXDp = OriginalNeedlePivotXDp,
+        pivotYDp = OriginalNeedlePivotYDp,
+    )
 
-private val OriginalNeedleLargeMetrics = OriginalNeedleMetrics(
-    widthDp = OriginalNeedleWidthBaseDp,
-    heightDp = OriginalNeedleHeightLargeDp,
-    topWidthDp = OriginalNeedleTopWidthBaseDp,
-    topMarginDp = OriginalNeedleTopMarginLargeDp,
-    rightMarginDp = OriginalNeedleRightMarginLargeDp,
-    shadowRightMarginDp = OriginalNeedleShadowRightMarginLargeDp,
-    pivotXDp = OriginalNeedlePivotXDp,
-    pivotYDp = OriginalNeedlePivotYDp,
-)
+private val OriginalNeedleLargeMetrics =
+    OriginalNeedleMetrics(
+        widthDp = OriginalNeedleWidthBaseDp,
+        heightDp = OriginalNeedleHeightLargeDp,
+        topWidthDp = OriginalNeedleTopWidthBaseDp,
+        topMarginDp = OriginalNeedleTopMarginLargeDp,
+        rightMarginDp = OriginalNeedleRightMarginLargeDp,
+        shadowRightMarginDp = OriginalNeedleShadowRightMarginLargeDp,
+        pivotXDp = OriginalNeedlePivotXDp,
+        pivotYDp = OriginalNeedlePivotYDp,
+    )
 
 internal fun originalNeedleMetrics(turntableScale: Float): OriginalNeedleMetrics {
-    val metrics = if (turntableScale >= OriginalLargeNeedleBreakpointScale) {
-        OriginalNeedleLargeMetrics
-    } else {
-        OriginalNeedleBaseMetrics
-    }
+    val metrics =
+        if (turntableScale >= OriginalLargeNeedleBreakpointScale) {
+            OriginalNeedleLargeMetrics
+        } else {
+            OriginalNeedleBaseMetrics
+        }
     val shrinkScale = turntableScale.coerceIn(0f, 1f)
     return if (shrinkScale < 1f) {
         metrics.scaled(shrinkScale)
@@ -88,19 +94,24 @@ internal fun rememberSmoothDiscRotation(
         mutableFloatStateOf(manualRotationOffsetDegrees)
     }
 
-    LaunchedEffect(running, cycleDurationMs) {
-        if (!running) return@LaunchedEffect
-
-        var anchorFrameTimeNanos = Long.MIN_VALUE
-        val anchorRotation = rotation.floatValue
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(running, cycleDurationMs, lifecycle) {
+        if (!running || !cycleDurationMs.isFinite() || cycleDurationMs <= 0f) return@LaunchedEffect
         val degreesPerMs = DiscRotationDegrees / cycleDurationMs
-        while (isActive) {
-            withFrameNanos { frameTimeNanos ->
-                if (anchorFrameTimeNanos == Long.MIN_VALUE) {
-                    anchorFrameTimeNanos = frameTimeNanos
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            var previousFrameTimeNanos: Long? = null
+            while (isActive) {
+                withFrameNanos { frameTimeNanos ->
+                    val previous = previousFrameTimeNanos
+                    previousFrameTimeNanos = frameTimeNanos
+                    if (previous != null) {
+                        val elapsedMs = (frameTimeNanos - previous) / 1_000_000f
+                        // Accumulate from the current angle so manual motion survives the next
+                        // frame.
+                        rotation.floatValue =
+                            (rotation.floatValue + elapsedMs * degreesPerMs) % DiscRotationDegrees
+                    }
                 }
-                val elapsedMs = (frameTimeNanos - anchorFrameTimeNanos) / 1_000_000f
-                rotation.floatValue = anchorRotation + elapsedMs * degreesPerMs
             }
         }
     }
@@ -109,7 +120,7 @@ internal fun rememberSmoothDiscRotation(
         val deltaDegrees = manualRotationOffsetDegrees - lastManualRotationOffsetDegrees
         lastManualRotationOffsetDegrees = manualRotationOffsetDegrees
         if (deltaDegrees != 0f) {
-            rotation.floatValue += deltaDegrees
+            rotation.floatValue = (rotation.floatValue + deltaDegrees) % DiscRotationDegrees
         }
     }
 
@@ -181,13 +192,14 @@ internal fun scratchFlingVelocityKeyframes(
     resumePlaybackAfterDrag: Boolean,
 ): FloatArray {
     return when {
-        velocityDegreesPerSecond < 0f && resumePlaybackAfterDrag -> floatArrayOf(
-            velocityDegreesPerSecond,
-            (2f * velocityDegreesPerSecond) / 3f,
-            velocityDegreesPerSecond / 3f,
-            0f,
-            -velocityDegreesPerSecond * 0.2f,
-        )
+        velocityDegreesPerSecond < 0f && resumePlaybackAfterDrag ->
+            floatArrayOf(
+                velocityDegreesPerSecond,
+                (2f * velocityDegreesPerSecond) / 3f,
+                velocityDegreesPerSecond / 3f,
+                0f,
+                -velocityDegreesPerSecond * 0.2f,
+            )
         velocityDegreesPerSecond < 0f -> floatArrayOf(velocityDegreesPerSecond, 0f)
         else -> floatArrayOf(velocityDegreesPerSecond, ScratchPlaybackVelocityDegreesPerSecond)
     }
@@ -204,8 +216,7 @@ internal fun scratchFlingVelocityAt(
     if (keyframes.size == 1 || durationMs <= 0L) {
         return keyframes.last()
     }
-    val scaledFraction = (elapsedMs / durationMs.toFloat())
-        .coerceIn(0f, 1f) * (keyframes.size - 1)
+    val scaledFraction = (elapsedMs / durationMs.toFloat()).coerceIn(0f, 1f) * (keyframes.size - 1)
     val startIndex = scaledFraction.toInt().coerceAtMost(keyframes.size - 2)
     val segmentFraction = scaledFraction - startIndex
     return keyframes[startIndex] +
@@ -217,9 +228,9 @@ internal fun scratchPositionAfterAngle(
     deltaAngleDegrees: Float,
     durationMs: Long,
 ): Long {
-    return (
-        positionMs + (deltaAngleDegrees / DiscRotationDegrees) * ScratchCycleDurationMs
-    ).roundToLong().coerceIn(0L, durationMs)
+    return (positionMs + (deltaAngleDegrees / DiscRotationDegrees) * ScratchCycleDurationMs)
+        .roundToLong()
+        .coerceIn(0L, durationMs)
 }
 
 internal fun playbackNeedleGeometry(
@@ -231,18 +242,19 @@ internal fun playbackNeedleGeometry(
     val metrics = originalNeedleMetrics(turntableScale)
     val needleWidthPx = metrics.widthDp * densityPxPerDp
     val needleHeightPx = metrics.heightDp * densityPxPerDp
-    val needleLeftPx = containerSize.width -
-        (metrics.rightMarginDp * densityPxPerDp) -
-        needleWidthPx
+    val needleLeftPx =
+        containerSize.width - (metrics.rightMarginDp * densityPxPerDp) - needleWidthPx
     val needleTopPx = metrics.topMarginDp * densityPxPerDp
-    val pivotLocal = Offset(
-        x = metrics.pivotXDp * densityPxPerDp,
-        y = metrics.pivotYDp * densityPxPerDp,
-    )
-    val pivot = Offset(
-        x = needleLeftPx + pivotLocal.x,
-        y = needleTopPx + pivotLocal.y,
-    )
+    val pivotLocal =
+        Offset(
+            x = metrics.pivotXDp * densityPxPerDp,
+            y = metrics.pivotYDp * densityPxPerDp,
+        )
+    val pivot =
+        Offset(
+            x = needleLeftPx + pivotLocal.x,
+            y = needleTopPx + pivotLocal.y,
+        )
     return PlaybackNeedleGeometry(
         left = needleLeftPx,
         top = needleTopPx,
@@ -263,17 +275,19 @@ internal fun isWithinNeedleSeekRegion(
     if (containerSize.width <= 0 || containerSize.height <= 0 || densityPxPerDp <= 0f) {
         return false
     }
-    val geometry = playbackNeedleGeometry(
-        containerSize = containerSize,
-        densityPxPerDp = densityPxPerDp,
-        turntableScale = turntableScale,
-        rotationDegrees = rotationDegrees,
-    )
-    val localPoint = needleLocalPoint(
-        point = point,
-        geometry = geometry,
-        rotationDegrees = rotationDegrees,
-    )
+    val geometry =
+        playbackNeedleGeometry(
+            containerSize = containerSize,
+            densityPxPerDp = densityPxPerDp,
+            turntableScale = turntableScale,
+            rotationDegrees = rotationDegrees,
+        )
+    val localPoint =
+        needleLocalPoint(
+            point = point,
+            geometry = geometry,
+            rotationDegrees = rotationDegrees,
+        )
     return localPoint.x >= 0f &&
         localPoint.x <= geometry.width &&
         localPoint.y >= geometry.height * OriginalNeedleTouchStartRatio &&
@@ -289,19 +303,24 @@ internal fun needleSeekRotationFromPoint(
     if (containerSize.width <= 0 || containerSize.height <= 0 || densityPxPerDp <= 0f) {
         return NeedleRestRotationDegrees
     }
-    val neutralGeometry = playbackNeedleGeometry(
-        containerSize = containerSize,
-        densityPxPerDp = densityPxPerDp,
-        turntableScale = turntableScale,
-        rotationDegrees = 0f,
-    )
-    val neutralAngle = angleDegrees(
-        point = Offset(
-            x = neutralGeometry.left + (neutralGeometry.width / 2f),
-            y = neutralGeometry.top + (neutralGeometry.height * OriginalNeedleTouchStartRatio),
-        ),
-        center = neutralGeometry.pivot,
-    )
+    val neutralGeometry =
+        playbackNeedleGeometry(
+            containerSize = containerSize,
+            densityPxPerDp = densityPxPerDp,
+            turntableScale = turntableScale,
+            rotationDegrees = 0f,
+        )
+    val neutralAngle =
+        angleDegrees(
+            point =
+                Offset(
+                    x = neutralGeometry.left + (neutralGeometry.width / 2f),
+                    y =
+                        neutralGeometry.top +
+                            (neutralGeometry.height * OriginalNeedleTouchStartRatio),
+                ),
+            center = neutralGeometry.pivot,
+        )
     val pointAngle = angleDegrees(point, neutralGeometry.pivot)
     return normalizeAngleDelta(pointAngle - neutralAngle)
         .coerceIn(NeedleRestRotationDegrees, NeedlePlaybackEndRotationDegrees)
@@ -312,13 +331,15 @@ internal fun needleLocalPoint(
     geometry: PlaybackNeedleGeometry,
     rotationDegrees: Float,
 ): Offset {
-    val unrotatedOffset = rotateOffset(
-        offset = Offset(
-            x = point.x - geometry.pivot.x,
-            y = point.y - geometry.pivot.y,
-        ),
-        rotationDegrees = -rotationDegrees,
-    )
+    val unrotatedOffset =
+        rotateOffset(
+            offset =
+                Offset(
+                    x = point.x - geometry.pivot.x,
+                    y = point.y - geometry.pivot.y,
+                ),
+            rotationDegrees = -rotationDegrees,
+        )
     return Offset(
         x = geometry.pivotLocal.x + unrotatedOffset.x,
         y = geometry.pivotLocal.y + unrotatedOffset.y,
@@ -332,13 +353,10 @@ internal fun needleSeekPositionFromRotation(
     if (durationMs <= 0L || rotationDegrees < NeedlePlaybackStartRotationDegrees) {
         return null
     }
-    val fraction = (
-        (rotationDegrees - NeedlePlaybackStartRotationDegrees) /
-            NeedlePlaybackSweepDegrees
-    ).coerceIn(0f, 1f)
-    return (durationMs.toFloat() * fraction)
-        .roundToLong()
-        .coerceIn(0L, durationMs)
+    val fraction =
+        ((rotationDegrees - NeedlePlaybackStartRotationDegrees) / NeedlePlaybackSweepDegrees)
+            .coerceIn(0f, 1f)
+    return (durationMs.toFloat() * fraction).roundToLong().coerceIn(0L, durationMs)
 }
 
 internal fun shouldStartNeedleSeekDrag(
@@ -350,20 +368,22 @@ internal fun shouldStartNeedleSeekDrag(
     if (initialPositionMs == null) {
         return true
     }
-    val movingToOutsideOrStart = candidatePositionMs == null ||
-        candidatePositionMs <= NeedleSeekStartPositionGuardMs
+    val movingToOutsideOrStart =
+        candidatePositionMs == null || candidatePositionMs <= NeedleSeekStartPositionGuardMs
     return !movingToOutsideOrStart || maxMoveDistance >= outsideActivationDistancePx
 }
 
 internal fun angleDegrees(
     point: Offset,
     center: Offset,
-): Float = Math.toDegrees(
-    atan2(
-        y = (point.y - center.y).toDouble(),
-        x = (point.x - center.x).toDouble(),
-    ),
-).toFloat()
+): Float =
+    Math.toDegrees(
+            atan2(
+                y = (point.y - center.y).toDouble(),
+                x = (point.x - center.x).toDouble(),
+            )
+        )
+        .toFloat()
 
 internal fun normalizeAngleDelta(deltaDegrees: Float): Float {
     var normalized = deltaDegrees

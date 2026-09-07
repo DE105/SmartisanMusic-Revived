@@ -82,7 +82,9 @@ internal constructor(
     }
 
     fun toggle() {
-        if (!disposed && currentEnabled()) finish(!currentChecked(), fadeShadow = false)
+        if (!disposed && currentEnabled()) {
+            finish(!(pendingTarget ?: currentChecked()), fadeShadow = false)
+        }
     }
 
     fun finish(target: Boolean, fadeShadow: Boolean = true) {

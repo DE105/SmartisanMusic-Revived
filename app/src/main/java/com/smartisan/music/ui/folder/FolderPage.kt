@@ -66,9 +66,6 @@ import com.smartisan.music.ui.library.libraryListEntrance
 import com.smartisan.music.ui.library.libraryTexture
 import com.smartisan.music.ui.library.rememberLibraryListEntrance
 import com.smartisan.music.ui.shell.PageStackTransition
-import com.smartisan.music.ui.shell.PredictiveBackHandler
-import com.smartisan.music.ui.shell.PredictiveBackState
-import com.smartisan.music.ui.shell.rememberPredictiveBackState
 import com.smartisan.music.ui.shell.titlebar.TitleBarShadow
 import com.smartisan.music.ui.shell.titlebar.TitleBarTransition
 import com.smartisan.music.ui.songs.SmartisanSongRow
@@ -94,7 +91,6 @@ internal fun FolderPage(
     libraryRefreshVersion: Int,
     libraryRefreshing: Boolean,
     onClose: (() -> Unit)?,
-    closePredictiveBackState: PredictiveBackState?,
     onRefreshLibrary: () -> Unit,
     onMediaIdsHidden: (Set<String>) -> Unit,
     onRequestDeleteMediaIds: (Set<String>) -> Unit,
@@ -123,7 +119,6 @@ internal fun FolderPage(
     var editMode by remember { mutableStateOf(false) }
     var selectedDirectoryKeys by remember { mutableStateOf(emptySet<String>()) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    val detailPredictiveBackState = rememberPredictiveBackState()
 
     LaunchedEffect(active, hasPermission, libraryRefreshVersion, audioLibrary) {
         if (!active || !hasPermission) {
@@ -145,23 +140,14 @@ internal fun FolderPage(
             )
         }
 
-    PredictiveBackHandler(
-        enabled = active && target != null,
-        state = detailPredictiveBackState,
-    ) {
+    BackHandler(enabled = active && target != null) {
         target = null
     }
     BackHandler(enabled = active && target == null && editMode) {
         editMode = false
         selectedDirectoryKeys = emptySet()
     }
-    if (closePredictiveBackState != null && onClose != null) {
-        PredictiveBackHandler(
-            enabled = active && target == null && !editMode,
-            state = closePredictiveBackState,
-            onBack = onClose,
-        )
-    } else if (onClose != null) {
+    if (onClose != null) {
         BackHandler(enabled = active && target == null && !editMode) {
             onClose()
         }
@@ -198,9 +184,6 @@ internal fun FolderPage(
                 secondaryKey = target,
                 modifier = Modifier.fillMaxWidth().height(titleAreaHeight),
                 label = "folder title stack",
-                predictiveBackProgress = detailPredictiveBackState.progress,
-                predictiveBackExitConsumed = detailPredictiveBackState.exitConsumed,
-                onPredictiveBackExitConsumedReset = detailPredictiveBackState::reset,
                 primaryContent = {
                     FolderTitleBar(
                         modifier = Modifier.fillMaxSize(),
@@ -236,9 +219,6 @@ internal fun FolderPage(
                     secondaryKey = target,
                     modifier = Modifier.fillMaxSize(),
                     label = "folder detail stack",
-                    predictiveBackProgress = detailPredictiveBackState.progress,
-                    predictiveBackExitConsumed = detailPredictiveBackState.exitConsumed,
-                    onPredictiveBackExitConsumedReset = detailPredictiveBackState::reset,
                     primaryContent = {
                         FolderRootPage(
                             active = active,
@@ -460,11 +440,7 @@ private fun FolderRootPage(
     val list = rememberLazyListState()
     val display =
         remember(directories) { filterDirectoryEntriesForDisplay(directories, editMode = true) }
-    var expanded by remember { mutableStateOf(editMode) }
-    LaunchedEffect(editMode) {
-        delay(200)
-        expanded = editMode
-    }
+    val expanded = editMode
     val visibleCount = if (editMode) display.size else display.count { !it.hidden }
     val checkboxBounds = remember { mutableMapOf<String, Rect>() }
     var listOrigin by remember { mutableStateOf(Offset.Zero) }

@@ -154,9 +154,10 @@ private fun PlaybackBottomPanel(
         if (!visible) rendered = false
     }
     if (rendered) {
-        Box(modifier.graphicsLayer { alpha = fraction.value }) {
+        Box(modifier) {
             Box(
                 Modifier.matchParentSize()
+                    .graphicsLayer { alpha = fraction.value }
                     .background(colorResource(R.color.transparent_black))
                     .clickable(
                         remember { MutableInteractionSource() },

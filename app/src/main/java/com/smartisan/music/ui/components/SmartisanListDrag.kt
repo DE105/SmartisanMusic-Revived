@@ -2,7 +2,10 @@ package com.smartisan.music.ui.components
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -120,6 +123,9 @@ internal class SmartisanListDragState internal constructor(private val scope: Co
         if (disposed || settling) return
         val commit = released && finished.moved && finished.source != finished.target
         val destination = if (commit) finished.target else finished.source
+        // Return the gap with the floating row on cancellation, not after it has landed.
+        val landing = if (commit) finished else finished.copy(target = finished.source)
+        drag = landing
         val targetY = rowTop(destination)?.minus(shadowTop)?.toFloat() ?: finished.floatingY
         val expectedGeneration = generation
         settling = true
@@ -129,12 +135,14 @@ internal class SmartisanListDragState internal constructor(private val scope: Co
                 tween(SmartisanDragSettleMillis, easing = SmartisanDragEasing),
             ) {
                 if (isCurrent() && !disposed && generation == expectedGeneration)
-                    drag = finished.copy(floatingY = value)
+                    drag = landing.copy(floatingY = value)
             }
             if (isCurrent() && !disposed && generation == expectedGeneration) {
                 drag = null
                 settling = false
                 if (commit) onCommit(finished.source, finished.target)
+            } else if (!disposed && generation == expectedGeneration) {
+                reset()
             }
         }
     }
@@ -192,11 +200,20 @@ internal fun Modifier.smartisanDragItem(
                 state.drag?.target,
                 rowHeight.toFloat(),
             ),
-            tween(SmartisanDragSettleMillis, easing = SmartisanDragEasing),
+            when {
+                state.drag == null -> snap()
+                state.settling -> tween(SmartisanDragSettleMillis, easing = SmartisanDragEasing)
+                else ->
+                    spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMedium,
+                    )
+            },
             label = "list reorder row",
         )
     return graphicsLayer {
-        translationY = shift
+        // Item keys have already moved to their committed positions; never replay the old offset.
+        translationY = if (state.drag == null) 0f else shift
         alpha = if (state.drag?.source == index) 0f else contentAlpha()
     }
 }
@@ -254,12 +271,10 @@ internal fun smartisanDragFloatingY(
     shadowTop: Int,
     shadowBottom: Int,
 ): Float =
-    (pointerY.toInt() - touchOffset)
-        .coerceIn(
-            -shadowTop,
-            maxOf(-shadowTop, viewportHeight - rowHeight - shadowTop - shadowBottom),
-        )
-        .toFloat()
+    (pointerY - touchOffset).coerceIn(
+        -shadowTop.toFloat(),
+        maxOf(-shadowTop, viewportHeight - rowHeight - shadowTop - shadowBottom).toFloat(),
+    )
 
 internal fun smartisanDragTargetAt(
     pointerY: Float,

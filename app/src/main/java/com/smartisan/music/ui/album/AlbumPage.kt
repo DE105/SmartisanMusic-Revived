@@ -27,9 +27,6 @@ internal fun AlbumPage(
     selectedAlbumId: String?,
     selectedAlbumIds: Set<String>,
     modifier: Modifier = Modifier,
-    predictiveBackProgress: Float? = null,
-    predictiveBackExitConsumed: Boolean = false,
-    onPredictiveBackExitConsumedReset: (() -> Unit)? = null,
     hiddenMediaIds: Set<String>,
     onAlbumSelected: (String, String) -> Unit,
     onAlbumSelectionChange: (String, Boolean) -> Unit,
@@ -81,9 +78,6 @@ internal fun AlbumPage(
         secondaryKey = selectedAlbum,
         modifier = modifier,
         label = "album detail transition",
-        predictiveBackProgress = predictiveBackProgress,
-        predictiveBackExitConsumed = predictiveBackExitConsumed,
-        onPredictiveBackExitConsumedReset = onPredictiveBackExitConsumedReset,
         primaryContent = {
             AlbumOverviewPage(
                 active = active,
@@ -147,7 +141,7 @@ private fun AlbumOverviewPage(
             editMode = editMode,
             selectedIds = selectedAlbumIds,
             onSelectionChange = onAlbumSelectionChange,
-            revealInitialGrid = true,
+            animateInitialAppearance = true,
             modifier = Modifier.fillMaxWidth().weight(1f),
             footer = { LibraryFooter(R.plurals.library_album_count, albums.size) },
         )

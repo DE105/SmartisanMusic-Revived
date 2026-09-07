@@ -104,21 +104,7 @@ internal fun SmartisanMoreRootPage(
     }
 
     Column(modifier = modifier.fillMaxSize().background(colorResource(R.color.page_background))) {
-        SmartisanTitleBar(
-            title = stringResource(R.string.tab_more),
-            navigationIcon =
-                SmartisanTitleBarAction(
-                    iconRes = R.drawable.standard_icon_settings_selector,
-                    contentDescription = stringResource(R.string.setting),
-                    onClick = onSettingsClick,
-                ),
-            action =
-                SmartisanTitleBarAction(
-                    iconRes = R.drawable.search_btn_selector,
-                    contentDescription = stringResource(R.string.tab_local_search),
-                    onClick = onSearchClick,
-                ),
-        )
+        MoreTitleBar(onSettingsClick, onSearchClick)
         LazyColumn(
             state = listState,
             modifier =
@@ -272,5 +258,24 @@ private fun SmartisanMoreRootPagePreview() {
         onDestinationSelected = {},
         onSettingsClick = {},
         onSearchClick = {},
+    )
+}
+
+@Composable
+internal fun MoreTitleBar(onSettingsClick: () -> Unit, onSearchClick: () -> Unit) {
+    SmartisanTitleBar(
+        title = stringResource(R.string.tab_more),
+        navigationIcon =
+            SmartisanTitleBarAction(
+                iconRes = R.drawable.standard_icon_settings_selector,
+                contentDescription = stringResource(R.string.setting),
+                onClick = onSettingsClick,
+            ),
+        action =
+            SmartisanTitleBarAction(
+                iconRes = R.drawable.search_btn_selector,
+                contentDescription = stringResource(R.string.tab_local_search),
+                onClick = onSearchClick,
+            ),
     )
 }

@@ -6,7 +6,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
@@ -14,12 +13,12 @@ import com.smartisan.music.R
 import com.smartisan.music.data.settings.*
 import com.smartisan.music.launcher.AppIconManager
 import com.smartisan.music.ui.shell.PageStackTransition
-import com.smartisan.music.ui.shell.PredictiveBackHandler
-import com.smartisan.music.ui.shell.rememberPredictiveBackState
 
 @Composable
 internal fun SettingsPage(
     active: Boolean,
+    secondaryPage: SettingsSecondaryPage?,
+    onSecondaryPageChange: (SettingsSecondaryPage?) -> Unit,
     playbackSettings: PlaybackSettings,
     artistSettings: ArtistSettings,
     navigationSettings: NavigationSettings,
@@ -41,16 +40,10 @@ internal fun SettingsPage(
     var appIcon by remember(appIconManager) { mutableStateOf(appIconManager.currentIcon()) }
     var editingArtistSeparators by remember { mutableStateOf(false) }
     var artistSeparatorsInitialValues by remember { mutableStateOf(emptySet<String>()) }
-    var secondaryPage by rememberSaveable { mutableStateOf<SettingsSecondaryPage?>(null) }
     val latestOnArtistSeparatorsChange by rememberUpdatedState(onArtistSeparatorsChange)
 
-    val settingsPredictiveBackState = rememberPredictiveBackState()
-
-    PredictiveBackHandler(
-        enabled = active && secondaryPage != null,
-        state = settingsPredictiveBackState,
-    ) {
-        secondaryPage = null
+    BackHandler(enabled = active && secondaryPage != null) {
+        onSecondaryPageChange(null)
     }
     BackHandler(enabled = active && secondaryPage == null) {
         onClose()
@@ -60,9 +53,6 @@ internal fun SettingsPage(
         secondaryKey = secondaryPage,
         modifier = modifier.fillMaxSize().background(colorResource(R.color.page_background)),
         label = "settings page stack",
-        predictiveBackProgress = settingsPredictiveBackState.progress,
-        predictiveBackExitConsumed = settingsPredictiveBackState.exitConsumed,
-        onPredictiveBackExitConsumedReset = settingsPredictiveBackState::reset,
         primaryContent = {
             SettingsRootPage(
                 active = active,
@@ -76,20 +66,20 @@ internal fun SettingsPage(
                 onHidePlayerAxisEnabledChange = onHidePlayerAxisEnabledChange,
                 onPopcornSoundEnabledChange = onPopcornSoundEnabledChange,
                 onAudioFxClick = {
-                    secondaryPage = SettingsSecondaryPage.AudioFx
+                    onSecondaryPageChange(SettingsSecondaryPage.AudioFx)
                 },
                 onArtistSeparatorsClick = {
                     artistSeparatorsInitialValues = artistSettings.separators
                     editingArtistSeparators = true
                 },
                 onNavigationClick = {
-                    secondaryPage = SettingsSecondaryPage.Navigation
+                    onSecondaryPageChange(SettingsSecondaryPage.Navigation)
                 },
                 onAppIconClick = {
-                    secondaryPage = SettingsSecondaryPage.AppIcon
+                    onSecondaryPageChange(SettingsSecondaryPage.AppIcon)
                 },
                 onThemeClick = {
-                    secondaryPage = SettingsSecondaryPage.Theme
+                    onSecondaryPageChange(SettingsSecondaryPage.Theme)
                 },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -101,7 +91,7 @@ internal fun SettingsPage(
                         active = active,
                         playbackSettings = playbackSettings,
                         onClose = {
-                            secondaryPage = null
+                            onSecondaryPageChange(null)
                         },
                         onAudioFxEnabledChange = onAudioFxEnabledChange,
                         onAudioFxPresetChange = onAudioFxPresetChange,
@@ -113,7 +103,7 @@ internal fun SettingsPage(
                         active = active,
                         navigationSettings = navigationSettings,
                         onClose = {
-                            secondaryPage = null
+                            onSecondaryPageChange(null)
                         },
                         onTabPinnedChange = onTabPinnedChange,
                         modifier = Modifier.fillMaxSize(),
@@ -123,7 +113,7 @@ internal fun SettingsPage(
                         active = active,
                         themeMode = themeMode,
                         onClose = {
-                            secondaryPage = null
+                            onSecondaryPageChange(null)
                         },
                         onThemeModeChange = onThemeModeChange,
                         modifier = Modifier.fillMaxSize(),
@@ -133,7 +123,7 @@ internal fun SettingsPage(
                         active = active,
                         selectedIcon = appIcon,
                         onClose = {
-                            secondaryPage = null
+                            onSecondaryPageChange(null)
                         },
                         onIconSelected = { selectedIcon ->
                             appIconManager
@@ -173,7 +163,7 @@ internal fun SettingsPage(
     }
 }
 
-private enum class SettingsSecondaryPage {
+internal enum class SettingsSecondaryPage {
     AudioFx,
     Navigation,
     Theme,

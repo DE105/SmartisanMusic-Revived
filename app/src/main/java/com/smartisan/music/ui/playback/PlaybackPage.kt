@@ -129,7 +129,7 @@ internal fun PlaybackPage(
         modifier = modifier.fillMaxSize().background(colorResource(R.color.page_background))
     ) {
         val screenHeightPx = with(density) { maxHeight.roundToPx() }
-        val playerOffsetY by
+        val playerOffsetY =
             animateFloatAsState(
                 targetValue = if (queueVisible) screenHeightPx.toFloat() else 0f,
                 animationSpec =
@@ -224,7 +224,7 @@ internal fun PlaybackPage(
         Box(
             modifier =
                 Modifier.fillMaxSize().zIndex(1f).graphicsLayer {
-                    translationY = playerOffsetY
+                    translationY = playerOffsetY.value
                 }
         ) {
             PlaybackScreen(

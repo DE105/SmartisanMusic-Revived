@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.absolutePadding
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -33,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
@@ -46,6 +48,10 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.smartisan.music.R
+import com.smartisan.music.ui.navigation.LocalProjectedNavigationTitle
+import com.smartisan.music.ui.navigation.LocalSmartisanTitleMotion
+import com.smartisan.music.ui.navigation.LocalSmartisanTitleVisible
+import com.smartisan.music.ui.navigation.ProjectableNavigationTitle
 
 internal data class SmartisanTitleBarAction(
     @param:DrawableRes val iconRes: Int,
@@ -70,6 +76,30 @@ internal fun SmartisanTitleBar(
     centerContent: (@Composable () -> Unit)? = null,
     contentHeight: androidx.compose.ui.unit.Dp = dimensionResource(R.dimen.title_bar_height),
 ) {
+    if (!LocalSmartisanTitleVisible.current) return
+    if (LocalProjectedNavigationTitle.current != null) {
+        val height =
+            contentHeight +
+                if (includeStatusBar)
+                    WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                else 0.dp
+        ProjectableNavigationTitle(modifier, height) { titleModifier ->
+            SmartisanTitleBar(
+                title = title,
+                modifier = titleModifier,
+                navigationIcon = navigationIcon,
+                action = action,
+                includeStatusBar = includeStatusBar,
+                showShadow = showShadow,
+                navigationActions = navigationActions,
+                actions = actions,
+                centerContent = centerContent,
+                contentHeight = contentHeight,
+            )
+        }
+        return
+    }
+    val titleMotion = LocalSmartisanTitleMotion.current
     val shadowHeight = dimensionResource(R.dimen.title_bar_shadow_height)
     val iconSize = dimensionResource(R.dimen.standard_icon_size)
     val edgeMargin = dimensionResource(R.dimen.bar_margin_edge)
@@ -81,22 +111,35 @@ internal fun SmartisanTitleBar(
         if (widestCount > 0) edgeMargin + iconSize * widestCount + gap * (widestCount - 1) else 0.dp
     val centerVisible =
         widestCount == 0 || titleInset + gap <= dimensionResource(R.dimen.title_bar_center_limite)
+    val contentAlpha = titleMotion?.contentAlpha ?: 1f
+    val leftAlpha = titleMotion?.leftAlpha ?: 1f
+    val leftSlide = with(LocalDensity.current) { (iconSize + edgeMargin * 2).toPx() }
     Column(
         modifier
             .then(if (showShadow) Modifier.zIndex(1f) else Modifier)
             .fillMaxWidth()
-            .background(colorResource(R.color.title_bar_background))
+            .then(
+                if (titleMotion == null)
+                    Modifier.background(colorResource(R.color.title_bar_background))
+                else Modifier
+            )
     ) {
         if (includeStatusBar) {
             Spacer(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars))
         }
         Box(Modifier.fillMaxWidth().height(contentHeight)) {
-            if (centerVisible) {
+            if (centerVisible && contentAlpha > 0f) {
                 if (centerContent == null) {
-                    SmartisanTitleText(title, titleInset, Modifier.matchParentSize())
+                    SmartisanTitleText(
+                        title,
+                        titleInset,
+                        Modifier.matchParentSize().graphicsLayer { alpha = contentAlpha },
+                    )
                 } else {
                     Box(
-                        Modifier.matchParentSize().padding(horizontal = titleInset),
+                        Modifier.matchParentSize().padding(horizontal = titleInset).graphicsLayer {
+                            alpha = contentAlpha
+                        },
                         contentAlignment = Alignment.Center,
                     ) {
                         centerContent()
@@ -104,21 +147,29 @@ internal fun SmartisanTitleBar(
                 }
             }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Row(
-                    Modifier.align(AbsoluteAlignment.CenterLeft).absolutePadding(left = edgeMargin),
-                    horizontalArrangement = Arrangement.spacedBy(gap),
-                ) {
-                    leftActions.forEach { TitleBarIcon(it) }
-                }
-                Row(
-                    Modifier.align(AbsoluteAlignment.CenterRight)
-                        .absolutePadding(right = edgeMargin),
-                    horizontalArrangement = Arrangement.spacedBy(gap),
-                ) {
-                    rightActions.asReversed().forEach { TitleBarIcon(it) }
-                }
+                if (leftAlpha > 0f)
+                    Row(
+                        Modifier.align(AbsoluteAlignment.CenterLeft)
+                            .absolutePadding(left = edgeMargin)
+                            .graphicsLayer {
+                                alpha = leftAlpha
+                                translationX = (titleMotion?.leftOffset ?: 0f) * leftSlide
+                            },
+                        horizontalArrangement = Arrangement.spacedBy(gap),
+                    ) {
+                        leftActions.forEach { TitleBarIcon(it) }
+                    }
+                if (contentAlpha > 0f)
+                    Row(
+                        Modifier.align(AbsoluteAlignment.CenterRight)
+                            .absolutePadding(right = edgeMargin)
+                            .graphicsLayer { alpha = contentAlpha },
+                        horizontalArrangement = Arrangement.spacedBy(gap),
+                    ) {
+                        rightActions.asReversed().forEach { TitleBarIcon(it) }
+                    }
             }
-            if (showShadow) {
+            if (showShadow && (titleMotion == null || !titleMotion.detail)) {
                 SmartisanDrawableBackground(
                     R.drawable.title_bar_shadow,
                     Modifier.align(Alignment.BottomCenter)
@@ -133,6 +184,7 @@ internal fun SmartisanTitleBar(
 
 @Composable
 private fun TitleBarIcon(action: SmartisanTitleBarAction, modifier: Modifier = Modifier) {
+    val motionInteractive = LocalSmartisanTitleMotion.current?.interactive ?: true
     val iconSize = dimensionResource(R.dimen.standard_icon_size)
     val viewConfiguration = LocalViewConfiguration.current
     val iconViewConfiguration =
@@ -169,7 +221,7 @@ private fun TitleBarIcon(action: SmartisanTitleBarAction, modifier: Modifier = M
                     interactionSource = interaction,
                     indication = null,
                     role = Role.Button,
-                    enabled = action.enabled,
+                    enabled = action.enabled && motionInteractive,
                     onClick = smartisanClick(action.onClick),
                 ),
             contentAlignment = Alignment.Center,
