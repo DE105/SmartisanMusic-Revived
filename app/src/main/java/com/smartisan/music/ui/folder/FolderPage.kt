@@ -12,7 +12,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -551,7 +550,7 @@ private fun FolderDirectoryRow(
             label = "Directory visibility",
         )
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     val checkbox =
         rememberSmartisanDrawablePainter(
             R.drawable.selector_check_box_red,
@@ -613,7 +612,11 @@ private fun FolderDirectoryRow(
                     entry.name,
                     style =
                         TextStyle(
-                            color = colorResource(R.color.setting_item_text_color),
+                            color =
+                                smartisanPressedTextColor(
+                                    colorResource(R.color.setting_item_text_color),
+                                    pressed,
+                                ),
                             fontSize = smartisanTextSize(R.dimen.text_size_large),
                             platformStyle = PlatformTextStyle(includeFontPadding = true),
                         ),
@@ -625,7 +628,11 @@ private fun FolderDirectoryRow(
                     Modifier.padding(top = 3.dp),
                     style =
                         TextStyle(
-                            color = colorResource(R.color.list_text_color_small),
+                            color =
+                                smartisanPressedTextColor(
+                                    colorResource(R.color.list_text_color_small),
+                                    pressed,
+                                ),
                             fontSize = smartisanTextSize(R.dimen.text_size_micro),
                             platformStyle = PlatformTextStyle(includeFontPadding = true),
                         ),

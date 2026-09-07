@@ -5,7 +5,6 @@ import android.view.WindowManager
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.*
@@ -123,7 +122,7 @@ private fun ModalIcon(
     enabled: Boolean = true,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     val size = dimensionResource(R.dimen.standard_icon_size)
     val base = LocalViewConfiguration.current
     val config =
@@ -156,7 +155,7 @@ internal fun SmartisanDialogButton(
     textColorRes: Int = android.R.color.white,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     val shrinkButton = backgroundRes == R.drawable.shrink_long_btn_red_selector
     val background =
         if (shrinkButton) {

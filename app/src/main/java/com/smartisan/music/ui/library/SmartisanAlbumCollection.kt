@@ -9,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -49,6 +48,7 @@ import com.smartisan.music.R
 import com.smartisan.music.ui.album.AlbumSummary
 import com.smartisan.music.ui.album.AlbumViewMode
 import com.smartisan.music.ui.artwork.AlbumArtworkLoader
+import com.smartisan.music.ui.components.collectSmartisanPressedAsState
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 import com.smartisan.music.ui.components.smartisanCheckboxBounds
 import com.smartisan.music.ui.components.smartisanCheckboxHit
@@ -429,7 +429,7 @@ private fun LibraryAlbumTile(
     coverModifier: Modifier = Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     val tileSize = dimensionResource(R.dimen.gridview_item_ccontainer_height)
     Column(
         modifier

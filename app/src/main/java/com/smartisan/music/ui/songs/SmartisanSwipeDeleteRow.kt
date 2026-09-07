@@ -7,7 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -22,6 +21,7 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import com.smartisan.music.R
+import com.smartisan.music.ui.components.collectSmartisanPressedAsState
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 import com.smartisan.music.ui.components.smartisanClick
 import com.smartisan.music.ui.library.libraryTexture
@@ -149,7 +149,7 @@ internal fun SmartisanSwipeDeleteRow(
     ) {
         if (shift.value > 0f) {
             val interaction = remember { MutableInteractionSource() }
-            val pressed by interaction.collectIsPressedAsState()
+            val pressed by interaction.collectSmartisanPressedAsState()
             Box(Modifier.matchParentSize()) {
                 Image(
                     rememberSmartisanDrawablePainter(

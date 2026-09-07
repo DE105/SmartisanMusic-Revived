@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.*
@@ -32,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.MediaItem
 import com.smartisan.music.R
+import com.smartisan.music.ui.components.smartisanPressedTextColor
+import com.smartisan.music.ui.components.collectSmartisanPressedAsState
 import com.smartisan.music.ui.album.AlbumSummary
 import com.smartisan.music.ui.artwork.AlbumArtworkLoader
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
@@ -199,12 +200,12 @@ internal fun LibrarySummaryRow(
         dimensionResource(R.dimen.listview_items_margin_top1),
     titleColor: Color = colorResource(R.color.setting_item_text_color),
     leadingContent: (@Composable RowScope.() -> Unit)? = null,
-    trailingContent: (@Composable RowScope.() -> Unit)? = null,
+    trailingContent: (@Composable RowScope.(pressed: Boolean) -> Unit)? = null,
     textInset: androidx.compose.ui.unit.Dp = dimensionResource(R.dimen.listview_items_margin_left),
     selected: Boolean = false,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     val focused by interaction.collectIsFocusedAsState()
     Row(
         modifier
@@ -233,7 +234,7 @@ internal fun LibrarySummaryRow(
                 title,
                 style =
                     TextStyle(
-                        color = titleColor,
+                        color = smartisanPressedTextColor(titleColor, pressed),
                         fontSize = smartisanTextSize(primarySizeRes),
                         platformStyle = PlatformTextStyle(includeFontPadding = true),
                     ),
@@ -245,7 +246,11 @@ internal fun LibrarySummaryRow(
                 Modifier.padding(top = lineSpacing),
                 style =
                     TextStyle(
-                        color = colorResource(R.color.list_text_color_small),
+                        color =
+                            smartisanPressedTextColor(
+                                colorResource(R.color.list_text_color_small),
+                                pressed,
+                            ),
                         fontSize = smartisanTextSize(secondarySizeRes),
                         platformStyle = PlatformTextStyle(includeFontPadding = true),
                     ),
@@ -253,7 +258,7 @@ internal fun LibrarySummaryRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        trailingContent?.invoke(this)
+        trailingContent?.invoke(this, pressed)
         if (showArrow)
             Image(
                 rememberSmartisanDrawablePainter(
@@ -308,7 +313,7 @@ private fun LibraryRedAction(
     modifier: Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     Row(
         modifier
             .height(30.dp)
@@ -362,7 +367,7 @@ internal fun LibraryIconButton(
     enabled: Boolean = true,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     val focused by interaction.collectIsFocusedAsState()
     Image(
         rememberSmartisanDrawablePainter(

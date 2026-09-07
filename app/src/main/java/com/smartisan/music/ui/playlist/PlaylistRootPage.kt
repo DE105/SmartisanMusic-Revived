@@ -5,7 +5,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -72,7 +71,7 @@ internal fun PlaylistRootPage(
         if (active)
             Column(Modifier.fillMaxSize()) {
                 val source = remember { MutableInteractionSource() }
-                val pressed by source.collectIsPressedAsState()
+                val pressed by source.collectSmartisanPressedAsState()
                 Row(
                     Modifier.fillMaxWidth()
                         .height(60.dp)
@@ -93,7 +92,7 @@ internal fun PlaylistRootPage(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Image(
-                        rememberSmartisanDrawablePainter(R.drawable.add_icon_selector),
+                        rememberSmartisanDrawablePainter(R.drawable.add_icon_selector, pressed = pressed),
                         null,
                         Modifier.width(60.dp).fillMaxHeight(),
                         contentScale = ContentScale.None,
@@ -186,7 +185,7 @@ private fun PlaylistSummaryRow(
     modifier: Modifier,
 ) {
     val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
+    val pressed by source.collectSmartisanPressedAsState()
     val progress by
         animateFloatAsState(
             if (editMode) 1f else 0f,
@@ -240,7 +239,11 @@ private fun PlaylistSummaryRow(
                         Modifier.fillMaxWidth(),
                         style =
                             TextStyle(
-                                color = colorResource(R.color.setting_item_text_color),
+                                color =
+                                    smartisanPressedTextColor(
+                                        colorResource(R.color.setting_item_text_color),
+                                        pressed,
+                                    ),
                                 fontSize = smartisanTextSize(R.dimen.text_size_large),
                                 platformStyle = PlatformTextStyle(includeFontPadding = true),
                             ),
@@ -256,7 +259,11 @@ private fun PlaylistSummaryRow(
                         Modifier.fillMaxWidth().padding(top = 3.dp),
                         style =
                             TextStyle(
-                                color = colorResource(R.color.setting_item_summary_text_color),
+                                color =
+                                    smartisanPressedTextColor(
+                                        colorResource(R.color.setting_item_summary_text_color),
+                                        pressed,
+                                    ),
                                 fontSize = smartisanTextSize(R.dimen.text_size_micro),
                                 platformStyle = PlatformTextStyle(includeFontPadding = true),
                             ),
@@ -272,7 +279,7 @@ private fun PlaylistSummaryRow(
             ) {
                 if (progress < 1f)
                     Image(
-                        rememberSmartisanDrawablePainter(R.drawable.arrow3_selector),
+                        rememberSmartisanDrawablePainter(R.drawable.arrow3_selector, pressed = pressed),
                         null,
                         Modifier.align(AbsoluteAlignment.CenterRight).graphicsLayer {
                             alpha = 1f - progress
@@ -281,7 +288,7 @@ private fun PlaylistSummaryRow(
                     )
                 if (progress > 0f) {
                     val actionSource = remember { MutableInteractionSource() }
-                    val actionPressed by actionSource.collectIsPressedAsState()
+                    val actionPressed by actionSource.collectSmartisanPressedAsState()
                     Image(
                         rememberSmartisanDrawablePainter(
                             R.drawable.rename_playlist_selector,

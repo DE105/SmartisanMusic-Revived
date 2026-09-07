@@ -5,7 +5,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -79,7 +78,7 @@ internal fun PlaybackPlaylistPickerOverlay(
 @Composable
 private fun PlaylistChoice(title: String, subtitle: String?, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     Box(
         Modifier.fillMaxWidth()
             .height(60.dp)
@@ -97,7 +96,11 @@ private fun PlaylistChoice(title: String, subtitle: String?, onClick: () -> Unit
                 title,
                 style =
                     TextStyle(
-                        color = colorResource(R.color.list_item_first_line),
+                        color =
+                            smartisanPressedTextColor(
+                                colorResource(R.color.list_item_first_line),
+                                pressed,
+                            ),
                         fontSize = 16.sp,
                         platformStyle = PlatformTextStyle(includeFontPadding = true),
                     ),
@@ -109,7 +112,11 @@ private fun PlaylistChoice(title: String, subtitle: String?, onClick: () -> Unit
                     subtitle,
                     style =
                         TextStyle(
-                            color = colorResource(R.color.list_item_second_line),
+                            color =
+                                smartisanPressedTextColor(
+                                    colorResource(R.color.list_item_second_line),
+                                    pressed,
+                                ),
                             fontSize = 13.sp,
                             platformStyle = PlatformTextStyle(includeFontPadding = true),
                         ),
@@ -118,7 +125,7 @@ private fun PlaylistChoice(title: String, subtitle: String?, onClick: () -> Unit
                 )
         }
         Image(
-            rememberSmartisanDrawablePainter(R.drawable.arrow3_selector),
+            rememberSmartisanDrawablePainter(R.drawable.arrow3_selector, pressed = pressed),
             null,
             Modifier.align(AbsoluteAlignment.CenterRight).absolutePadding(right = 16.dp),
             contentScale = ContentScale.Inside,

@@ -7,7 +7,6 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,6 +48,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.smartisan.music.R
 import com.smartisan.music.launcher.AppIcon
+import com.smartisan.music.ui.components.collectSmartisanPressedAsState
 import com.smartisan.music.ui.components.SmartisanTitleBar
 import com.smartisan.music.ui.components.SmartisanTitleBarAction
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
@@ -189,7 +189,7 @@ private fun AppIconSettingsRow(
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
+    val pressed by interactionSource.collectSmartisanPressedAsState()
     val focused by interactionSource.collectIsFocusedAsState()
     val title = stringResource(icon.labelRes())
     val summary = stringResource(icon.summaryRes())
@@ -290,7 +290,7 @@ private fun AppIconSettingsRow(
                 if (selected) {
                     Image(
                         painter =
-                            rememberSmartisanDrawablePainter(R.drawable.selector_radio_choice),
+                            rememberSmartisanDrawablePainter(R.drawable.selector_radio_choice, pressed = pressed),
                         contentDescription = null,
                         contentScale = ContentScale.Inside,
                         modifier = Modifier.fillMaxSize(),

@@ -5,7 +5,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -247,6 +246,7 @@ internal fun AudioFxSettingsPage(
         Column(Modifier.selectableGroup()) {
             AudioFxPreset.entries.forEachIndexed { index, item ->
                 val source = remember { MutableInteractionSource() }
+                val pressed by source.collectSmartisanPressedAsState()
                 SettingsRow(
                     item.labelRes(),
                     stringResource(item.summaryRes()),
@@ -270,7 +270,11 @@ internal fun AudioFxSettingsPage(
                     ) {
                         if (item == preset)
                             Image(
-                                rememberSmartisanDrawablePainter(R.drawable.selector_radio_choice),
+                                rememberSmartisanDrawablePainter(
+                                    R.drawable.selector_radio_choice,
+                                    enabled = playbackSettings.audioFxEnabled,
+                                    pressed = pressed,
+                                ),
                                 null,
                                 Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Inside,
@@ -346,7 +350,7 @@ private fun SettingsValueRow(
     onClick: () -> Unit,
 ) {
     val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
+    val pressed by source.collectSmartisanPressedAsState()
     val focused by source.collectIsFocusedAsState()
     SettingsRow(
         title,
@@ -435,7 +439,7 @@ private fun SettingsRow(
     titleAccessoryGap: Dp? = null,
     accessory: @Composable RowScope.() -> Unit,
 ) {
-    val pressed by source.collectIsPressedAsState()
+    val pressed by source.collectSmartisanPressedAsState()
     val focused by source.collectIsFocusedAsState()
     val localeDirection = LocalLayoutDirection.current
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {

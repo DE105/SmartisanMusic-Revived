@@ -5,7 +5,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -26,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import com.smartisan.music.R
+import com.smartisan.music.ui.components.collectSmartisanPressedAsState
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 import com.smartisan.music.ui.components.smartisanClick
 import com.smartisan.music.ui.components.smartisanStateColor
@@ -42,7 +42,7 @@ internal fun SmartisanBottomTabItem(
     enabled: Boolean = true,
 ) {
     val interactions = remember { MutableInteractionSource() }
-    val pressed by interactions.collectIsPressedAsState()
+    val pressed by interactions.collectSmartisanPressedAsState()
     val scale by
         animateFloatAsState(
             if (pressed) 1.1f else if (selected) 1f else .9f,

@@ -10,7 +10,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.*
@@ -38,6 +37,7 @@ import androidx.media3.common.Player
 import com.smartisan.music.R
 import com.smartisan.music.isExternalAudioLaunchItem
 import com.smartisan.music.playback.NowPlayingArtworkRepository
+import com.smartisan.music.ui.components.collectSmartisanPressedAsState
 import com.smartisan.music.ui.components.SmartisanTouchShield
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 import com.smartisan.music.ui.components.smartisanClick
@@ -285,7 +285,7 @@ private fun PlaybackBarButton(
     enabled: Boolean = true,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     Image(
         rememberSmartisanDrawablePainter(icon, enabled = enabled, pressed = pressed),
         description,

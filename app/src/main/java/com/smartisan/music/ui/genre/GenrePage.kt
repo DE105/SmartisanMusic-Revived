@@ -236,9 +236,9 @@ private fun GenreRootPage(
                         primarySizeRes = R.dimen.text_size_large,
                         secondarySizeRes = R.dimen.text_size_micro,
                         lineSpacing = 3.dp,
-                        trailingContent = {
+                        trailingContent = { pressed ->
                             Image(
-                                rememberSmartisanDrawablePainter(R.drawable.arrow3_selector),
+                                rememberSmartisanDrawablePainter(R.drawable.arrow3_selector, pressed = pressed),
                                 null,
                                 Modifier.padding(
                                         end = dimensionResource(R.dimen.listview_items_margin_right)

@@ -5,7 +5,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.absolutePadding
@@ -36,6 +35,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.smartisan.music.R
 import com.smartisan.music.data.settings.ThemeMode
+import com.smartisan.music.ui.components.collectSmartisanPressedAsState
 import com.smartisan.music.ui.components.SmartisanTitleBar
 import com.smartisan.music.ui.components.SmartisanTitleBarAction
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
@@ -101,7 +101,7 @@ private fun ThemeChoiceRow(
     onClick: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     val focused by interaction.collectIsFocusedAsState()
     val (background, shadow) =
         when (position) {
@@ -149,7 +149,7 @@ private fun ThemeChoiceRow(
         )
         if (selected) {
             Image(
-                painter = rememberSmartisanDrawablePainter(R.drawable.selector_radio_choice),
+                painter = rememberSmartisanDrawablePainter(R.drawable.selector_radio_choice, pressed = pressed),
                 contentDescription = null,
                 contentScale = ContentScale.Inside,
                 modifier =

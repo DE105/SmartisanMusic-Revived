@@ -12,7 +12,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -61,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import com.smartisan.music.R
+import com.smartisan.music.ui.components.collectSmartisanPressedAsState
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 import com.smartisan.music.ui.components.smartisanClick
 import com.smartisan.music.ui.components.smartisanPainterBackground
@@ -358,7 +358,7 @@ private fun QuickBarGrid(
         content = {
             repeat(27) { index ->
                 val interaction = remember { MutableInteractionSource() }
-                val pressed by interaction.collectIsPressedAsState()
+                val pressed by interaction.collectSmartisanPressedAsState()
                 Box(
                     Modifier.smartisanPainterBackground(
                             rememberSmartisanDrawablePainter(

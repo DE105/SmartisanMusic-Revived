@@ -6,7 +6,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,6 +69,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.smartisan.music.R
+import com.smartisan.music.ui.components.smartisanPressedTextColor
+import com.smartisan.music.ui.components.collectSmartisanPressedAsState
 import com.smartisan.music.data.library.LibraryExclusionsStore
 import com.smartisan.music.data.search.SearchHistoryStore
 import com.smartisan.music.data.settings.ArtistSettings
@@ -451,7 +452,7 @@ private fun SearchField(
         modifier = modifier.height(SearchFieldHeight).focusRequester(focusRequester),
         decorationBox = { innerTextField ->
             val clearInteractionSource = remember { MutableInteractionSource() }
-            val clearPressed by clearInteractionSource.collectIsPressedAsState()
+            val clearPressed by clearInteractionSource.collectSmartisanPressedAsState()
             Box(modifier = Modifier.fillMaxSize()) {
                 SmartisanDrawableBackground(
                     drawableRes = R.drawable.search_field,
@@ -511,7 +512,7 @@ private fun SearchField(
 @Composable
 private fun SearchCancelButton(onDismiss: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
+    val pressed by interactionSource.collectSmartisanPressedAsState()
 
     Box(
         modifier =
@@ -769,7 +770,7 @@ private fun SearchEntityRow(
     action: SearchEntityAction = SearchEntityAction.More,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
+    val pressed by interactionSource.collectSmartisanPressedAsState()
 
     Box(
         modifier =
@@ -808,14 +809,14 @@ private fun SearchEntityRow(
             ) {
                 Text(
                     text = title,
-                    style = SearchPrimaryTextStyle.copy(color = titleColor),
+                    style = SearchPrimaryTextStyle.copy(color = smartisanPressedTextColor(titleColor, pressed)),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (!subtitle.isNullOrEmpty()) {
                     Text(
                         text = subtitle,
-                        style = SearchSecondaryTextStyle.copy(color = subtitleColor),
+                        style = SearchSecondaryTextStyle.copy(color = smartisanPressedTextColor(subtitleColor, pressed)),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 2.dp),
@@ -861,7 +862,7 @@ private fun SearchHistoryChip(
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
+    val pressed by interactionSource.collectSmartisanPressedAsState()
 
     Box(
         modifier =

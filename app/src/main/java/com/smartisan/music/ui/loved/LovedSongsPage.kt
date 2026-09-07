@@ -8,7 +8,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -312,7 +311,7 @@ private fun LovedSongRow(
     onCheckboxBoundsChanged: (Rect?) -> Unit = {},
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     val edit by
         animateFloatAsState(
             if (editMode) 1f else 0f,
@@ -403,6 +402,7 @@ private fun LovedSongRow(
                     smartisanTextSize(R.dimen.text_size_medium),
                     Modifier.padding(top = dimensionResource(R.dimen.collect_text_padding_top)),
                     textDirection = textDirection,
+                    pressed = pressed,
                 )
                 Row(
                     Modifier.padding(top = dimensionResource(R.dimen.listview_items_margin_top1)),
@@ -422,7 +422,11 @@ private fun LovedSongRow(
                         style =
                             TextStyle(
                                 textDirection = textDirection,
-                                color = colorResource(R.color.list_text_color_small),
+                                color =
+                                    smartisanPressedTextColor(
+                                        colorResource(R.color.list_text_color_small),
+                                        pressed,
+                                    ),
                                 fontSize = smartisanTextSize(R.dimen.text_size_small),
                                 platformStyle = PlatformTextStyle(includeFontPadding = true),
                             ),
@@ -433,7 +437,7 @@ private fun LovedSongRow(
             }
             if (!editMode) {
                 val moreInteraction = remember { MutableInteractionSource() }
-                val morePressed by moreInteraction.collectIsPressedAsState()
+                val morePressed by moreInteraction.collectSmartisanPressedAsState()
                 Image(
                     rememberSmartisanDrawablePainter(
                         R.drawable.btn_more_selector,

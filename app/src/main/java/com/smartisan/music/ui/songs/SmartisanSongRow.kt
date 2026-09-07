@@ -6,7 +6,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.*
@@ -86,7 +85,7 @@ internal fun SmartisanSongRow(
     onCheckboxBoundsChanged: (Rect?) -> Unit = {},
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     val progress by
         animateFloatAsState(
             if (editMode) 1f else 0f,
@@ -168,6 +167,7 @@ internal fun SmartisanSongRow(
                     playback.playing,
                     smartisanTextSize(R.dimen.text_size_large),
                     textDirection = textDirection,
+                    pressed = pressed,
                 )
                 Row(
                     Modifier.padding(
@@ -189,7 +189,11 @@ internal fun SmartisanSongRow(
                         style =
                             TextStyle(
                                 textDirection = textDirection,
-                                color = colorResource(R.color.list_text_color_small),
+                                color =
+                                    smartisanPressedTextColor(
+                                        colorResource(R.color.list_text_color_small),
+                                        pressed,
+                                    ),
                                 fontSize = smartisanTextSize(R.dimen.text_size_micro),
                                 platformStyle = PlatformTextStyle(includeFontPadding = true),
                             ),
@@ -208,7 +212,11 @@ internal fun SmartisanSongRow(
                     Modifier.padding(start = 18.dp),
                     style =
                         TextStyle(
-                            color = colorResource(R.color.list_text_color_small),
+                            color =
+                                smartisanPressedTextColor(
+                                    colorResource(R.color.list_text_color_small),
+                                    pressed,
+                                ),
                             fontSize = smartisanTextSize(R.dimen.text_size_micro),
                             platformStyle = PlatformTextStyle(includeFontPadding = true),
                         ),
@@ -220,7 +228,11 @@ internal fun SmartisanSongRow(
                     Modifier.padding(horizontal = 4.dp),
                     style =
                         TextStyle(
-                            color = colorResource(R.color.list_text_color_small),
+                            color =
+                                smartisanPressedTextColor(
+                                    colorResource(R.color.list_text_color_small),
+                                    pressed,
+                                ),
                             fontSize = smartisanTextSize(R.dimen.text_size_micro),
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                             platformStyle = PlatformTextStyle(includeFontPadding = true),
@@ -228,7 +240,7 @@ internal fun SmartisanSongRow(
                 )
             if (progress < 1f) {
                 val moreInteraction = remember { MutableInteractionSource() }
-                val morePressed by moreInteraction.collectIsPressedAsState()
+                val morePressed by moreInteraction.collectSmartisanPressedAsState()
                 Image(
                     rememberSmartisanDrawablePainter(
                         R.drawable.btn_more_selector,
@@ -290,6 +302,7 @@ internal fun SmartisanPlayingTitle(
     includeFontPadding: Boolean = true,
     textDirection: androidx.compose.ui.text.style.TextDirection =
         androidx.compose.ui.text.style.TextDirection.Content,
+    pressed: Boolean = false,
 ) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         BasicText(
@@ -298,7 +311,11 @@ internal fun SmartisanPlayingTitle(
             style =
                 TextStyle(
                     textDirection = textDirection,
-                    color = colorResource(R.color.setting_item_text_color),
+                    color =
+                        smartisanPressedTextColor(
+                            colorResource(R.color.setting_item_text_color),
+                            pressed,
+                        ),
                     fontSize = fontSize,
                     platformStyle = PlatformTextStyle(includeFontPadding = includeFontPadding),
                 ),
@@ -309,7 +326,8 @@ internal fun SmartisanPlayingTitle(
             Image(
                 rememberSmartisanDrawablePainter(
                     if (isPlaying) R.drawable.playing_blueplay2_selector
-                    else R.drawable.playing_bluepause_selector
+                    else R.drawable.playing_bluepause_selector,
+                    pressed = pressed,
                 ),
                 null,
                 Modifier.padding(start = 10.dp),

@@ -41,7 +41,7 @@ Smartisan OS has left the stage, so this project uses Smartisan Music 8.1.0 as i
 
 - Local audio permission flow, scanning, reindexing, and library folder exclusions
 - Song, album, artist, genre, and folder browsing, with gallery-style album artwork previews
-- Sorting, filtering, alphabetical navigation, list multi-select with blue highlights, and swipe actions
+- Sorting, filtering, alphabetical navigation, blue list tap feedback, button press feedback, list multi-select with blue highlights, and swipe actions
 - Favorites, user-created playlists, and play statistics
 - System-following, light, and dark themes with a charcoal night palette
 - Background playback, media notifications, and headset and Bluetooth controls

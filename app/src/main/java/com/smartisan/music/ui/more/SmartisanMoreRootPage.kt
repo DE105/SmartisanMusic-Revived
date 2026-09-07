@@ -9,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,6 +49,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.smartisan.music.R
+import com.smartisan.music.ui.components.collectSmartisanPressedAsState
 import com.smartisan.music.ui.components.SmartisanTitleBar
 import com.smartisan.music.ui.components.SmartisanTitleBarAction
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
@@ -146,7 +146,7 @@ private fun SmartisanMoreDestinationRow(
     modifier: Modifier = Modifier,
 ) {
     val interactions = remember { MutableInteractionSource() }
-    val pressed by interactions.collectIsPressedAsState()
+    val pressed by interactions.collectSmartisanPressedAsState()
     val focused by interactions.collectIsFocusedAsState()
     val iconArea = dimensionResource(R.dimen.left_icon_area_width)
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl

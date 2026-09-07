@@ -3,7 +3,6 @@ package com.smartisan.music.ui.library
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.*
@@ -22,6 +21,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.media3.common.MediaItem
 import com.smartisan.music.R
+import com.smartisan.music.ui.components.smartisanPressedTextColor
+import com.smartisan.music.ui.components.collectSmartisanPressedAsState
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 import com.smartisan.music.ui.components.smartisanClick
 import com.smartisan.music.ui.components.smartisanPainterBackground
@@ -44,7 +45,7 @@ internal fun SmartisanAlbumTrackRow(
     modifier: Modifier = Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     val metadata = item.mediaMetadata
     val rowHeight = dimensionResource(R.dimen.listview_item_height)
     Row(
@@ -84,13 +85,18 @@ internal fun SmartisanAlbumTrackRow(
                 isPlaying = playback.playing,
                 fontSize = smartisanTextSize(R.dimen.text_size_medium),
                 modifier = Modifier.fillMaxWidth(),
+                pressed = pressed,
             )
             if (showArtist)
                 BasicText(
                     artist,
                     style =
                         TextStyle(
-                            color = colorResource(R.color.list_text_color_small),
+                            color =
+                                smartisanPressedTextColor(
+                                    colorResource(R.color.list_text_color_small),
+                                    pressed,
+                                ),
                             fontSize = smartisanTextSize(R.dimen.text_size_micro),
                             platformStyle = PlatformTextStyle(includeFontPadding = true),
                         ),
@@ -115,7 +121,7 @@ internal fun SmartisanAlbumTrackRow(
             maxLines = 1,
         )
         val moreInteraction = remember { MutableInteractionSource() }
-        val morePressed by moreInteraction.collectIsPressedAsState()
+        val morePressed by moreInteraction.collectSmartisanPressedAsState()
         Image(
             rememberSmartisanDrawablePainter(
                 R.drawable.btn_more_selector,

@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -38,6 +37,7 @@ import com.smartisan.music.ui.artist.artistNormalizedKey
 import com.smartisan.music.ui.artist.toArtistDisplayNames
 import com.smartisan.music.ui.artwork.AlbumArtworkBrowserState
 import com.smartisan.music.ui.artwork.LocalAlbumArtworkBrowser
+import com.smartisan.music.ui.components.collectSmartisanPressedAsState
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 import com.smartisan.music.ui.components.smartisanClick
 import com.smartisan.music.ui.components.smartisanStateColor
@@ -264,7 +264,7 @@ private fun AlbumHeaderAction(
     modifier: Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     Box(
         modifier.fillMaxHeight().graphicsLayer { alpha = if (enabled) 1f else .3f },
         contentAlignment = Alignment.Center,

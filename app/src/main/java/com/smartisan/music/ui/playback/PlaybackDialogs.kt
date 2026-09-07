@@ -8,7 +8,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.*
@@ -27,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smartisan.music.R
 import com.smartisan.music.playback.PlaybackSleepTimerState
+import com.smartisan.music.ui.components.collectSmartisanPressedAsState
 import com.smartisan.music.ui.components.SmartisanMenuTitleBar
 import com.smartisan.music.ui.components.SmartisanTouchShield
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
@@ -181,7 +181,7 @@ private fun PlaybackBottomPanel(
 @Composable
 private fun MoreActionCell(item: MoreActionItem, modifier: Modifier) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     Box(
         modifier
             .graphicsLayer { alpha = if (item.enabled) 1f else DisabledAlpha }

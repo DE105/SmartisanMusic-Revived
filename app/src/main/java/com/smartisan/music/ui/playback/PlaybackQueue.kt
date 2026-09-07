@@ -9,7 +9,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -374,7 +373,7 @@ private fun QueueNormalTrack(
     modifier: Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     Row(
         modifier
             .fillMaxWidth()
@@ -427,7 +426,7 @@ private fun QueueNormalTrack(
             }
         }
         Image(
-            rememberSmartisanDrawablePainter(R.drawable.btn_drag_selector),
+            rememberSmartisanDrawablePainter(R.drawable.btn_drag_selector, pressed = pressed),
             null,
             Modifier.padding(end = 2.dp).graphicsLayer { alpha = if (reorderable) 1f else 0f },
         )
@@ -445,7 +444,7 @@ private fun QueueCurrentTrack(
     modifier: Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     val cover = dimensionResource(R.dimen.album_cover_zone_width)
     val padding = dimensionResource(R.dimen.common_padding_left)
     val favoritePainter =
@@ -557,7 +556,7 @@ private fun QueueIconButton(
     checked: Boolean? = null,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressed by interaction.collectSmartisanPressedAsState()
     val click = smartisanClick(onClick)
     val input =
         if (checked == null)

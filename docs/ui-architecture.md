@@ -46,6 +46,8 @@ Room schema、DataStore key、稳定媒体 ID、队列顺序、当前项及恢�
 
 背景统一使用 [smartisanPainterBackground](../app/src/main/java/com/smartisan/music/ui/components/SmartisanPainterBackground.kt) 在 `drawBehind` 中按已测量尺寸绘制。`Modifier.paint` 即使关闭固有尺寸仍会改变父约束，不能用于自适应高度的底栏、列表或弹层背景。装饰阴影显式声明资源高度，不通过图片宽度缩放决定容器高度。
 
+[SmartisanPressFeedback](../app/src/main/java/com/smartisan/music/ui/components/SmartisanPressFeedback.kt) 统一收集点击控件的按压交互，让同帧结束的快点也能显示原有 selector 或按压位图。背景、文字和图标共享该视觉状态；取消立即清除，正常释放使用公开平台反馈时长。它不延迟业务回调，不代替拖拽、滑块、开关或导航的状态机。列表蓝底上的文字白色反馈与普通、多选、播放态分开处理，核对范围见 [列表选中样式](list-selection.md)。
+
 Compose 绘制阶段仍可调用 Android 的公开 `Canvas` / `Drawable` / `TextPaint`；[睡眠定时滚轮](../app/src/main/java/com/smartisan/music/ui/playback/PlaybackSleepTimerPicker.kt) 使用 Compose `AnimationState`、Android 样条衰减和吸附动画，不再依赖 `Scroller` 的墙钟时间。系统窗口、点击音、触觉及权限桥接仍使用适用的公开平台 API。UI 测试中的原生标题栏和 Drawable View 只用于对照，不进入生产页面。
 
 普通层级返回统一使用 [SmartisanNavigationMotion](../app/src/main/java/com/smartisan/music/ui/navigation/SmartisanNavigationMotion.kt)，同一套 300ms 时序驱动页面和标题各槽位。[SmartisanPageStack](../app/src/main/java/com/smartisan/music/ui/navigation/SmartisanPageStack.kt) 提供固定标题区与整宽内容区，供分离标题的层级页复用；已有标题与内容分离的专辑、艺术家、文件夹、流派和播放列表分别复用 `TitleBarTransition` 与 `PageStackTransition`。标题图标使用继承的局部动效状态，嵌套标题不会覆盖父级淡出。页面业务与存储不归动效组件所有。

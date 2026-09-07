@@ -7,7 +7,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -313,7 +312,7 @@ private fun PlaylistTrackRow(
     modifier: Modifier,
 ) {
     val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
+    val pressed by source.collectSmartisanPressedAsState()
     val progress by
         animateFloatAsState(
             if (editMode) 1f else 0f,
@@ -372,6 +371,7 @@ private fun PlaylistTrackRow(
                         playback.playing,
                         smartisanTextSize(R.dimen.text_size_large),
                         Modifier.fillMaxWidth(),
+                        pressed = pressed,
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         qualityBadge(item)?.let { badge ->
@@ -396,7 +396,11 @@ private fun PlaylistTrackRow(
                             ),
                             style =
                                 TextStyle(
-                                    color = colorResource(R.color.setting_item_summary_text_color),
+                                    color =
+                                        smartisanPressedTextColor(
+                                            colorResource(R.color.setting_item_summary_text_color),
+                                            pressed,
+                                        ),
                                     fontSize = smartisanTextSize(R.dimen.text_size_micro),
                                     platformStyle = PlatformTextStyle(includeFontPadding = true),
                                 ),
@@ -417,7 +421,11 @@ private fun PlaylistTrackRow(
                     .padding(start = dimensionResource(R.dimen.alum_line_width)),
                 style =
                     TextStyle(
-                        color = colorResource(R.color.setting_item_summary_text_color),
+                        color =
+                            smartisanPressedTextColor(
+                                colorResource(R.color.setting_item_summary_text_color),
+                                pressed,
+                            ),
                         fontSize = smartisanTextSize(R.dimen.text_size_micro),
                         fontWeight = FontWeight.Bold,
                         platformStyle = PlatformTextStyle(includeFontPadding = true),
@@ -426,7 +434,7 @@ private fun PlaylistTrackRow(
             )
             if (!editMode) {
                 val moreSource = remember { MutableInteractionSource() }
-                val morePressed by moreSource.collectIsPressedAsState()
+                val morePressed by moreSource.collectSmartisanPressedAsState()
                 Image(
                     rememberSmartisanDrawablePainter(
                         R.drawable.btn_more_selector,
@@ -545,7 +553,7 @@ private fun PlaylistDetailHeader(
                     )
                     val removing = selected > 0
                     val buttonSource = remember { MutableInteractionSource() }
-                    val pressed by buttonSource.collectIsPressedAsState()
+                    val pressed by buttonSource.collectSmartisanPressedAsState()
                     Row(
                         Modifier.padding(end = 6.dp)
                             .height(30.dp)
@@ -595,7 +603,7 @@ private fun PlaylistDetailHeader(
 @Composable
 private fun PlaylistActionButton(icon: Int, title: Int, onClick: () -> Unit) {
     val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
+    val pressed by source.collectSmartisanPressedAsState()
     Row(
         Modifier.fillMaxSize()
             .smartisanPainterBackground(

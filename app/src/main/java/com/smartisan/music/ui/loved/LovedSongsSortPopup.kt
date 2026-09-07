@@ -6,7 +6,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -140,7 +139,7 @@ internal fun LovedSongsSortPopup(
                     )
                     LovedSongsSortMode.entries.forEachIndexed { index, mode ->
                         val source = remember { MutableInteractionSource() }
-                        val pressed by source.collectIsPressedAsState()
+                        val pressed by source.collectSmartisanPressedAsState()
                         Row(
                             Modifier.fillMaxWidth()
                                 .height(dimensionResource(R.dimen.popup_list_menu_item_height))
@@ -194,7 +193,8 @@ internal fun LovedSongsSortPopup(
                             if (mode == sortMode)
                                 Image(
                                     rememberSmartisanDrawablePainter(
-                                        R.drawable.selector_radio_choice
+                                        R.drawable.selector_radio_choice,
+                                        pressed = pressed,
                                     ),
                                     null,
                                     Modifier.padding(end = 6.dp).size(27.dp),
