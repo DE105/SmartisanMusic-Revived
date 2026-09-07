@@ -617,7 +617,7 @@ private fun PlaylistActionButton(icon: Int, title: Int, onClick: () -> Unit) {
             stringResource(title),
             style =
                 TextStyle(
-                    color = colorResource(R.color.transparent_black),
+                    color = colorResource(R.color.title_or_btn_text_color),
                     fontSize = smartisanTextSize(R.dimen.button_text_size),
                     fontWeight = FontWeight.Bold,
                     platformStyle = PlatformTextStyle(includeFontPadding = false),

@@ -86,7 +86,7 @@ internal fun PlaylistNameDialogOverlay(
                         title,
                         style =
                             TextStyle(
-                                color = colorResource(R.color.status_bar_color_dialog),
+                                color = colorResource(R.color.title_color),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 platformStyle = PlatformTextStyle(includeFontPadding = true),
