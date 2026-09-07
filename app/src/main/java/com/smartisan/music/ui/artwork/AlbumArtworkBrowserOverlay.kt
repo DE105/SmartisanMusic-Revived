@@ -1,32 +1,41 @@
 package com.smartisan.music.ui.artwork
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionOnScreen
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import com.smartisan.music.R
 import com.smartisan.music.ui.album.AlbumSummary
-import com.smartisan.music.ui.library.SmartisanAlbumArtwork
+import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 import com.smartisan.music.ui.library.rememberAlbumArtworkLoader
-import kotlin.math.min
+import kotlin.math.roundToInt
 
 internal data class AlbumArtworkBrowserState(
     val album: AlbumSummary,
-    val sourceBounds: Rect?,
+    val sourceBounds: Rect,
     val onSourceVisibilityChanged: (Boolean) -> Unit = {},
 )
 
@@ -37,87 +46,95 @@ internal fun AlbumArtworkBrowserOverlay(
     modifier: Modifier = Modifier,
 ) {
     var retained by remember { mutableStateOf<AlbumArtworkBrowserState?>(null) }
-    val progress = remember { Animatable(0f) }
-    LaunchedEffect(state) {
+    var viewport by remember { mutableStateOf<Rect?>(null) }
+    val motion = remember { GalleryArtworkMotion() }
+    LaunchedEffect(state, viewport != null) {
         if (state != null) {
             retained = state
-            progress.animateTo(1f, tween(420, easing = ArtworkBrowserEasing))
+            if (viewport != null) motion.animateTo(true)
         } else if (retained != null) {
-            progress.animateTo(0f, tween(300, easing = ArtworkBrowserEasing))
+            motion.animateTo(false)
             retained = null
         }
     }
     val displayed = state ?: retained ?: return
-    DisposableEffect(displayed) {
-        displayed.onSourceVisibilityChanged(false)
-        onDispose { displayed.onSourceVisibilityChanged(true) }
+    val placed = viewport != null
+    DisposableEffect(displayed, placed) {
+        if (placed) displayed.onSourceVisibilityChanged(false)
+        onDispose { if (placed) displayed.onSourceVisibilityChanged(true) }
+    }
+    val position = remember {
+        object : PopupPositionProvider {
+            override fun calculatePosition(
+                anchorBounds: IntRect,
+                windowSize: IntSize,
+                layoutDirection: LayoutDirection,
+                popupContentSize: IntSize,
+            ) = IntOffset.Zero
+        }
     }
     Popup(
+        popupPositionProvider = position,
         onDismissRequest = onDismissRequest,
         properties = PopupProperties(focusable = true, clippingEnabled = false),
     ) {
+        DisposableEffect(Unit) { onDispose { viewport = null } }
         val loader = rememberAlbumArtworkLoader()
-        BoxWithConstraints(modifier.fillMaxSize()) {
-            val density = LocalDensity.current
-            val widthPx = with(density) { maxWidth.toPx() }
-            val heightPx = with(density) { maxHeight.toPx() }
-            val sizePx = min(widthPx, heightPx)
-            val end =
-                Rect(
-                    (widthPx - sizePx) / 2,
-                    (heightPx - sizePx) / 2,
-                    (widthPx + sizePx) / 2,
-                    (heightPx + sizePx) / 2,
-                )
-            val start =
-                displayed.sourceBounds?.takeIf { it.width > 0 && it.height > 0 }
-                    ?: Rect(
-                        end.left + sizePx * .03f,
-                        end.top + sizePx * .03f,
-                        end.right - sizePx * .03f,
-                        end.bottom - sizePx * .03f,
-                    )
-            val startScale = min(start.width, start.height) / sizePx.coerceAtLeast(1f)
-            Box(
+        val decodeSize = viewport?.let { minOf(it.width, it.height).roundToInt() }
+        val bitmap by
+            produceState(loader.cached(displayed.album), displayed.album, decodeSize) {
+                if (decodeSize != null) value = loader.load(displayed.album, decodeSize)
+            }
+        val placeholder = rememberSmartisanDrawablePainter(R.drawable.noalbumcover_220)
+        val painter =
+            bitmap?.let { remember(it) { BitmapPainter(it.asImageBitmap()) } } ?: placeholder
+        val dismissLabel = stringResource(R.string.back)
+        val dismiss by rememberUpdatedState(onDismissRequest)
+        Box(
+            modifier.fillMaxSize().onGloballyPositioned {
+                viewport = Rect(it.positionOnScreen(), it.size.toSize())
+            }
+        ) {
+            Canvas(
                 Modifier.fillMaxSize()
-                    .graphicsLayer { alpha = progress.value }
-                    .background(Color.Black)
-                    .clickable(
-                        remember { MutableInteractionSource() },
-                        null,
-                        onClick = onDismissRequest,
-                    )
-            )
-            val side = with(density) { sizePx.toDp() }
-            SmartisanAlbumArtwork(
-                displayed.album,
-                sizePx.toInt().coerceAtLeast(1),
-                R.drawable.noalbumcover_220,
-                Modifier.size(side)
-                    .graphicsLayer {
-                        val t = progress.value
-                        val r = 1f - t
-                        val controlX =
-                            (start.center.x + end.center.x) / 2 -
-                                (end.center.y - start.center.y) * .18f
-                        val controlY =
-                            (start.center.y + end.center.y) / 2 +
-                                (end.center.x - start.center.x) * .18f
-                        val x = r * r * start.center.x + 2 * r * t * controlX + t * t * end.center.x
-                        val y = r * r * start.center.y + 2 * r * t * controlY + t * t * end.center.y
-                        scaleX = startScale + (1 - startScale) * t
-                        scaleY = scaleX
-                        transformOrigin = TransformOrigin(0f, 0f)
-                        translationX = x - sizePx * scaleX / 2
-                        translationY = y - sizePx * scaleY / 2
+                    .pointerInput(displayed.album.id, painter) {
+                        detectTapGestures { point ->
+                            val bounds = viewport ?: return@detectTapGestures
+                            val frame =
+                                galleryArtworkFrame(
+                                    displayed.sourceBounds.translate(-bounds.topLeft),
+                                    size.toSize(),
+                                    painter.intrinsicSize,
+                                    motion.expansion.value,
+                                    motion.cropReveal.value,
+                                )
+                            if (!frame.clip.contains(point)) dismiss()
+                        }
                     }
-                    .clickable(remember { MutableInteractionSource() }, null, onClick = {})
-                    .clearAndSetSemantics {},
-                loader,
-                ContentScale.Fit,
-            )
+                    .semantics {
+                        contentDescription = dismissLabel
+                        onClick(label = dismissLabel) {
+                            dismiss()
+                            true
+                        }
+                    }
+            ) {
+                val bounds = viewport ?: return@Canvas
+                val frame =
+                    galleryArtworkFrame(
+                        displayed.sourceBounds.translate(-bounds.topLeft),
+                        size,
+                        painter.intrinsicSize,
+                        motion.expansion.value,
+                        motion.cropReveal.value,
+                    )
+                drawRect(Color.Black, alpha = motion.background.value)
+                clipRect(frame.clip.left, frame.clip.top, frame.clip.right, frame.clip.bottom) {
+                    translate(frame.image.left, frame.image.top) {
+                        with(painter) { draw(frame.image.size) }
+                    }
+                }
+            }
         }
     }
 }
-
-private val ArtworkBrowserEasing = CubicBezierEasing(.25f, .1f, .25f, 1f)

@@ -40,7 +40,7 @@ Smartisan OS has left the stage, so this project uses Smartisan Music 8.1.0 as i
 ## Current features
 
 - Local audio permission flow, scanning, reindexing, and library folder exclusions
-- Song, album, artist, genre, and folder browsing
+- Song, album, artist, genre, and folder browsing, with gallery-style album artwork previews
 - Sorting, filtering, alphabetical navigation, multi-select, and swipe actions
 - Favorites, user-created playlists, and play statistics
 - System-following, light, and dark themes with a charcoal night palette

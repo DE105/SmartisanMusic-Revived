@@ -16,8 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.dimensionResource
@@ -27,6 +27,7 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import androidx.media3.common.MediaItem
 import com.smartisan.music.R
 import com.smartisan.music.data.settings.ArtistSettings
@@ -111,7 +112,7 @@ internal fun AlbumDetailPage(
 private fun AlbumDetailHeader(
     album: AlbumSummary,
     coverVisible: Boolean,
-    onCoverClick: (Rect?) -> Unit,
+    onCoverClick: (Rect) -> Unit,
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
     onAddToPlaylist: () -> Unit,
@@ -129,11 +130,10 @@ private fun AlbumDetailHeader(
                 Modifier.align(Alignment.CenterStart)
                     .padding(start = left)
                     .size(coverSize)
-                    .onGloballyPositioned { sourceBounds = it.boundsInWindow() }
                     .clickable(
                         remember { MutableInteractionSource() },
                         null,
-                        onClick = smartisanClick { onCoverClick(sourceBounds) },
+                        onClick = smartisanClick { sourceBounds?.let(onCoverClick) },
                     )
             ) {
                 SmartisanAlbumArtwork(
@@ -142,7 +142,10 @@ private fun AlbumDetailHeader(
                     R.drawable.noalbumcover_220,
                     Modifier.fillMaxSize()
                         .graphicsLayer { alpha = if (coverVisible) 1f else 0f }
-                        .padding(dimensionResource(R.dimen.gridview_padding)),
+                        .padding(dimensionResource(R.dimen.gridview_padding))
+                        .onGloballyPositioned {
+                            sourceBounds = Rect(it.positionOnScreen(), it.size.toSize())
+                        },
                     loader,
                 )
                 Image(
