@@ -26,6 +26,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.smartisan.music.data.settings.ThemeSettingsStore
+import com.smartisan.music.ui.artwork.AlbumArtworkBrowserHost
 import com.smartisan.music.ui.shell.MusicAppShell
 import com.smartisan.music.ui.theme.MusicTheme
 import kotlinx.coroutines.delay
@@ -57,18 +58,20 @@ class MainActivity : AppCompatActivity() {
         setContent {
             MusicTheme(dynamicColor = false) {
                 RequestAudioPermissionOnLaunch()
-                MusicAppShell(
-                    playbackLaunchRequest = playbackLaunchRequest,
-                    externalAudioLaunchRequest = externalAudioLaunchRequest,
-                    onExternalAudioLaunchConsumed = ::clearExternalAudioLaunchRequest,
-                    onStartupReady = {
-                        startupContentReady = true
-                    },
-                    onThemeModeChange = { mode ->
-                        themeSettingsStore.setMode(mode)
-                        AppCompatDelegate.setDefaultNightMode(mode.appCompatNightMode)
-                    },
-                )
+                AlbumArtworkBrowserHost {
+                    MusicAppShell(
+                        playbackLaunchRequest = playbackLaunchRequest,
+                        externalAudioLaunchRequest = externalAudioLaunchRequest,
+                        onExternalAudioLaunchConsumed = ::clearExternalAudioLaunchRequest,
+                        onStartupReady = {
+                            startupContentReady = true
+                        },
+                        onThemeModeChange = { mode ->
+                            themeSettingsStore.setMode(mode)
+                            AppCompatDelegate.setDefaultNightMode(mode.appCompatNightMode)
+                        },
+                    )
+                }
             }
         }
     }

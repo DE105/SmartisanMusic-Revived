@@ -56,7 +56,7 @@ AndroidX `BackHandler` 仅处理已确认的返回，与标题返回按钮汇入
 
 封面加载沿用原 LRU：已有缓存可先显示，同一加载器内相同请求合并，媒体解析和解码在 IO 线程执行；离开页面取消所属任务。列表、队列和转场复用加载入口，不复制解码流程。主题资源仍通过 `values-night` / `drawable-night` 提供，[夜间资源生成脚本](../tools/generate_night_drawables.py) 维护对应输入和输出。
 
-专辑封面预览由 `GalleryArtworkMotion` 驱动直线缩放、轻微回弹和背景透明度；几何计算保留原始图片比例与缩略图裁剪。起点取图片内容的屏幕坐标，预览窗口完成布局后换算为局部坐标，再隐藏来源封面，退出完成后恢复。参数依据和验证边界见 [封面预览动画](gallery-artwork-motion.md)。
+专辑封面预览由 `GalleryArtworkMotion` 驱动直线缩放、轻微回弹和背景透明度；几何计算保留原始图片比例与缩略图裁剪。`AlbumArtworkBrowserHost` 在应用同一窗口顶层绘制，来源页只提交请求并持有来源标识；移除来源页时取消对应预览。缩回完成时先恢复缩略图、再移除预览，避免跨窗口交接出现空帧。参数依据和验证边界见 [封面预览动画](gallery-artwork-motion.md)。
 
 ## 后续维护规则
 

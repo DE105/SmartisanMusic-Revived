@@ -36,8 +36,8 @@ import com.smartisan.music.playback.replaceQueueAndPlay
 import com.smartisan.music.playback.replaceQueueAndPlayShuffled
 import com.smartisan.music.ui.artist.artistNormalizedKey
 import com.smartisan.music.ui.artist.toArtistDisplayNames
-import com.smartisan.music.ui.artwork.AlbumArtworkBrowserOverlay
 import com.smartisan.music.ui.artwork.AlbumArtworkBrowserState
+import com.smartisan.music.ui.artwork.LocalAlbumArtworkBrowser
 import com.smartisan.music.ui.components.rememberSmartisanDrawablePainter
 import com.smartisan.music.ui.components.smartisanClick
 import com.smartisan.music.ui.components.smartisanStateColor
@@ -62,8 +62,12 @@ internal fun AlbumDetailPage(
 ) {
     val browser = LocalPlaybackBrowser.current
     val playback = rememberSongPlaybackState()
-    var artworkBrowserState by remember { mutableStateOf<AlbumArtworkBrowserState?>(null) }
-    var coverVisible by remember { mutableStateOf(true) }
+    val artworkBrowser = LocalAlbumArtworkBrowser.current
+    val artworkOwner = remember(album.id) { Any() }
+    var coverVisible by remember(album.id) { mutableStateOf(true) }
+    DisposableEffect(artworkBrowser, artworkOwner) {
+        onDispose { artworkBrowser.removeOwner(artworkOwner) }
+    }
     val showArtists =
         remember(album.songs, artistSettings) { album.songs.hasMultipleArtists(artistSettings) }
     Box(modifier.fillMaxSize()) {
@@ -73,8 +77,10 @@ internal fun AlbumDetailPage(
                     album,
                     coverVisible,
                     onCoverClick = { bounds ->
-                        artworkBrowserState =
-                            AlbumArtworkBrowserState(album, bounds) { coverVisible = it }
+                        artworkBrowser.open(
+                            artworkOwner,
+                            AlbumArtworkBrowserState(album, bounds) { coverVisible = it },
+                        )
                     },
                     onPlay = { browser.replaceQueueAndPlay(album.songs) },
                     onShuffle = { browser.replaceQueueAndPlayShuffled(album.songs) },
@@ -100,11 +106,6 @@ internal fun AlbumDetailPage(
                 LibraryFooter(R.plurals.track_count, album.songs.size)
             }
         }
-        AlbumArtworkBrowserOverlay(
-            artworkBrowserState,
-            { artworkBrowserState = null },
-            Modifier.fillMaxSize(),
-        )
     }
 }
 
