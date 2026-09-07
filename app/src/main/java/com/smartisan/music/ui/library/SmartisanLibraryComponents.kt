@@ -201,6 +201,7 @@ internal fun LibrarySummaryRow(
     leadingContent: (@Composable RowScope.() -> Unit)? = null,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
     textInset: androidx.compose.ui.unit.Dp = dimensionResource(R.dimen.listview_items_margin_left),
+    selected: Boolean = false,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -214,6 +215,7 @@ internal fun LibrarySummaryRow(
                     R.drawable.listview_selector,
                     pressed = pressed,
                     focused = focused,
+                    activated = selected,
                 )
             )
             .clickable(interaction, null, role = Role.Button, onClick = smartisanClick(onClick)),

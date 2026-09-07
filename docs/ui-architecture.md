@@ -54,6 +54,8 @@ AndroidX `BackHandler` 仅处理已确认的返回，与标题返回按钮汇入
 
 列表使用稳定项键和独立滚动状态。按压、编辑、滑删、滑选和拖拽各有明确手势所有者；边缘自动滚动跳过不可选择的标题/页脚。隐藏页面不应接受点击或暴露重复的可访问节点。动画和后台工作绑定 Composition 生命周期，不能为离开的页面留下运行中的任务或 Drawable 回调。
 
+多选行通过 `editMode && selected`（或 checked）映射 Drawable 的 activated 状态，`listview_selector` 统一读取日间/夜间的 `list_selection_background`。按下、焦点与多选使用不同优先级，当前播放状态不映射为多选蓝底。范围与设计依据见 [列表选中样式](list-selection.md)。
+
 封面加载沿用原 LRU：已有缓存可先显示，同一加载器内相同请求合并，媒体解析和解码在 IO 线程执行；离开页面取消所属任务。列表、队列和转场复用加载入口，不复制解码流程。主题资源仍通过 `values-night` / `drawable-night` 提供，[夜间资源生成脚本](../tools/generate_night_drawables.py) 维护对应输入和输出。
 
 专辑封面预览由 `GalleryArtworkMotion` 驱动直线缩放、轻微回弹和背景透明度；几何计算保留原始图片比例与缩略图裁剪。`AlbumArtworkBrowserHost` 在应用同一窗口顶层绘制，来源页只提交请求并持有来源标识；移除来源页时取消对应预览。缩回完成时先恢复缩略图、再移除预览，避免跨窗口交接出现空帧。参数依据和验证边界见 [封面预览动画](gallery-artwork-motion.md)。

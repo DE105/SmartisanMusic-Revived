@@ -210,6 +210,7 @@ private fun PlaylistSummaryRow(
                     rememberSmartisanDrawablePainter(
                         R.drawable.listview_selector,
                         pressed = pressed,
+                        activated = editMode && checked,
                     )
                 )
                 .semantics { if (editMode) selected = checked }

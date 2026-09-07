@@ -386,6 +386,7 @@ private fun LibraryAlbumListRow(
         item.subtitle,
         onClick,
         modifier = modifier.semantics { if (editMode) this.selected = selected },
+        selected = editMode && selected,
         titleColor =
             colorResource(if (playing) R.color.playing_red else R.color.setting_item_text_color),
         leadingContent = {

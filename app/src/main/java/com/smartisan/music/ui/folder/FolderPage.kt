@@ -574,6 +574,7 @@ private fun FolderDirectoryRow(
                     rememberSmartisanDrawablePainter(
                         R.drawable.listview_selector,
                         pressed = pressed,
+                        activated = editMode && selected,
                     )
                 )
                 .semantics { if (editMode) this.selected = selected }
