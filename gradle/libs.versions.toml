@@ -1,5 +1,5 @@
 [versions]
-agp = "9.2.1"
+agp = "9.3.2"
 coreKtx = "1.19.0"
 coreSplashscreen = "1.2.0"
 appcompat = "1.7.1"
